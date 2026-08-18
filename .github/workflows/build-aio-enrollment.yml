@@ -134,6 +134,14 @@ jobs:
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
           echo "Provisioning APK URL: $url"
 
+      - name: Validate Gradle wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f gradlew
+          chmod +x gradlew
+          ./gradlew --version
+
       - name: Build enterpriseDebug and generate provisioning QR
         run: ./gradlew :app-dpc:assembleEnterpriseDebug
 
