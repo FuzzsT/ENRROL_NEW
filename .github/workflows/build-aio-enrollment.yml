@@ -41,19 +41,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android 17 / native build toolchain
-        shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager \
-            "platforms;android-37" \
-            "build-tools;36.0.0" \
-            "platform-tools" \
-            "ndk;28.2.13676358" \
-            "cmake;3.22.1"
+      - name: Set up Android SDK + Android 17 native toolchain
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools platforms;android-37 build-tools;36.0.0 ndk;28.2.13676358 cmake;3.22.1'
 
       - name: Set up Python QR dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
