@@ -1,0 +1,8 @@
+iss=DPC-AIO-LAB
+aud=io.dpcaio.app
+track=lab
+licenseType=KLM_TEST_ONLY
+iat=1787046180
+exp=1913276580
+nonce=LxvUnbZjbapz0TxYHQa5GA
+scopes=knox.mock.active,app.manage,policy.test,license.callback.test,offline.startup

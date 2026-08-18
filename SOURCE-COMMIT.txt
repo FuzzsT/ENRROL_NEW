@@ -1,0 +1,3 @@
+DPC-AIO 0.6.1 full GitHub + enrollment QR checkpoint
+Source branch: feature/0.6-lab-network-replay
+Source commit: d6d550f

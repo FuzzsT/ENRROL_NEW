@@ -1,0 +1,107 @@
+name: Build AIO + enrollment QR
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: "HTTPS URL Setup Wizard will use to download the APK (optional; defaults to latest GitHub release asset)"
+        required: false
+        type: string
+      enrollment_token:
+        description: "Optional enrollment token embedded in admin extras"
+        required: false
+        type: string
+      policy_profile:
+        description: "Policy profile placed in admin extras"
+        required: false
+        default: "default"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
+      DPC_AIO_ENROLLMENT_TOKEN: ${{ inputs.enrollment_token }}
+      DPC_AIO_POLICY_PROFILE: ${{ inputs.policy_profile || 'default' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 17 / native build toolchain
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platforms;android-37" \
+            "build-tools;36.0.0" \
+            "platform-tools" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Set up Python QR dependencies
+        run: python3 -m pip install -r tools/provisioning/requirements.txt
+
+      - name: Resolve public APK URL
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.apk_url }}" ]]; then
+            url='${{ inputs.apk_url }}'
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/DPC-AIO-enterprise-debug.apk"
+          else
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/DPC-AIO-enterprise-debug.apk"
+          fi
+          echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
+          echo "Provisioning APK URL: $url"
+
+      - name: Build enterpriseDebug and generate provisioning QR
+        run: ./gradlew :app-dpc:assembleEnterpriseDebug
+
+      - name: Collect AIO enrollment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk="$(find app-dpc/build/outputs/apk/enterprise/debug -type f -name '*.apk' | head -n1)"
+          test -n "$apk"
+          cp "$apk" dist/DPC-AIO-enterprise-debug.apk
+          cp app-dpc/build/outputs/provisioning/enterprise/debug/provisioning.json dist/
+          cp app-dpc/build/outputs/provisioning/enterprise/debug/provisioning-payload.txt dist/
+          cp app-dpc/build/outputs/provisioning/enterprise/debug/provisioning-metadata.json dist/
+          cp app-dpc/build/outputs/provisioning/enterprise/debug/provisioning-qr.png dist/
+          sha256sum dist/* > dist/SHA256SUMS.txt
+
+      - name: Upload full build + enrollment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPC-AIO-enterpriseDebug-enrollment
+          path: dist/
+
+      - name: Publish tag release assets
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/DPC-AIO-enterprise-debug.apk
+            dist/provisioning.json
+            dist/provisioning-payload.txt
+            dist/provisioning-metadata.json
+            dist/provisioning-qr.png
+            dist/SHA256SUMS.txt

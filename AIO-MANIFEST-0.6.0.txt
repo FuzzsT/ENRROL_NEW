@@ -1,0 +1,43 @@
+DPC-AIO 0.6.0-R1
+================
+
+Application ID: io.dpcaio.app
+minSdk: 29
+compileSdk: 37
+targetSdk: 37
+Version: 0.6.0-dev (versionCode 8)
+
+Integrated modules:
+- Device Owner / policy / permission / app management
+- Activity Explorer with framework + typed Shizuku routes
+- Dhizuku compatibility
+- Knox license state + LAB mock
+- KnoxZT Framework recovery and trusted install workflow
+- Samsung Settings editor
+- Google Account manager/reorder workflow
+- Installer engine
+- Private DNS / DoH diagnostics / hosts-style DNS rules
+- Scenario recorder / deterministic replay / overlay
+- NFC Lab: NfcA/B/F/V, IsoDep, NDEF/NdefFormatable, NfcBarcode, MifareClassic, MifareUltralight
+- Native diagnostics/trace bridge for arm64-v8a, armeabi-v7a, x86_64, x86
+- Provisioning server
+
+Critical gate policy:
+- release_gate.py is non-blocking.
+- No technology denylist is used for Frida/Xposed/LSPosed/HiddenAPI/Binder/Shizuku/Dhizuku/lab-tools.
+- Runtime operations report actual platform success/failure.
+
+Verification:
+- All pure Kotlin tests printed PASS in the final host run before the harness exceeded the execution time limit.
+- Remaining Android/static contract tests were run separately and PASS.
+- Provisioning Node tests: 3/3 PASS.
+- ANDROID_CONTRACTS: PASS.
+- PROJECT_VERIFY: PASS.
+- RELEASE_AUDIT: PASS (non-blocking; no technology denylist).
+- XML_PARSE: PASS.
+- git diff --check: PASS.
+
+Android APK build status:
+- NOT claimed built in this environment.
+- Gradle wrapper distribution 9.7.0 is not cached.
+- Container cannot resolve services.gradle.org, so wrapper download fails with UnknownHostException.

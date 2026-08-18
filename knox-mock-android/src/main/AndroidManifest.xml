@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <permission android:name="io.dpcaio.permission.BIND_KNOX_MOCK" android:protectionLevel="signature" />
+    <application>
+        <service
+            android:name="io.dpcaio.knox.mock.android.KnoxMockService"
+            android:exported="true"
+            android:permission="io.dpcaio.permission.BIND_KNOX_MOCK" />
+    </application>
+</manifest>

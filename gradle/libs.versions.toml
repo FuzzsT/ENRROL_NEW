@@ -1,0 +1,19 @@
+[versions]
+agp = "9.3.1"
+kotlin = "2.4.10"
+compileSdk = "37"
+minSdk = "29"
+targetSdk = "37"
+androidxCore = "1.19.0"
+shizuku = "13.1.5"
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+
+[libraries]
+androidx-core = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }

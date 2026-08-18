@@ -1,0 +1,43 @@
+package io.dpcaio.core.model
+
+enum class BuildTrack {
+    ENTERPRISE_RELEASE,
+    ENTERPRISE_DEBUG,
+    SYSTEM_PRIVILEGED,
+    LAB_DEBUG
+}
+
+enum class CapabilityType {
+    ACTIVITY_START,
+    SERVICE_START,
+    SERVICE_BIND,
+    BROADCAST_SEND,
+    PROVIDER_ACCESS,
+    PERMISSION_GRANT,
+    PERMISSION_EFFECTIVE_USE,
+    PACKAGE_INSTALL,
+    PACKAGE_UNINSTALL,
+    PACKAGE_ENABLE,
+    PACKAGE_DISABLE,
+    PACKAGE_HIDE,
+    PACKAGE_SUSPEND,
+    USER_OPERATION,
+    PROFILE_OPERATION,
+    ACCOUNT_READ,
+    ACCOUNT_SELECT,
+    ACCOUNT_REORDER,
+    SETTINGS_READ,
+    SETTINGS_WRITE,
+    OEM_UNLOCK_DIAGNOSTIC,
+    OEM_POLICY_CHANGE,
+    KIOSK,
+    NETWORK,
+    CERTIFICATES,
+    NATIVE_OPERATION
+}
+
+data class CapabilityRequest(
+    val id: String,
+    val type: CapabilityType,
+    val buildTrack: BuildTrack
+)

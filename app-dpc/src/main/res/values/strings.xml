@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">DPC-AIO</string>
+    <string name="device_admin_description">Enterprise device policy controller</string>
+</resources>

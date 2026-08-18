@@ -1,0 +1,22 @@
+Provisioning verification:
+- test_provisioning_android_contract: PASS
+- test_build_provisioning_qr: PASS
+- test_provisioning_build_integration: PASS
+- provisioning-server node tests: 5/5 PASS
+- test_release_gate: PASS
+- test_no_policy_gates: PASS
+- ANDROID_CONTRACTS: PASS
+- PROJECT_VERIFY: PASS
+- RELEASE_AUDIT: PASS (non-blocking)
+- WORKFLOW_YAML_PARSE: PASS
+- git diff --check: PASS
+
+Android APK build in this sandbox:
+- NOT completed.
+- Gradle wrapper attempted to fetch Gradle 9.7.0 from services.gradle.org.
+- Sandbox DNS returned UnknownHostException before project configuration/Android compilation.
+
+GitHub workflow:
+- .github/workflows/build-aio-enrollment.yml
+- Installs Android API 37, Build Tools 36.0.0, NDK 28.2.13676358 and CMake 3.22.1.
+- Builds enterpriseDebug and generates provisioning JSON + QR from the built APK.

@@ -1,0 +1,23 @@
+plugins {
+    alias(libs.plugins.android.library)
+}
+
+android {
+    namespace = "io.dpcaio.delegation.dhizuku"
+    compileSdk = libs.versions.compileSdk.get().toInt()
+    defaultConfig { minSdk = libs.versions.minSdk.get().toInt() }
+    buildFeatures { aidl = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+dependencies {
+    implementation(project(":core-model"))
+    implementation(project(":core-execution"))
+    implementation(project(":platform-compat"))
+    implementation(project(":delegation-core"))
+    implementation(project(":policy-core"))
+    implementation(project(":policy-android"))
+}
