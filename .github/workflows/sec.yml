@@ -200,6 +200,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          signing_mode=""
+
           # 1. Try repository secrets
           if [[ -n "${DPC_AIO_RELEASE_KEYSTORE_B64:-}" && -n "${DPC_AIO_RELEASE_STORE_PASSWORD:-}" && -n "${DPC_AIO_RELEASE_KEY_ALIAS:-}" && -n "${DPC_AIO_RELEASE_KEY_PASSWORD:-}" && -n "${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256:-}" ]]; then
             keystore="$RUNNER_TEMP/dpc-aio-release.p12"
@@ -213,7 +215,9 @@ jobs:
               echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256}"
               echo "DPC_AIO_SIGNING_MODE=secret"
             } >> "$GITHUB_ENV"
+            signing_mode="secret"
             echo "Using repository secrets for signing."
+            echo "signing_mode=$signing_mode" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -243,7 +247,9 @@ jobs:
               echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$fingerprint"
               echo "DPC_AIO_SIGNING_MODE=manual"
             } >> "$GITHUB_ENV"
+            signing_mode="manual"
             echo "Using manual signing password (run-scoped)."
+            echo "signing_mode=$signing_mode" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -273,8 +279,10 @@ jobs:
             echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$fingerprint"
             echo "DPC_AIO_SIGNING_MODE=ephemeral"
           } >> "$GITHUB_ENV"
+          signing_mode="ephemeral"
           echo "Generated ephemeral signing key."
           echo "WARNING: this signer is run-specific; independent runs cannot update each other in place."
+          echo "signing_mode=$signing_mode" >> "$GITHUB_OUTPUT"
 
       - name: Verify Android build environment
         shell: bash
@@ -320,8 +328,8 @@ jobs:
           fi
           echo "Release signing certificate SHA-256: $observed"
 
-      - name: Package ephemeral signing material (if used)
-        if: env.DPC_AIO_SIGNING_MODE == 'ephemeral'
+      - name: Package ephemeral signing material (if ephemeral)
+        if: steps.signing.outputs.signing_mode == 'ephemeral'
         shell: bash
         env:
           ZIP_PASSWORD: "9966"
@@ -341,8 +349,10 @@ ZIP password: ${ZIP_PASSWORD}
 
 This keystore is run‑specific and intended for emergency use only.
 EOF
+
+          # Create ZIP directly in the workspace dist directory
           cd "$tmpdir"
-          zip -q -r -P "$ZIP_PASSWORD" "../../dist/dpc-aio-signing-material.zip" .
+          zip -q -r -P "$ZIP_PASSWORD" "$GITHUB_WORKSPACE/dist/dpc-aio-signing-material.zip" .
           cd -
           rm -rf "$tmpdir"
           echo "Packaged ephemeral signing material into dist/dpc-aio-signing-material.zip (password: ${ZIP_PASSWORD})"
@@ -368,9 +378,10 @@ EOF
           cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
           cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
 
-          # If ephemeral signing bundle exists, include it in dist
           if [[ -f "dist/dpc-aio-signing-material.zip" ]]; then
             echo "Including dpc-aio-signing-material.zip in artifacts."
+          else
+            echo "Warning: dpc-aio-signing-material.zip not found."
           fi
 
       - name: Validate enrollment QR files
