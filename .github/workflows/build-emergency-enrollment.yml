@@ -73,7 +73,7 @@ jobs:
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools'
 
-      - name: Install Android 17 SDK + native toolchain
+      - name: Install Android 17 SDK + stable APK signer
         shell: bash
         run: |
           set -euo pipefail
@@ -109,17 +109,9 @@ jobs:
             exit 1
           fi
 
-          build_tools_pkg="$(
-            awk -F'|' '
-              { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
-              $1 ~ /^build-tools;37\./ { print $1 }
-            ' "$SDK_LIST" | sort -V | tail -n1
-          )"
-          [[ -n "$build_tools_pkg" ]] || build_tools_pkg="build-tools;36.0.0"
-
           "$SDKMANAGER" \
             "$platform_pkg" \
-            "$build_tools_pkg" \
+            "build-tools;36.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1" \
             --channel=3
@@ -130,6 +122,7 @@ jobs:
             [[ ! -d "$installed_path" ]] || ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"
           fi
           test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
 
       - name: Set up Python QR dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
@@ -175,7 +168,6 @@ jobs:
             echo "DPC_AIO_SIGNING_MODE=ephemeral"
           } >> "$GITHUB_ENV"
           echo "Emergency signer fingerprint: $fingerprint"
-          echo "WARNING: this signer is run-specific; independent runs cannot update each other in place."
 
       - name: Verify Android build environment
         shell: bash
@@ -215,9 +207,13 @@ jobs:
           mkdir -p dist
           apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
           test -n "$apk"
-          apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          apksigner_bin="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
           test -x "$apksigner_bin"
-          observed="$($apksigner_bin verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          echo "APK selected: $apk"
+          echo "APK signer: $($apksigner_bin --version)"
+          cert_output="$($apksigner_bin verify --print-certs "$apk" 2>&1)"
+          printf '%s\n' "$cert_output"
+          observed="$(printf '%s\n' "$cert_output" | sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+).*/\1/p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           [[ -n "$observed" && "$observed" == "$expected" ]] || { echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
 
@@ -249,9 +245,7 @@ jobs:
 
       - name: Cleanup ephemeral signer before runtime
         shell: bash
-        run: |
-          set -euo pipefail
-          rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
+        run: rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
 
       - name: Enable KVM group perms
         shell: bash
@@ -312,7 +306,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="dpc-aio-emergency-enrollment"
+          tag="$DPC_AIO_EMERGENCY_RELEASE_TAG"
           notes="Run-specific emergency DPC-AIO 1.1.4 enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this build is not update-stable across independent runs."
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "DPC-AIO Emergency Enrollment" --notes "$notes" --prerelease
@@ -325,7 +319,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-emergency-enrollment/DPC-AIO-enterprise-release.apk"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_EMERGENCY_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
           downloaded="$RUNNER_TEMP/DPC-AIO-enterprise-release.downloaded.apk"
           matched=0
           for attempt in 1 2 3 4 5 6; do

@@ -28,6 +28,7 @@ def main():
     require('apps/dpc/app/build.gradle.kts',
             'DPC_AIO_RELEASE_KEYSTORE_B64', 'DPC_AIO_RELEASE_STORE_PASSWORD',
             'DPC_AIO_RELEASE_KEY_ALIAS', 'DPC_AIO_RELEASE_KEY_PASSWORD')
+
     workflow = text('.github/workflows/build-aio-enrollment.yml')
     for needle in ('assembleEnterpriseRelease', 'DPC-AIO-enterprise-release.apk',
                    'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256', 'cmp -s'):
@@ -38,6 +39,18 @@ def main():
     assert 'apps/dpc/app/build/outputs/provisioning/enterprise/release' in workflow, 'production workflow must collect provisioning files from :app-dpc output directory'
     assert 'apps/dpc/build/outputs/apk/enterprise/release' not in workflow, 'production workflow uses obsolete root-level APK output path'
     assert 'apps/dpc/build/outputs/provisioning/enterprise/release' not in workflow, 'production workflow uses obsolete root-level provisioning output path'
+
+    emergency = text('.github/workflows/build-emergency-enrollment.yml')
+    for needle in (
+        'build-tools;36.0.0',
+        '$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner',
+        'verify --print-certs "$apk" 2>&1',
+        'apps/dpc/app/build/outputs/apk/enterprise/release',
+        'DPC-AIO-enterprise-release.apk',
+    ):
+        assert needle in emergency, f"emergency workflow missing {needle!r}"
+    assert 'find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner' not in emergency, 'emergency workflow must not auto-select preview apksigner'
+
     print('test_102_qr_production_readiness_contract: PASS')
 
 if __name__ == '__main__':
