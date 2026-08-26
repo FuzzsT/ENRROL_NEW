@@ -44,7 +44,9 @@ assert 'GITHUB_EVENT_PATH' in workflow
 assert 'tools/release/prepare_enterprise_signing.sh' in workflow
 assert '${{ inputs.release_signing_password }}' not in workflow, 'manual password must not be interpolated into logged run/env YAML'
 assert 'signing_mode: ${{ steps.signing.outputs.mode }}' in workflow, 'build job must export signing mode'
-assert "needs.build.outputs.signing_mode == 'stable-secrets'" in workflow, 'run-scoped signing must never publish as stable release'
+assert "github.ref_type == 'tag' && needs.build.outputs.signing_mode == 'stable-secrets'" in workflow, 'versioned releases must require stable signing'
+assert "needs.build.outputs.signing_mode == 'generated-bootstrap'" in workflow, 'manual bootstrap builds must be able to populate the continuous prerelease'
+assert 'Existing installations cannot update to a later build signed with a different generated key' in workflow, 'continuous generated-signing releases must warn about update incompatibility'
 
 cp, env_text, out_text, files = run_prepare('workflow_dispatch', PASSWORD)
 assert cp.returncode == 0, cp.stderr + cp.stdout

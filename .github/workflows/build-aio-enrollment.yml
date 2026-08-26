@@ -363,7 +363,10 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ needs.build.result == 'success' && needs.build.outputs.signing_mode == 'stable-secrets' && (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.apk_url == '')) }}
+    # A manually generated bootstrap key may populate the rolling prerelease so
+    # the QR URL becomes real after the build. Versioned tag releases remain
+    # restricted to the repository's stable signing key.
+    if: ${{ needs.build.result == 'success' && ((github.ref_type == 'tag' && needs.build.outputs.signing_mode == 'stable-secrets') || (github.event_name == 'workflow_dispatch' && inputs.apk_url == '' && (needs.build.outputs.signing_mode == 'stable-secrets' || needs.build.outputs.signing_mode == 'generated-bootstrap'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -397,7 +400,12 @@ jobs:
         run: |
           set -euo pipefail
           tag="$DPC_AIO_CONTINUOUS_RELEASE_TAG"
-          notes="Continuously updated DPC-AIO enrollment artifacts from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus the verified QR Release Bundle."
+          if [[ "${{ needs.build.outputs.signing_mode }}" == "generated-bootstrap" ]]; then
+            signing_note="This run used a generated bootstrap signer. Existing installations cannot update to a later build signed with a different generated key. Configure the stable repository signing secrets for update-compatible deployments."
+          else
+            signing_note="This run used the stable repository signing key and is update-compatible with other builds signed by that key."
+          fi
+          notes="Continuously updated DPC-AIO enrollment artifacts from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus the verified QR Release Bundle. $signing_note"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "DPC-AIO Continuous Enrollment" --notes "$notes" --prerelease
           else
