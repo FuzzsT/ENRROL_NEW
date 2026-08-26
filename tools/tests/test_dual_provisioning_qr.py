@@ -10,6 +10,7 @@ GEN = ROOT / 'tools' / 'provisioning' / 'generate_provisioning.py'
 VERIFY = ROOT / 'tools' / 'provisioning' / 'verify_provisioning_qr.py'
 ADMIN_EXTRAS = 'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'
 MODE_KEY = 'io.dpcaio.extra.PROVISIONING_MODE'
+OFFLINE_MODE_KEY = 'io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE'
 ALLOW_OFFLINE = 'android.app.extra.PROVISIONING_ALLOW_OFFLINE'
 
 
@@ -37,6 +38,8 @@ def test_default_generator_mode_is_explicit_work_profile():
         assert proc.returncode == 0, proc.stderr
         payload = json.loads((out / 'provisioning.json').read_text('utf-8'))
         assert payload[ADMIN_EXTRAS][MODE_KEY] == 'work-profile'
+        assert ALLOW_OFFLINE not in payload, 'false framework default should be omitted from online QR'
+        assert OFFLINE_MODE_KEY not in payload[ADMIN_EXTRAS], 'ONLINE DPC default should be omitted from QR'
         assert (out / 'work-profile-qr.png').is_file()
 
 

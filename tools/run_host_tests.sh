@@ -216,6 +216,7 @@ python3 "$ROOT/tools/tests/test_110_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_diagnostics_contract.py"
 python3 "$ROOT/tools/tests/test_non_sdk_api_scan.py"
 python3 "$ROOT/tools/tests/test_release_secret_scan.py"
+python3 "$ROOT/tools/tests/test_gradle_ci_output_filter.py"
 python3 "$ROOT/tools/tests/test_knox_lab_token_bundle.py"
 node --test "$ROOT/services/provisioning/test"/*.test.mjs
 python3 "$ROOT/tools/tests/test_release_gate.py"

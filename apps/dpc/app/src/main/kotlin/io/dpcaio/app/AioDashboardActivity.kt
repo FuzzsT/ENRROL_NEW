@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -13,10 +15,77 @@ class AioDashboardActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO"
+        showProtectedContent()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent != null) setIntent(intent)
+        showProtectedContent()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (DpcPinManager.isEnabled(this) && !DpcPinSession.isUnlocked()) {
+            showPinUnlock()
+        }
+    }
+
+    private fun showProtectedContent() {
+        if (DpcPinManager.isEnabled(this) && !DpcPinSession.isUnlocked()) {
+            showPinUnlock()
+        } else {
+            showDashboard()
+        }
+    }
+
+    private fun showPinUnlock() {
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 48, 24, 24)
+        }
+        body.addView(TextView(this).apply {
+            text = "DPC-AIO is locked\nEnter the application PIN to continue."
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        val pin = EditText(this).apply {
+            hint = "DPC PIN"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            maxLines = 1
+        }
+        body.addView(pin)
+        body.addView(Button(this).apply {
+            text = "Unlock"
+            setOnClickListener {
+                val remaining = DpcPinManager.blockedRemainingMs(this@AioDashboardActivity)
+                if (remaining > 0L) {
+                    pin.error = "Too many attempts. Try again in ${(remaining + 999) / 1000}s"
+                    return@setOnClickListener
+                }
+                if (DpcPinManager.verify(this@AioDashboardActivity, pin.text.toString())) {
+                    DpcPinSession.markUnlocked()
+                    showDashboard()
+                } else {
+                    val wait = DpcPinManager.blockedRemainingMs(this@AioDashboardActivity)
+                    pin.error = if (wait > 0L) {
+                        "Too many attempts. Try again in ${(wait + 999) / 1000}s"
+                    } else {
+                        "Incorrect PIN"
+                    }
+                    pin.setText("")
+                    pin.requestFocus()
+                }
+            }
+        })
+        setContentView(body)
+    }
+
+    private fun showDashboard() {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         val versionName = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "unknown"
         body.addView(TextView(this).apply { text = "DPC-AIO $versionName\nDevice Owner / policy / research toolkit" })
 
+        add(body, "App PIN / Security") { DpcPinSettingsActivity::class.java }
         add(body, "Enrollment Engine") { EnrollmentManualActivity::class.java }
         add(body, "Full Offline Setup") { OfflineSetupActivity::class.java }
         add(body, "Enrollment Status") { EnrollmentStatusActivity::class.java }

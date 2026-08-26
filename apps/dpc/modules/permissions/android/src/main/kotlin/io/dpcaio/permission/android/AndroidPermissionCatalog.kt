@@ -27,7 +27,7 @@ class AndroidPermissionCatalog(context: Context) {
                 protection = protectionOf(info),
                 publicSdkConstant = info.name in publicPermissions,
                 description = runCatching { info.loadDescription(pm)?.toString() }.getOrNull(),
-                rawProtectionLevel = info.protectionLevel,
+                rawProtectionLevel = info.protection or info.protectionFlags,
                 permissionFlags = info.flags
             )
         }
@@ -59,8 +59,8 @@ class AndroidPermissionCatalog(context: Context) {
 
     private fun protectionOf(info: PermissionInfo): PermissionProtection {
         if (info.name in SPECIAL_ACCESS) return PermissionProtection.SPECIAL_ACCESS
-        val base = info.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
-        val flags = info.protectionLevel and PermissionInfo.PROTECTION_MASK_FLAGS
+        val base = info.protection
+        val flags = info.protectionFlags
         val privileged = flags and PermissionInfo.PROTECTION_FLAG_PRIVILEGED != 0
         val appOp = flags and PermissionInfo.PROTECTION_FLAG_APPOP != 0
         if (base == PermissionInfo.PROTECTION_SIGNATURE && privileged) return PermissionProtection.SIGNATURE_PRIVILEGED

@@ -47,17 +47,21 @@ android {
     }
 
     sourceSets {
-        getByName("tst").assets.srcDir("src/lab/assets")
-        getByName("tst").java.srcDir("src/lab/java")
-        getByName("eng").assets.srcDir("src/lab/assets")
-        getByName("eng").java.srcDir("src/lab/java")
+        getByName("tst").assets.directories.add("src/lab/assets")
+        getByName("tst").java.directories.add("src/lab/java")
+        getByName("eng").assets.directories.add("src/lab/assets")
+        getByName("eng").java.directories.add("src/lab/java")
     }
 
     signingConfigs {
         create("enterpriseRelease") {
             val path = releaseKeystorePath.orNull
             if (!path.isNullOrBlank() && releaseStorePassword.isPresent && releaseKeyAlias.isPresent && releaseKeyPassword.isPresent) {
-                storeFile = file(path)
+                val keystoreFile = file(path)
+                require(keystoreFile.isFile && keystoreFile.length() > 0L) {
+                    "DPC-AIO release keystore does not exist or is empty: ${keystoreFile.absolutePath}"
+                }
+                storeFile = keystoreFile
                 storePassword = releaseStorePassword.get()
                 keyAlias = releaseKeyAlias.get()
                 keyPassword = releaseKeyPassword.get()

@@ -60,9 +60,30 @@ def decode_qr(path: Path) -> dict:
     image = cv2.imread(str(path))
     if image is None:
         raise ValueError('QR image is unreadable')
+
+    # OpenCV's classic QRCodeDetector can fail to detect otherwise valid,
+    # dense Android Enterprise provisioning QR codes (for example version 20
+    # produced by a long GitHub Releases URL with error correction M).
+    # QRCodeDetectorAruco in OpenCV 4.14+ decodes those payloads reliably.
+    decoded = ''
+    points = None
+
     decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(image)
     if points is None or not decoded:
-        raise ValueError('QR image could not be decoded')
+        aruco_cls = getattr(cv2, 'QRCodeDetectorAruco', None)
+        if aruco_cls is not None:
+            decoded, points, _ = aruco_cls().detectAndDecode(image)
+
+    if points is None or not decoded:
+        height, width = image.shape[:2]
+        tried = 'QRCodeDetector'
+        if getattr(cv2, 'QRCodeDetectorAruco', None) is not None:
+            tried += ' + QRCodeDetectorAruco'
+        raise ValueError(
+            f'QR image could not be decoded by OpenCV detectors '
+            f'(image={width}x{height}; tried {tried})'
+        )
+
     value = json.loads(decoded)
     if not isinstance(value, dict):
         raise ValueError('QR payload must decode to a JSON object')

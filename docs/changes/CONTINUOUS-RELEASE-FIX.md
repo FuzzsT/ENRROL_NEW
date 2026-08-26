@@ -9,7 +9,7 @@ The manual GitHub Actions path used `releases/latest/download/DPC-AIO-enterprise
 ## Fix
 
 - Manual `workflow_dispatch` without `apk_url` uses `dpc-aio-continuous`.
-- A successful manual build using the run-scoped generated bootstrap signer now
+- A successful manual build using the password-backed rolling release signer now
   creates or refreshes that continuous prerelease, so the APK URL embedded in
   the generated QR is published by the same workflow instead of pointing to a
   release asset that was never created. Versioned tag releases still require

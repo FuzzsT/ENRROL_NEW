@@ -2,40 +2,7 @@ name: Emergency enrollment (ephemeral signing)
 
 on:
   workflow_dispatch:
-    inputs:
-      policy_profile:
-        description: "Policy profile placed in admin extras"
-        required: false
-        default: "default"
-        type: string
-      provisioning_mode:
-        description: "Compatibility QR mode; dedicated Work Profile and Device Owner QRs are always generated"
-        required: true
-        default: "work-profile"
-        type: choice
-        options:
-          - auto
-          - work-profile
-          - fully-managed
-      allow_offline:
-        description: "Allow Android offline provisioning when supported"
-        required: false
-        default: false
-        type: boolean
-      enrollment_offline_mode:
-        description: "DPC route after Setup Wizard installs the APK"
-        required: false
-        default: "ONLINE"
-        type: choice
-        options:
-          - ONLINE
-          - ONLINE_PREFERRED
-          - FULL_OFFLINE
-          - OFFLINE_THEN_SYNC
-      offline_bundle_id:
-        description: "Signed local bundle/profile id for FULL_OFFLINE/OFFLINE_THEN_SYNC"
-        required: false
-        type: string
+
 
 permissions:
   contents: read
@@ -58,9 +25,17 @@ jobs:
     outputs:
       app_version: ${{ steps.metadata.outputs.app_version }}
       qr_bundle_name: ${{ steps.metadata.outputs.qr_bundle_name }}
+      release_apk_name: ${{ steps.config.outputs.release_apk_name }}
+      emergency_release_tag: ${{ steps.config.outputs.emergency_release_tag }}
     env:
       DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
-      DPC_AIO_CONTINUOUS_RELEASE_TAG: ${{ vars.DPC_AIO_EMERGENCY_RELEASE_TAG || 'dpc-aio-emergency-enrollment' }}
+      DPC_AIO_CFG_RELEASE_APK_NAME: ${{ vars.DPC_AIO_RELEASE_APK_NAME }}
+      DPC_AIO_CFG_EMERGENCY_RELEASE_TAG: ${{ vars.DPC_AIO_EMERGENCY_RELEASE_TAG }}
+      DPC_AIO_CFG_POLICY_PROFILE: ${{ vars.DPC_AIO_POLICY_PROFILE }}
+      DPC_AIO_CFG_PROVISIONING_MODE: ${{ vars.DPC_AIO_PROVISIONING_MODE }}
+      DPC_AIO_CFG_ALLOW_OFFLINE: ${{ vars.DPC_AIO_ALLOW_OFFLINE }}
+      DPC_AIO_CFG_ENROLLMENT_OFFLINE_MODE: ${{ vars.DPC_AIO_ENROLLMENT_OFFLINE_MODE }}
+      DPC_AIO_CFG_OFFLINE_BUNDLE_ID: ${{ vars.DPC_AIO_OFFLINE_BUNDLE_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -157,13 +132,64 @@ jobs:
       - name: Set up Python QR dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
 
-      - name: Resolve emergency public APK URL
+      - name: Resolve automatic emergency configuration
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          defaults_file='.github/dpc-aio-defaults.env'
+          if [[ -f "$defaults_file" ]]; then
+            set -a
+            # shellcheck disable=SC1090
+            source "$defaults_file"
+            set +a
+          fi
+          pick() {
+            local configured="$1" fallback="$2" builtin="$3"
+            if [[ -n "$configured" ]]; then printf '%s' "$configured"
+            elif [[ -n "$fallback" ]]; then printf '%s' "$fallback"
+            else printf '%s' "$builtin"; fi
+          }
+          bool() { case "${1,,}" in 1|true|yes|on) echo true;; *) echo false;; esac; }
+
+          release_apk="$(pick "${DPC_AIO_CFG_RELEASE_APK_NAME:-}" "${DPC_AIO_DEFAULT_RELEASE_APK_NAME:-}" 'DPC-AIO-enterprise-release.apk')"
+          [[ "$release_apk" =~ ^[A-Za-z0-9._-]+\.apk$ ]] || release_apk='DPC-AIO-enterprise-release.apk'
+          release_tag="$(pick "${DPC_AIO_CFG_EMERGENCY_RELEASE_TAG:-}" "${DPC_AIO_DEFAULT_EMERGENCY_RELEASE_TAG:-}" 'dpc-aio-emergency-enrollment')"
+          [[ "$release_tag" =~ ^[A-Za-z0-9._-]+$ ]] || release_tag='dpc-aio-emergency-enrollment'
+          profile="$(pick "${DPC_AIO_CFG_POLICY_PROFILE:-}" "${DPC_AIO_DEFAULT_POLICY_PROFILE:-}" 'default')"
+          mode="$(pick "${DPC_AIO_CFG_PROVISIONING_MODE:-}" "${DPC_AIO_DEFAULT_PROVISIONING_MODE:-}" 'work-profile')"
+          case "$mode" in auto|work-profile|fully-managed) ;; *) mode=work-profile;; esac
+          allow="$(bool "$(pick "${DPC_AIO_CFG_ALLOW_OFFLINE:-}" "${DPC_AIO_DEFAULT_ALLOW_OFFLINE:-}" 'false')")"
+          offline="$(pick "${DPC_AIO_CFG_ENROLLMENT_OFFLINE_MODE:-}" "${DPC_AIO_DEFAULT_ENROLLMENT_OFFLINE_MODE:-}" 'ONLINE')"
+          offline="${offline^^}"; offline="${offline//-/_}"
+          case "$offline" in ONLINE|ONLINE_PREFERRED|FULL_OFFLINE|OFFLINE_THEN_SYNC) ;; *) offline=ONLINE;; esac
+          bundle="$(pick "${DPC_AIO_CFG_OFFLINE_BUNDLE_ID:-}" "${DPC_AIO_DEFAULT_OFFLINE_BUNDLE_ID:-}" '')"
+          if [[ "$offline" == FULL_OFFLINE || "$offline" == OFFLINE_THEN_SYNC ]]; then
+            if [[ -z "$bundle" ]]; then offline=ONLINE; allow=false; fi
+          fi
+          {
+            echo "DPC_AIO_RELEASE_APK_NAME=$release_apk"
+            echo "DPC_AIO_EMERGENCY_RELEASE_TAG=$release_tag"
+            echo "DPC_AIO_CONTINUOUS_RELEASE_TAG=$release_tag"
+            echo "DPC_AIO_POLICY_PROFILE=$profile"
+            echo "DPC_AIO_PROVISIONING_MODE=$mode"
+            echo "DPC_AIO_ALLOW_OFFLINE=$allow"
+            echo "DPC_AIO_ENROLLMENT_OFFLINE_MODE=$offline"
+            echo "DPC_AIO_OFFLINE_BUNDLE_ID=$bundle"
+          } >> "$GITHUB_ENV"
+          {
+            echo "release_apk_name=$release_apk"
+            echo "emergency_release_tag=$release_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "AUTO EMERGENCY CONFIG: tag=$release_tag apk=$release_apk profile=$profile mode=$mode offline=$offline"
+
+      - name: Resolve emergency target APK URL (published after local validation)
         shell: bash
         run: |
           set -euo pipefail
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_EMERGENCY_RELEASE_TAG}/${DPC_AIO_RELEASE_APK_NAME}"
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
-          echo "Provisioning APK URL: $url"
+          echo "Provisioning target APK URL (may not exist until publish job): $url"
 
       - name: Create ephemeral PKCS12 enterprise signer
         shell: bash
@@ -199,6 +225,26 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "Emergency signer fingerprint: $fingerprint"
 
+      - name: Verify signing keystore file and path before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DPC_AIO_RELEASE_KEYSTORE_PATH:?DPC_AIO_RELEASE_KEYSTORE_PATH is required}"
+          raw="$DPC_AIO_RELEASE_KEYSTORE_PATH"
+          test -f "$raw"
+          test -s "$raw"
+          resolved="$(realpath -e "$raw")"
+          runner_temp="$(realpath -e "$RUNNER_TEMP")"
+          case "$resolved" in
+            "$runner_temp"/*) ;;
+            *) echo "SIGNING_KEYSTORE_PATH_INVALID: expected a runner-temporary file, got $resolved" >&2; exit 1 ;;
+          esac
+          export DPC_AIO_EFFECTIVE_STORE_PASSWORD="$DPC_AIO_RELEASE_STORE_PASSWORD"
+          keytool -list -keystore "$resolved" -alias "$DPC_AIO_RELEASE_KEY_ALIAS" -storepass:env DPC_AIO_EFFECTIVE_STORE_PASSWORD >/dev/null
+          chmod 600 "$resolved"
+          echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$resolved" >> "$GITHUB_ENV"
+          echo "Verified signing keystore path: $resolved"
+
       - name: Verify Android build environment
         shell: bash
         run: |
@@ -218,25 +264,49 @@ jobs:
           python3 tools/tests/test_release_secret_scan.py
 
       - name: Build signed enterpriseRelease
-        env:
-          DPC_AIO_POLICY_PROFILE: ${{ inputs.policy_profile || 'default' }}
-          DPC_AIO_PROVISIONING_MODE: ${{ inputs.provisioning_mode || 'work-profile' }}
-          DPC_AIO_ALLOW_OFFLINE: ${{ inputs.allow_offline || false }}
-          DPC_AIO_ENROLLMENT_OFFLINE_MODE: ${{ inputs.enrollment_offline_mode || 'ONLINE' }}
-          DPC_AIO_OFFLINE_BUNDLE_ID: ${{ inputs.offline_bundle_id }}
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew :app-dpc:assembleEnterpriseRelease
+          mkdir -p dist
+          ./gradlew :app-dpc:assembleEnterpriseRelease --console=plain 2>&1 \
+            | tee dist/gradle-build.log \
+            | python3 tools/ci/filter_gradle_output.py
+
+      - name: Resolve and verify built APK path
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_dir='apps/dpc/app/build/outputs/apk/enterprise/release'
+          test -d "$apk_dir"
+          mapfile -t candidates < <(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print | sort)
+          [[ ${#candidates[@]} -eq 1 ]] || {
+            printf 'BUILT_APK_COUNT_INVALID: expected exactly 1 APK under %s, found %d\n' "$apk_dir" "${#candidates[@]}" >&2
+            printf 'candidate: %s\n' "${candidates[@]:-<none>}" >&2
+            exit 1
+          }
+          apk="$(realpath -e "${candidates[0]}")"
+          apk_root="$(realpath -e "$apk_dir")"
+          case "$apk" in
+            "$apk_root"/*) ;;
+            *) echo "BUILT_APK_PATH_INVALID: $apk escapes $apk_root" >&2; exit 1 ;;
+          esac
+          test -f "$apk"
+          test -s "$apk"
+          echo "DPC_AIO_BUILT_APK_PATH=$apk" >> "$GITHUB_ENV"
+          echo "Verified built APK path: $apk"
+          stat --printf='APK size: %s bytes\n' "$apk"
+          sha256sum "$apk"
 
       - name: Verify APK signer and collect enrollment artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
-          test -n "$apk"
+          : "${DPC_AIO_BUILT_APK_PATH:?DPC_AIO_BUILT_APK_PATH is required}"
+          apk="$DPC_AIO_BUILT_APK_PATH"
+          test -f "$apk"
+          test -s "$apk"
           apksigner_bin="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
           test -x "$apksigner_bin"
           echo "APK selected: $apk"
@@ -280,14 +350,33 @@ jobs:
           printf '%s\n' "$observed" > dist/signing-cert-sha256.txt
           sha256sum dist/$DPC_AIO_RELEASE_APK_NAME > dist/$DPC_AIO_RELEASE_APK_NAME.sha256
 
-      - name: Validate QR to exact APK binding
+      - name: Validate QR to exact local APK binding before release publish
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           compat_mode="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provisioningMode"])' dist/provisioning-metadata.json)"
-          python3 tools/provisioning/verify_provisioning_qr.py --json dist/provisioning.json --qr dist/provisioning-qr.png --apk dist/$DPC_AIO_RELEASE_APK_NAME --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat_mode" > dist/provisioning-validation.json
-          python3 tools/provisioning/verify_provisioning_qr.py --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk dist/$DPC_AIO_RELEASE_APK_NAME --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile > dist/work-profile-validation.json
-          python3 tools/provisioning/verify_provisioning_qr.py --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk dist/$DPC_AIO_RELEASE_APK_NAME --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed > dist/device-owner-validation.json
+          verifier_apksigner="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -x "$verifier_apksigner"
+          status=0
+
+          validate_one() {
+            local report="$1"
+            shift
+            if ! python3 tools/provisioning/verify_provisioning_qr.py "$@" > "$report"; then
+              status=1
+            fi
+            echo "===== $report ====="
+            cat "$report" || true
+          }
+
+          validate_one dist/provisioning-validation.json --json dist/provisioning.json --qr dist/provisioning-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat_mode"
+          validate_one dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
+          validate_one dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
+
+          if [[ "$status" != "0" ]]; then
+            echo "QR_VALIDATION_FAILED: local QR/APK validation failed; validation reports were preserved for artifact upload." >&2
+            exit "$status"
+          fi
 
       - name: Cleanup ephemeral signer before runtime
         shell: bash
@@ -345,6 +434,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       DPC_AIO_APP_VERSION: ${{ needs.build.outputs.app_version }}
       DPC_AIO_QR_BUNDLE_NAME: ${{ needs.build.outputs.qr_bundle_name }}
+      DPC_AIO_RELEASE_APK_NAME: ${{ needs.build.outputs.release_apk_name }}
+      DPC_AIO_EMERGENCY_RELEASE_TAG: ${{ needs.build.outputs.emergency_release_tag }}
     steps:
       - name: Download verified artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -358,6 +449,7 @@ jobs:
           set -euo pipefail
           tag="$DPC_AIO_EMERGENCY_RELEASE_TAG"
           notes="Run-specific emergency DPC-AIO $DPC_AIO_APP_VERSION enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other and include $DPC_AIO_QR_BUNDLE_NAME. The signer is ephemeral, so this build is not update-stable across independent runs."
+          rm -f dist/gradle-build.log
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "DPC-AIO Emergency Enrollment" --notes "$notes" --prerelease
           else
