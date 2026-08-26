@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.dpcaio.core.model.OwnershipMode
 import io.dpcaio.knox.license.KnoxPublicCapability
 
 class KnoxEnterpriseCenterActivity : Activity() {
@@ -16,6 +17,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
 
     private fun render() {
         val management = ManagementContextFactory.create(this)
+        val ownerSatisfied = management.ownership == OwnershipMode.DEVICE_OWNER || management.ownership == OwnershipMode.PROFILE_OWNER
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 24, 24, 24)
@@ -53,17 +55,17 @@ class KnoxEnterpriseCenterActivity : Activity() {
         row(
             name = "Android Enterprise",
             route = "ANDROID_DPM",
-            owner = if (management.deviceOwner || management.profileOwner) "SATISFIED" else "REQUIRED",
+            owner = if (ownerSatisfied) "SATISFIED" else "REQUIRED",
             license = "N/A",
             permission = "DPM",
             readback = "REQUIRED",
-            state = if (management.deviceOwner || management.profileOwner) "AVAILABLE" else "OWNER_REQUIRED",
+            state = if (ownerSatisfied) "AVAILABLE" else "OWNER_REQUIRED",
         )
 
         row(
             name = "Knox KPE / License",
             route = "KNOX_OFFICIAL",
-            owner = if (management.deviceOwner || management.profileOwner) "SATISFIED" else "REQUIRED",
+            owner = if (ownerSatisfied) "SATISFIED" else "REQUIRED",
             license = KnoxRuntimeStateStore.realLicenseStateName(this),
             permission = "KPE/KLM_CAPABILITY_DEPENDENT",
             readback = "RUNTIME_STATE_STORE",
@@ -92,7 +94,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
             row(
                 name = labels.getValue(cap),
                 route = "KNOX_OFFICIAL",
-                owner = if (management.deviceOwner || management.profileOwner) "SATISFIED" else "REQUIRED",
+                owner = if (ownerSatisfied) "SATISFIED" else "REQUIRED",
                 license = if (management.knoxLicenseActive) "ACTIVE" else "REQUIRED",
                 permission = "CAPABILITY_DEPENDENT",
                 readback = if (cap.executable) "REQUIRED" else "UNAVAILABLE",

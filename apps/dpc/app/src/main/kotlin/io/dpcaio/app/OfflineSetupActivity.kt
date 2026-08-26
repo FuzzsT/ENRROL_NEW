@@ -75,7 +75,8 @@ class OfflineSetupActivity : Activity() {
     private fun preview() {
         val file = importedBundle
         val inspected = bundleInspection
-        if (file == null || !file.isFile || inspected?.manifest == null) {
+        val manifest = inspected?.manifest
+        if (file == null || !file.isFile || manifest == null) {
             renderState("${OfflineReadinessStatus.OFFLINE_BUNDLE_INVALID}\nImport and verify an offline bundle first")
             return
         }
@@ -91,10 +92,10 @@ class OfflineSetupActivity : Activity() {
             if (dpm.isDeviceOwnerApp(packageName)) add("PACKAGE_INSTALL")
         }
         val readiness = OfflineReadinessPlanner().evaluate(
-            inspected.manifest,
+            manifest,
             OfflineReadinessInput(
                 signatureVerified = inspected.signatureVerified && inspected.signingIdentityIssues.isEmpty() && inspected.packagePlan.ready,
-                schemaSupported = inspected.manifest.schemaVersion == 1,
+                schemaSupported = manifest.schemaVersion == 1,
                 currentAndroidApi = android.os.Build.VERSION.SDK_INT,
                 provisioningMode = provisioningMode,
                 currentDpcVersion = BuildConfig.VERSION_NAME,
@@ -105,8 +106,8 @@ class OfflineSetupActivity : Activity() {
         renderState(buildString {
             appendLine("${readiness.status}")
             appendLine("Mode: ${if (mode == OfflineMode.FULL_OFFLINE) "FULL OFFLINE" else "OFFLINE THEN SYNC"}")
-            appendLine("Bundle: ${inspected.manifest.bundleId}")
-            appendLine("Packages: ${inspected.manifest.packages.size}")
+            appendLine("Bundle: ${manifest.bundleId}")
+            appendLine("Packages: ${manifest.packages.size}")
             appendLine("Verified files: ${inspected.packagePlan.verifiedFiles.size}")
             appendLine("Capabilities: ${capabilities.sorted()}")
             readiness.details.forEach(::appendLine)
@@ -118,11 +119,11 @@ class OfflineSetupActivity : Activity() {
     private fun applySupported() {
         val file = importedBundle
         val inspected = bundleInspection
-        if (file == null || inspected?.ready != true || inspected.manifest == null) {
+        val manifest = inspected?.manifest
+        if (file == null || inspected?.ready != true || manifest == null) {
             renderState("OFFLINE_BUNDLE_INVALID\nSigned manifest/package verification must pass before apply")
             return
         }
-        val manifest = inspected.manifest
         coordinator.startFullOffline(manifest.bundleId)
         deploymentStore.save(
             OfflineDeploymentState(

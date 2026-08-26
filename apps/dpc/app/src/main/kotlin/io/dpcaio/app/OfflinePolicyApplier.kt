@@ -52,11 +52,12 @@ class OfflinePolicyApplier(private val context: Context) {
 
     fun apply(bundleFile: File): OfflinePolicyApplyResult {
         val inspected = AndroidOfflineBundleReader(appContext).inspect(bundleFile, BuildConfig.OFFLINE_SIGNING_PUBLIC_KEY)
-        if (!inspected.ready || inspected.manifest == null) {
+        val manifest = inspected.manifest
+        if (!inspected.ready || manifest == null) {
             store.load()?.let { store.save(it.copy(stage = OfflineStage.FAILED, lastError = "OFFLINE_BUNDLE_INVALID:${inspected.detail}")) }
             return OfflinePolicyApplyResult(false, listOf(OfflinePolicyApplyItem("bundle", bundleFile.name, true, false, inspected.detail)), OfflineStage.FAILED)
         }
-        val spec = AndroidOfflinePolicyReader().read(bundleFile, inspected.manifest.policyPath)
+        val spec = AndroidOfflinePolicyReader().read(bundleFile, manifest.policyPath)
         val items = mutableListOf<OfflinePolicyApplyItem>()
         val currentUser = AndroidUserId.fromUid(Process.myUid())
         val shizukuState = AndroidShizukuRuntime().probe()
@@ -136,7 +137,7 @@ class OfflinePolicyApplier(private val context: Context) {
                 OfflineComponentDesiredState.ENABLED -> ComponentOverrideState.ENABLED
                 OfflineComponentDesiredState.DISABLED -> ComponentOverrideState.DISABLED
             }
-            val activity = runCatching { AndroidActivityInventory(appContext).list(rule.packageName, UserHandle.of(targetUserId)) }
+            val activity = runCatching { AndroidActivityInventory(appContext).list(rule.packageName, UserHandle.getUserHandleForUid(AndroidUserId.baseUid(targetUserId))) }
                 .getOrElse { emptyList() }
                 .firstOrNull { it.className == rule.normalizedClassName }
             if (activity == null) {

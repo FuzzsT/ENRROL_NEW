@@ -1,3 +1,4 @@
 <resources>
     <string name="dpcaio_nfc_hce_description">DPC-AIO synthetic NFC test</string>
+    <string name="dpcaio_nfc_aid_group_description">DPC-AIO synthetic test</string>
 </resources>
