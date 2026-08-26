@@ -67,6 +67,8 @@ env:
   DPC_AIO_BUILD_ARTIFACT_NAME: DPC-AIO-enterpriseRelease-enrollment-${{ github.run_id }}-${{ github.run_attempt }}
   DPC_AIO_RUNTIME_ARTIFACT_NAME: DPC-AIO-android-runtime-smoke-${{ github.run_id }}-${{ github.run_attempt }}
   DPC_AIO_ENVIRONMENT_ARTIFACT_NAME: DPC-AIO-build-environment-${{ github.run_id }}-${{ github.run_attempt }}
+  DPC_AIO_RELEASE_APK_NAME: ${{ vars.DPC_AIO_RELEASE_APK_NAME || 'DPC-AIO-enterprise-release.apk' }}
+  DPC_AIO_CONTINUOUS_RELEASE_TAG: ${{ vars.DPC_AIO_CONTINUOUS_RELEASE_TAG || 'dpc-aio-continuous' }}
 
 jobs:
   build:
@@ -76,13 +78,38 @@ jobs:
       contents: read
     outputs:
       signing_mode: ${{ steps.signing.outputs.mode }}
+      app_version: ${{ steps.metadata.outputs.app_version }}
+      qr_bundle_name: ${{ steps.metadata.outputs.qr_bundle_name }}
     env:
       DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
-      DPC_AIO_CONTINUOUS_RELEASE_TAG: dpc-aio-continuous
 
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Resolve project release metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 - <<'PYMETA'
+          import pathlib, re
+          text = pathlib.Path('apps/dpc/app/build.gradle.kts').read_text(encoding='utf-8')
+          match = re.search(r'versionName\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit('VERSION_NAME_NOT_FOUND')
+          print(match.group(1))
+          PYMETA
+          )"
+          bundle_name="DPC-AIO-${version}-QR-RELEASE-BUNDLE.zip"
+          {
+            echo "DPC_AIO_APP_VERSION=$version"
+            echo "DPC_AIO_QR_BUNDLE_NAME=$bundle_name"
+          } >> "$GITHUB_ENV"
+          {
+            echo "app_version=$version"
+            echo "qr_bundle_name=$bundle_name"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved app version: $version"
       - name: Set up Java 21
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -177,18 +204,18 @@ jobs:
           test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
       - name: Set up Python QR dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
-      - name: Resolve public APK URL
+      - name: Resolve target APK URL (published after local validation)
         shell: bash
         run: |
           if [[ -n "${{ inputs.apk_url }}" ]]; then
             url='${{ inputs.apk_url }}'
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/DPC-AIO-enterprise-release.apk"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${DPC_AIO_RELEASE_APK_NAME}"
           else
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/${DPC_AIO_RELEASE_APK_NAME}"
           fi
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
-          echo "Provisioning APK URL: $url"
+          echo "Provisioning target APK URL (may not exist until publish job): $url"
       - name: Load manual signing password
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -219,6 +246,12 @@ jobs:
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_STRICT_EXPECTED_SIGNING_CERT || 'false' }}
         shell: bash
         run: bash tools/release/prepare_enterprise_signing.sh
+      - name: Require stable signing key for tag release
+        if: ${{ github.ref_type == 'tag' && steps.signing.outputs.mode != 'stable-secrets' }}
+        shell: bash
+        run: |
+          echo "STABLE_SIGNING_KEY_REQUIRED: versioned tag releases require repository stable signing secrets" >&2
+          exit 1
       - name: Verify Android build environment
         shell: bash
         run: |
@@ -288,7 +321,7 @@ jobs:
           mkdir -p dist
           apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
           test -n "$apk"
-          cp "$apk" dist/DPC-AIO-enterprise-release.apk
+          cp "$apk" dist/$DPC_AIO_RELEASE_APK_NAME
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning.json dist/
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
@@ -301,35 +334,55 @@ jobs:
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
-      - name: Validate enrollment QR files
+      - name: Validate enrollment QR files locally before release publish
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           compat_mode="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["provisioningMode"])' dist/provisioning-metadata.json)"
-          python3 tools/provisioning/verify_provisioning_qr.py \
+          verifier_apksigner="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -x "$verifier_apksigner"
+          status=0
+
+          validate_one() {
+            local report="$1"
+            shift
+            if ! python3 tools/provisioning/verify_provisioning_qr.py "$@" > "$report"; then
+              status=1
+            fi
+            echo "===== $report ====="
+            cat "$report" || true
+          }
+
+          # This stage validates only the local APK, generated QR image/payload and
+          # the target URL string embedded in the QR. It intentionally does NOT
+          # download the target release URL; that URL is verified after publish.
+          validate_one dist/provisioning-validation.json \
             --json dist/provisioning.json \
             --qr dist/provisioning-qr.png \
-            --apk dist/DPC-AIO-enterprise-release.apk \
+            --apk "dist/$DPC_AIO_RELEASE_APK_NAME" \
+            --apksigner "$verifier_apksigner" \
             --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
-            --expected-mode "$compat_mode" \
-            > dist/provisioning-validation.json
-          python3 tools/provisioning/verify_provisioning_qr.py \
+            --expected-mode "$compat_mode"
+          validate_one dist/work-profile-validation.json \
             --json dist/work-profile-provisioning.json \
             --qr dist/work-profile-qr.png \
-            --apk dist/DPC-AIO-enterprise-release.apk \
+            --apk "dist/$DPC_AIO_RELEASE_APK_NAME" \
+            --apksigner "$verifier_apksigner" \
             --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
-            --expected-mode work-profile \
-            > dist/work-profile-validation.json
-          python3 tools/provisioning/verify_provisioning_qr.py \
+            --expected-mode work-profile
+          validate_one dist/device-owner-validation.json \
             --json dist/device-owner-provisioning.json \
             --qr dist/device-owner-qr.png \
-            --apk dist/DPC-AIO-enterprise-release.apk \
+            --apk "dist/$DPC_AIO_RELEASE_APK_NAME" \
+            --apksigner "$verifier_apksigner" \
             --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
-            --expected-mode fully-managed \
-            > dist/device-owner-validation.json
-          cat dist/provisioning-validation.json
-          cat dist/work-profile-validation.json
-          cat dist/device-owner-validation.json
+            --expected-mode fully-managed
+
+          if [[ "$status" != "0" ]]; then
+            echo "QR_VALIDATION_FAILED: local QR/APK validation failed; dist/*-validation.json was preserved for artifact upload." >&2
+            exit "$status"
+          fi
+          echo "Local QR/APK validation passed. The publish job may now create/update the release and then verify the public URL."
       - name: Cleanup release signing material before runtime
         shell: bash
         run: |
@@ -355,41 +408,44 @@ jobs:
           disable-animations: true
           script: >-
             python3 tools/runtime/android_device_owner_smoke.py
-            --apk dist/DPC-AIO-enterprise-release.apk
+            --apk dist/$DPC_AIO_RELEASE_APK_NAME
             --out dist/android-runtime-smoke.json
-            --expected-version 1.1.4
+            --expected-version "$DPC_AIO_APP_VERSION"
       - name: Build QR release bundle
         shell: bash
         run: |
           set -euo pipefail
           python3 tools/release/build_qr_release_bundle.py \
             --dist dist \
-            --version 1.1.4 \
-            --apk-url "$DPC_AIO_PROVISIONING_APK_URL"
-          test -f dist/DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip
-          test -f dist/DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip.sha256
+            --version "$DPC_AIO_APP_VERSION" \
+            --apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
+            --apk-name "$DPC_AIO_RELEASE_APK_NAME"
+          test -f "dist/$DPC_AIO_QR_BUNDLE_NAME"
+          test -f "dist/$DPC_AIO_QR_BUNDLE_NAME.sha256"
           test -f dist/QR-README.md
           test -f dist/RELEASE-INDEX.json
           test -f dist/SHA256SUMS.txt
       - name: Upload Android runtime smoke evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ always() && hashFiles('dist/android-runtime-smoke.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         with:
           name: ${{ env.DPC_AIO_RUNTIME_ARTIFACT_NAME }}
           path: dist/android-runtime-smoke.json
-          if-no-files-found: warn
+          if-no-files-found: error
       - name: Upload full build + enrollment artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ always() && hashFiles('dist/**') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         with:
           name: ${{ env.DPC_AIO_BUILD_ARTIFACT_NAME }}
           path: dist/
+          if-no-files-found: error
       - name: Upload build environment evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ always() && hashFiles('dist/build-environment.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (Node 24)
         with:
           name: ${{ env.DPC_AIO_ENVIRONMENT_ARTIFACT_NAME }}
           path: dist/build-environment.json
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Cleanup release signing material fallback
         if: always()
         shell: bash
@@ -411,7 +467,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
-      DPC_AIO_CONTINUOUS_RELEASE_TAG: dpc-aio-continuous
+      DPC_AIO_APP_VERSION: ${{ needs.build.outputs.app_version }}
+      DPC_AIO_QR_BUNDLE_NAME: ${{ needs.build.outputs.qr_bundle_name }}
     steps:
       - name: Download verified build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -424,9 +481,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/DPC-AIO-enterprise-release.apk"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${DPC_AIO_RELEASE_APK_NAME}"
           else
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/${DPC_AIO_RELEASE_APK_NAME}"
           fi
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
           echo "Published APK URL: $url"
@@ -459,7 +516,7 @@ jobs:
           matched=0
           for attempt in 1 2 3 4 5 6; do
             rm -f "$downloaded"
-            if curl -fL --connect-timeout 15 --max-time 180 "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded"                && cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded"; then
+            if curl -fL --connect-timeout 15 --max-time 180 "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded"                && cmp -s dist/$DPC_AIO_RELEASE_APK_NAME "$downloaded"; then
               matched=1
               break
             fi
@@ -468,7 +525,7 @@ jobs:
           done
           if [[ "$matched" != "1" ]]; then
             echo "Continuous enrollment APK is not publicly downloadable or does not match this build." >&2
-            sha256sum dist/DPC-AIO-enterprise-release.apk
+            sha256sum dist/$DPC_AIO_RELEASE_APK_NAME
             [[ -f "$downloaded" ]] && sha256sum "$downloaded" || true
             exit 1
           fi
@@ -483,7 +540,7 @@ jobs:
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists; uploading verified assets with --clobber."
           else
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes "DPC-AIO verified release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip."
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes "DPC-AIO $DPC_AIO_APP_VERSION verified release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus $DPC_AIO_QR_BUNDLE_NAME."
           fi
           gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
 
@@ -496,7 +553,7 @@ jobs:
           matched=0
           for attempt in 1 2 3 4 5 6; do
             rm -f "$downloaded"
-            if curl -fL --connect-timeout 15 --max-time 180 "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded"                && cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded"; then
+            if curl -fL --connect-timeout 15 --max-time 180 "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded"                && cmp -s dist/$DPC_AIO_RELEASE_APK_NAME "$downloaded"; then
               matched=1
               break
             fi
@@ -505,7 +562,7 @@ jobs:
           done
           if [[ "$matched" != "1" ]]; then
             echo "Tag release enrollment APK is not publicly downloadable or does not match this build." >&2
-            sha256sum dist/DPC-AIO-enterprise-release.apk
+            sha256sum dist/$DPC_AIO_RELEASE_APK_NAME
             [[ -f "$downloaded" ]] && sha256sum "$downloaded" || true
             exit 1
           fi
