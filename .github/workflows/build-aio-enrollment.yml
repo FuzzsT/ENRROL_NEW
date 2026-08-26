@@ -69,6 +69,8 @@ jobs:
     timeout-minutes: 70
     permissions:
       contents: read
+    outputs:
+      signing_mode: ${{ steps.signing.outputs.mode }}
     env:
       DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
       DPC_AIO_CONTINUOUS_RELEASE_TAG: dpc-aio-continuous
@@ -356,7 +358,7 @@ jobs:
 
   publish:
     needs: build
-    if: ${{ needs.build.result == 'success' && (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.apk_url == '')) }}
+    if: ${{ needs.build.result == 'success' && needs.build.outputs.signing_mode == 'stable-secrets' && (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.apk_url == '')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
