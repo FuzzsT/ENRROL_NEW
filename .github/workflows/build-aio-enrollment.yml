@@ -134,12 +134,23 @@ jobs:
             exit 1
           fi
 
+          # Prefer a stable Android 17 Build Tools package. `sort -V` alone can
+          # rank a preview such as 37.0.0-rc2 after 37.0.0, which previously
+          # caused CI to select the RC apksigner for release verification.
           build_tools_pkg="$(
             awk -F'|' '
               { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
-              $1 ~ /^build-tools;37\./ { print $1 }
+              $1 ~ /^build-tools;37\.[0-9]+\.[0-9]+$/ { print $1 }
             ' "$SDK_LIST" | sort -V | tail -n1
           )"
+          if [[ -z "$build_tools_pkg" ]]; then
+            build_tools_pkg="$(
+              awk -F'|' '
+                { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+                $1 ~ /^build-tools;37\./ { print $1 }
+              ' "$SDK_LIST" | sort -V | tail -n1
+            )"
+          fi
           if [[ -z "$build_tools_pkg" ]]; then
             build_tools_pkg="build-tools;36.0.0"
           fi
@@ -149,6 +160,7 @@ jobs:
           "$SDKMANAGER" \
             "$platform_pkg" \
             "$build_tools_pkg" \
+            "build-tools;36.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1" \
             --channel=3
@@ -237,12 +249,34 @@ jobs:
           set -euo pipefail
           apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
           test -n "$apk"
-          apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+
+          # Use the explicitly installed stable verifier instead of auto-selecting
+          # the newest preview Build Tools package. The previous run selected
+          # 37.0.0-rc2 and then parsed an empty observed digest.
+          apksigner_bin="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
           test -x "$apksigner_bin"
-          observed="$($apksigner_bin verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr '[:lower:]' '[:upper:]')"
+          echo "APK selected: $apk"
+          echo "APK signer: $($apksigner_bin --version)"
+
+          # Capture both streams and parse tolerantly. This preserves diagnostics
+          # and avoids reporting SIGNING_CERT_MISMATCH merely because output
+          # formatting/stream placement differs between apksigner builds.
+          cert_output="$($apksigner_bin verify --verbose --print-certs "$apk" 2>&1)"
+          printf '%s\n' "$cert_output"
+          observed="$(
+            printf '%s\n' "$cert_output" \
+              | sed -nE 's/.*Signer[[:space:]]*#[[:space:]]*1[[:space:]]+certificate[[:space:]]+SHA-256[[:space:]]+digest:[[:space:]]*([0-9A-Fa-f:]+).*/\1/ip' \
+              | head -n1 \
+              | tr -d ':[:space:]' \
+              | tr '[:lower:]' '[:upper:]'
+          )"
           expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
-          observed="$(printf '%s' "$observed" | tr -d ':[:space:]')"
-          if [[ -z "$observed" || "$observed" != "$expected" ]]; then
+
+          if [[ -z "$observed" ]]; then
+            echo "SIGNING_CERT_PARSE_FAILED: apksigner verified the APK but no signer SHA-256 was parsed" >&2
+            exit 1
+          fi
+          if [[ "$observed" != "$expected" ]]; then
             echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2
             exit 1
           fi
