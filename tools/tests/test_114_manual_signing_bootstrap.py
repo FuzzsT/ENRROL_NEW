@@ -43,6 +43,8 @@ assert 'release_signing_password:' in workflow
 assert 'GITHUB_EVENT_PATH' in workflow
 assert 'tools/release/prepare_enterprise_signing.sh' in workflow
 assert '${{ inputs.release_signing_password }}' not in workflow, 'manual password must not be interpolated into logged run/env YAML'
+assert 'signing_mode: ${{ steps.signing.outputs.mode }}' in workflow, 'build job must export signing mode'
+assert "needs.build.outputs.signing_mode == 'stable-secrets'" in workflow, 'run-scoped signing must never publish as stable release'
 
 cp, env_text, out_text, files = run_prepare('workflow_dispatch', PASSWORD)
 assert cp.returncode == 0, cp.stderr + cp.stdout
