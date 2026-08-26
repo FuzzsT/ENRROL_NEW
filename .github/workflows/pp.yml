@@ -1,0 +1,469 @@
+name: Build AIO + enrollment QR
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: "Optional HTTPS APK URL. Leave empty to publish/use dpc-aio-continuous."
+        required: false
+        type: string
+      enrollment_token:
+        description: "Optional enrollment token embedded in admin extras"
+        required: false
+        type: string
+      enrollment_endpoint:
+        description: "Optional HTTPS DPC-AIO Enrollment Engine v2 endpoint"
+        required: false
+        type: string
+      enrollment_signing_public_key:
+        description: "Optional Base64 DER Ed25519 public key used by the DPC"
+        required: false
+        type: string
+      policy_profile:
+        description: "Policy profile placed in admin extras"
+        required: false
+        default: "default"
+        type: string
+      provisioning_mode:
+        description: "Compatibility QR mode"
+        required: true
+        default: "work-profile"
+        type: choice
+        options: [auto, work-profile, fully-managed]
+      allow_offline:
+        description: "Allow Android offline provisioning"
+        required: false
+        default: false
+        type: boolean
+      enrollment_offline_mode:
+        description: "DPC enrollment route"
+        required: false
+        default: "ONLINE"
+        type: choice
+        options: [ONLINE, ONLINE_PREFERRED, FULL_OFFLINE, OFFLINE_THEN_SYNC]
+      offline_bundle_id:
+        description: "Required for FULL_OFFLINE/OFFLINE_THEN_SYNC"
+        required: false
+        type: string
+      release_signing_password:
+        description: "12+ chars. Used to generate a run-scoped PKCS12 signer when persistent signing Secrets are absent."
+        required: false
+        type: string
+
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dpc-aio-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DPC_AIO_VERSION: "1.1.4"
+  DPC_AIO_CONTINUOUS_RELEASE_TAG: "dpc-aio-continuous"
+  DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
+  DPC_AIO_APP_DIR: "apps/dpc/app"
+
+jobs:
+  build:
+    name: Build, verify and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+    outputs:
+      signing_mode: ${{ steps.signing.outputs.mode }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: "platform-tools"
+
+      - name: Install Android 17 SDK + native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --list --channel=3 > "$RUNNER_TEMP/sdk-list.txt"
+
+          platform_pkg="$(awk -F'|' '
+            { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+            $1 == "platforms;android-37" || $1 ~ /^platforms;android-37\.[0-9]+$/ || $1 == "platforms;android-CinnamonBun" { print $1 }
+          ' "$RUNNER_TEMP/sdk-list.txt" | sort -V | tail -n1)"
+
+          build_tools_pkg="$(awk -F'|' '
+            { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+            $1 ~ /^build-tools;37\./ { print $1 }
+          ' "$RUNNER_TEMP/sdk-list.txt" | sort -V | tail -n1)"
+
+          [[ -n "$platform_pkg" ]] || { echo "Android 17/API 37 platform not found" >&2; exit 1; }
+          [[ -n "$build_tools_pkg" ]] || { echo "Build Tools 37.x not found" >&2; exit 1; }
+
+          sdkmanager "$platform_pkg" "$build_tools_pkg" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
+
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]]; then
+            installed_name="${platform_pkg#platforms;}"
+            ln -sfn "$ANDROID_SDK_ROOT/platforms/$installed_name" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+
+      - name: Set up Python QR dependencies
+        run: python3 -m pip install --disable-pip-version-check -r tools/provisioning/requirements.txt
+
+      - name: Resolve provisioning configuration
+        shell: bash
+        env:
+          INPUT_APK_URL: ${{ github.event.inputs.apk_url || '' }}
+          INPUT_OFFLINE_MODE: ${{ github.event.inputs.enrollment_offline_mode || vars.DPC_AIO_ENROLLMENT_OFFLINE_MODE || 'ONLINE' }}
+          INPUT_OFFLINE_BUNDLE_ID: ${{ github.event.inputs.offline_bundle_id || vars.DPC_AIO_OFFLINE_BUNDLE_ID || '' }}
+          INPUT_ENDPOINT: ${{ github.event.inputs.enrollment_endpoint || vars.DPC_AIO_ENROLLMENT_ENDPOINT || '' }}
+        run: |
+          set -euo pipefail
+
+          python3 - "$INPUT_APK_URL" "$INPUT_ENDPOINT" <<'PY'
+          import sys
+          from urllib.parse import urlparse
+          for label, value in (("apk_url", sys.argv[1]), ("enrollment_endpoint", sys.argv[2])):
+              if value:
+                  p = urlparse(value)
+                  if p.scheme.lower() != "https" or not p.netloc:
+                      raise SystemExit(f"{label} must be an absolute HTTPS URL: {value}")
+          PY
+
+          case "$INPUT_OFFLINE_MODE" in
+            ONLINE|ONLINE_PREFERRED) ;;
+            FULL_OFFLINE|OFFLINE_THEN_SYNC)
+              [[ -n "$INPUT_OFFLINE_BUNDLE_ID" ]] || { echo "offline_bundle_id required for $INPUT_OFFLINE_MODE" >&2; exit 1; }
+              ;;
+            *) echo "Unsupported offline mode: $INPUT_OFFLINE_MODE" >&2; exit 1 ;;
+          esac
+
+          if [[ -n "$INPUT_APK_URL" ]]; then
+            url="$INPUT_APK_URL"
+            custom=true
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/DPC-AIO-enterprise-release.apk"
+            custom=false
+          else
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
+            custom=false
+          fi
+
+          echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
+          echo "DPC_AIO_CUSTOM_APK_URL=$custom" >> "$GITHUB_ENV"
+          echo "Provisioning APK URL: $url"
+
+      - name: Load Run workflow signing password
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              print(json.load(f).get("inputs", {}).get("release_signing_password", ""), end="")
+          PY
+          )"
+          if [[ -n "$password" ]]; then
+            printf '::add-mask::%s\n' "$password"
+            printf 'DPC_AIO_MANUAL_SIGNING_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
+          fi
+
+      - name: Prepare enterprise release signing
+        id: signing
+        shell: bash
+        env:
+          DPC_AIO_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
+          DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
+          DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
+          DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
+          DPC_AIO_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          manual="${DPC_AIO_MANUAL_SIGNING_PASSWORD:-}"
+
+          if [[ -n "${DPC_AIO_RELEASE_KEYSTORE_B64:-}" && -n "${DPC_AIO_RELEASE_KEY_ALIAS:-}" && -n "${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256:-}" ]]; then
+            storepass="${DPC_AIO_RELEASE_STORE_PASSWORD:-$manual}"
+            [[ -n "$storepass" ]] || { echo "Missing persistent keystore password" >&2; exit 1; }
+            keypass="${DPC_AIO_RELEASE_KEY_PASSWORD:-$storepass}"
+            alias="$DPC_AIO_RELEASE_KEY_ALIAS"
+            keystore="$RUNNER_TEMP/dpc-aio-release.p12"
+            printf '%s' "$DPC_AIO_RELEASE_KEYSTORE_B64" | base64 --decode > "$keystore"
+            expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+            mode="persistent"
+          else
+            [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] || { echo "Persistent signer required for tag builds" >&2; exit 1; }
+            [[ ${#manual} -ge 12 ]] || { echo "Enter release_signing_password with at least 12 characters" >&2; exit 1; }
+            storepass="$manual"
+            keypass="$manual"
+            alias="dpc-aio-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            keystore="$RUNNER_TEMP/dpc-aio-run-scoped.p12"
+            keytool -genkeypair -storetype PKCS12 -keystore "$keystore" -storepass "$storepass" -keypass "$keypass" \
+              -alias "$alias" -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 3650 \
+              -dname "CN=DPC-AIO Run ${GITHUB_RUN_ID}, OU=GitHub Actions, O=DPC-AIO, C=PL" -noprompt
+            expected=""
+            mode="run-scoped"
+          fi
+
+          chmod 600 "$keystore"
+          printf '::add-mask::%s\n' "$storepass"
+          printf '::add-mask::%s\n' "$keypass"
+
+          observed="$(keytool -exportcert -rfc -storetype PKCS12 -keystore "$keystore" -storepass "$storepass" -alias "$alias" \
+            | openssl x509 -noout -fingerprint -sha256 | awk -F= '{print $2}' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          [[ -n "$observed" ]] || { echo "Could not read signing fingerprint" >&2; exit 1; }
+
+          if [[ "$mode" == "persistent" ]]; then
+            [[ "$observed" == "$expected" ]] || { echo "KEYSTORE_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
+          else
+            expected="$observed"
+            echo "::warning title=Run-scoped signer::This APK uses a temporary certificate. Configure persistent signing Secrets for update-compatible releases."
+          fi
+
+          {
+            echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$keystore"
+            echo "DPC_AIO_RELEASE_STORE_PASSWORD=$storepass"
+            echo "DPC_AIO_RELEASE_KEY_ALIAS=$alias"
+            echo "DPC_AIO_RELEASE_KEY_PASSWORD=$keypass"
+            echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$expected"
+            echo "DPC_AIO_SIGNING_MODE=$mode"
+          } >> "$GITHUB_ENV"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Android build environment
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python3 tools/android_build_preflight.py --require-signing --json-out dist/build-environment.json
+
+      - name: Build enterpriseRelease and provisioning QR files
+        shell: bash
+        env:
+          DPC_AIO_ENROLLMENT_TOKEN: ${{ github.event.inputs.enrollment_token || '' }}
+          DPC_AIO_ENROLLMENT_ENDPOINT: ${{ github.event.inputs.enrollment_endpoint || vars.DPC_AIO_ENROLLMENT_ENDPOINT || '' }}
+          DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY: ${{ github.event.inputs.enrollment_signing_public_key || vars.DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY || '' }}
+          DPC_AIO_POLICY_PROFILE: ${{ github.event.inputs.policy_profile || 'default' }}
+          DPC_AIO_PROVISIONING_MODE: ${{ github.event.inputs.provisioning_mode || 'work-profile' }}
+          DPC_AIO_ALLOW_OFFLINE: ${{ github.event.inputs.allow_offline || false }}
+          DPC_AIO_ENROLLMENT_OFFLINE_MODE: ${{ github.event.inputs.enrollment_offline_mode || vars.DPC_AIO_ENROLLMENT_OFFLINE_MODE || 'ONLINE' }}
+          DPC_AIO_OFFLINE_BUNDLE_ID: ${{ github.event.inputs.offline_bundle_id || vars.DPC_AIO_OFFLINE_BUNDLE_ID || '' }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app-dpc:assembleEnterpriseRelease
+
+      - name: Collect AIO enrollment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          app_build="$DPC_AIO_APP_DIR/build"
+          apk_dir="$app_build/outputs/apk/enterprise/release"
+          provisioning_dir="$app_build/outputs/provisioning/enterprise/release"
+
+          # settings.gradle.kts maps :app-dpc to apps/dpc/app.
+          test -d "$app_build" || { echo "Missing :app-dpc build dir: $app_build" >&2; exit 1; }
+
+          apk="$(find "$apk_dir" -type f -name '*.apk' -print 2>/dev/null | sort | head -n1)"
+          [[ -n "$apk" && -f "$apk" ]] || {
+            echo "enterpriseRelease APK not found in $apk_dir" >&2
+            find "$app_build/outputs" -type f -name '*.apk' -print >&2 || true
+            exit 1
+          }
+
+          required=(
+            provisioning.json provisioning-payload.txt provisioning-metadata.json provisioning-qr.png
+            work-profile-provisioning.json work-profile-provisioning-payload.txt work-profile-provisioning-metadata.json work-profile-qr.png
+            device-owner-provisioning.json device-owner-provisioning-payload.txt device-owner-provisioning-metadata.json device-owner-qr.png
+          )
+
+          cp "$apk" dist/DPC-AIO-enterprise-release.apk
+          for file in "${required[@]}"; do
+            src="$provisioning_dir/$file"
+            [[ -f "$src" ]] || { echo "Missing provisioning artifact: $src" >&2; exit 1; }
+            cp "$src" dist/
+          done
+
+          echo "APK: $apk"
+          echo "Provisioning: $provisioning_dir"
+
+      - name: Verify APK signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner -print | sort -V | tail -n1)"
+          test -x "$apksigner"
+          "$apksigner" verify --verbose dist/DPC-AIO-enterprise-release.apk
+          observed="$($apksigner verify --print-certs dist/DPC-AIO-enterprise-release.apk \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          [[ -n "$observed" && "$observed" == "$expected" ]] || { echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
+
+      - name: Verify custom APK URL matches this build
+        if: env.DPC_AIO_CUSTOM_APK_URL == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          downloaded="$RUNNER_TEMP/custom.apk"
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 180 \
+            "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded"
+          cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded" || {
+            echo "Custom apk_url does not serve the APK produced by this run" >&2
+            sha256sum dist/DPC-AIO-enterprise-release.apk "$downloaded"
+            exit 1
+          }
+
+      - name: Validate enrollment QR files
+        shell: bash
+        run: |
+          set -euo pipefail
+          compat_mode="$(python3 -c 'import json; print(json.load(open("dist/provisioning-metadata.json"))["provisioningMode"])')"
+          python3 tools/provisioning/verify_provisioning_qr.py --json dist/provisioning.json --qr dist/provisioning-qr.png \
+            --apk dist/DPC-AIO-enterprise-release.apk --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat_mode" > dist/provisioning-validation.json
+          python3 tools/provisioning/verify_provisioning_qr.py --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png \
+            --apk dist/DPC-AIO-enterprise-release.apk --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile > dist/work-profile-validation.json
+          python3 tools/provisioning/verify_provisioning_qr.py --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png \
+            --apk dist/DPC-AIO-enterprise-release.apk --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed > dist/device-owner-validation.json
+
+      - name: Build QR release bundle
+        run: |
+          set -euo pipefail
+          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL"
+          test -f "dist/DPC-AIO-${DPC_AIO_VERSION}-QR-RELEASE-BUNDLE.zip"
+          test -f "dist/DPC-AIO-${DPC_AIO_VERSION}-QR-RELEASE-BUNDLE.zip.sha256"
+          test -f dist/RELEASE-INDEX.json
+          test -f dist/SHA256SUMS.txt
+
+      - name: Remove signing keystore before emulator
+        run: rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
+
+      - name: Enable KVM group permissions
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AOSP Device Owner runtime smoke
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          script: >-
+            python3 tools/runtime/android_device_owner_smoke.py
+            --apk dist/DPC-AIO-enterprise-release.apk
+            --out dist/android-runtime-smoke.json
+            --expected-version ${{ env.DPC_AIO_VERSION }}
+
+      - name: Upload build + enrollment artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: DPC-AIO-enterpriseRelease-enrollment
+          path: dist/
+          if-no-files-found: warn
+
+      - name: Cleanup signing material
+        if: always()
+        run: rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
+
+  publish:
+    name: Publish verified release assets
+    needs: build
+    if: >-
+      ${{ needs.build.result == 'success' &&
+          (github.ref_type == 'tag' ||
+           (github.event_name == 'workflow_dispatch' && (github.event.inputs.apk_url || '') == '')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: DPC-AIO-enterpriseRelease-enrollment
+          path: dist
+
+      - name: Resolve release target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            title="$GITHUB_REF_NAME"
+            prerelease=false
+          else
+            tag="$DPC_AIO_CONTINUOUS_RELEASE_TAG"
+            title="DPC-AIO Continuous Enrollment"
+            prerelease=true
+          fi
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/DPC-AIO-enterprise-release.apk"
+          {
+            echo "DPC_RELEASE_TAG=$tag"
+            echo "DPC_RELEASE_TITLE=$title"
+            echo "DPC_RELEASE_PRERELEASE=$prerelease"
+            echo "DPC_AIO_PROVISIONING_APK_URL=$url"
+          } >> "$GITHUB_ENV"
+
+      - name: Create or update release and upload assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
+        run: |
+          set -euo pipefail
+          notes="DPC-AIO ${DPC_AIO_VERSION} from ${GITHUB_SHA}. Signing mode: ${SIGNING_MODE}. Includes APK, Work Profile QR, Device Owner QR, validation data, runtime evidence and QR release bundle."
+
+          if gh release view "$DPC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [[ "$DPC_RELEASE_PRERELEASE" == "true" ]]; then
+              gh release edit "$DPC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$DPC_RELEASE_TITLE" --notes "$notes" --prerelease
+            else
+              gh release edit "$DPC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "$DPC_RELEASE_TITLE" --notes "$notes"
+            fi
+          else
+            args=(release create "$DPC_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$DPC_RELEASE_TITLE" --notes "$notes")
+            [[ "$DPC_RELEASE_PRERELEASE" == "true" ]] && args+=(--prerelease)
+            gh "${args[@]}"
+          fi
+
+          gh release upload "$DPC_RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify published APK URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          downloaded="$RUNNER_TEMP/published.apk"
+          for attempt in 1 2 3 4 5 6; do
+            rm -f "$downloaded"
+            if curl --fail --location --connect-timeout 15 --max-time 180 "$DPC_AIO_PROVISIONING_APK_URL" -o "$downloaded" \
+              && cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded"; then
+              echo "Published APK is public and byte-identical."
+              exit 0
+            fi
+            echo "Published asset not ready yet (attempt $attempt/6)"
+            sleep 5
+          done
+          echo "Published APK URL is missing or does not match this build: $DPC_AIO_PROVISIONING_APK_URL" >&2
+          exit 1
