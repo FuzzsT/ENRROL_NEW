@@ -78,7 +78,10 @@ class ActivityExplorerActivity : Activity() {
         root.addView(Button(this).apply { text = "Apply batch"; setOnClickListener { applyBatch() } })
         root.addView(Button(this).apply { text = "Restore snapshot"; setOnClickListener { restoreSnapshot() } })
         root.addView(status)
-        root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        root.addView(
+            ScrollView(this).apply { addView(list) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        )
         setContentView(root)
         shizuku.bind()
     }
@@ -94,7 +97,7 @@ class ActivityExplorerActivity : Activity() {
             if (pkg == KNOXZT_PACKAGE) {
                 KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = shizuku).ensureReady()
             }
-            val activities = runCatching { AndroidActivityInventory(this).list(pkg, UserHandle.of(targetUserId)) }.getOrElse { emptyList() }
+            val activities = runCatching { AndroidActivityInventory(this).list(pkg, UserHandle.getUserHandleForUid(AndroidUserId.baseUid(targetUserId))) }.getOrElse { emptyList() }
             currentActivities = activities
             runOnUiThread { renderActivities(activities) }
         }.start()
@@ -302,7 +305,7 @@ class ActivityExplorerActivity : Activity() {
             shizukuAccessible = shizukuState.binderAlive && shizukuState.permissionGranted
         )
         val executor = ActivityExecutorRouter(
-            AndroidActivityRouteExecutor(this, UserHandle.of(targetUserId())),
+            AndroidActivityRouteExecutor(this, UserHandle.getUserHandleForUid(AndroidUserId.baseUid(targetUserId()))),
             mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId()))
         )
         val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
