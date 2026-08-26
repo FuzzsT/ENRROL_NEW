@@ -5,6 +5,32 @@ ROOT=Path(__file__).resolve().parents[2]
 errors=[]
 read=lambda p:(ROOT/p).read_text('utf-8')
 
+workflow_dir=ROOT/'.github/workflows'
+expected_workflows={
+    'build-aio-enrollment.yml': 'Build AIO + enrollment QR',
+    'build-emergency-enrollment.yml': 'Emergency enrollment (ephemeral signing)',
+}
+workflows={
+    path.name: path
+    for path in workflow_dir.iterdir()
+    if path.is_file() and path.suffix in {'.yml', '.yaml'}
+}
+if workflows.keys() != expected_workflows.keys():
+    errors.append(f'unexpected workflow topology: {sorted(workflows)}')
+for filename, expected_name in expected_workflows.items():
+    path=workflows.get(filename)
+    if path is None:
+        continue
+    workflow_text=path.read_text('utf-8')
+    name_match=re.search(r'^name:\s*(.+?)\s*$', workflow_text, re.M)
+    observed_name=name_match.group(1).strip('"\'') if name_match else None
+    if observed_name != expected_name:
+        errors.append(f'unexpected workflow name for {filename}: {observed_name!r}')
+    if '${{ github.run_id }}-${{ github.run_attempt }}' not in workflow_text:
+        errors.append(f'{filename} artifact names are not unique per run attempt')
+    if 'GH_TOKEN: ${{ github.token }}' not in workflow_text:
+        errors.append(f'{filename} publish job does not use automatic github.token')
+
 app=read('apps/dpc/app/build.gradle.kts')
 vm=re.search(r'versionName\s*=\s*"([0-9.]+)"', app)
 if not vm or tuple(map(int,vm.group(1).split('.'))) < (1,1,3): errors.append('versionName >=1.1.3 required')
@@ -39,6 +65,12 @@ if not re.search(r'^\s{2}publish:\n(?:.|\n)*?^\s{4}permissions:\n\s{6}contents:\
     errors.append('publish job contents: write missing')
 if 'needs: build' not in wf: errors.append('publish job does not depend on build')
 if 'actions/download-artifact@' not in wf: errors.append('publish job missing download-artifact')
+for marker in [
+    'tools/release/read_apk_signing_cert.py',
+    'tools/gradle_source_audit.py --root . --json-out dist/gradle-source-audit.json',
+    'DPC_AIO_SOURCE_AUDIT_ARTIFACT_NAME',
+]:
+    if marker not in wf: errors.append(f'workflow missing signing/source diagnostic: {marker}')
 
 # Secret signing material must not be job-global. It may appear only in step-level env blocks.
 head_to_steps=wf.split('    steps:',1)[0]
