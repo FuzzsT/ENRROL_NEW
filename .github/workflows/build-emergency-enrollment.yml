@@ -46,6 +46,7 @@ concurrency:
 
 env:
   DPC_AIO_EMERGENCY_RELEASE_TAG: dpc-aio-emergency-enrollment
+  DPC_AIO_EMERGENCY_ARTIFACT_NAME: DPC-AIO-emergency-enrollment-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   build:
@@ -284,7 +285,7 @@ jobs:
       - name: Upload verified emergency enrollment artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: DPC-AIO-emergency-enrollment
+          name: ${{ env.DPC_AIO_EMERGENCY_ARTIFACT_NAME }}
           path: dist/
 
       - name: Cleanup signing material fallback
@@ -299,17 +300,17 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download verified artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: DPC-AIO-emergency-enrollment
+          name: ${{ env.DPC_AIO_EMERGENCY_ARTIFACT_NAME }}
           path: dist
 
       - name: Publish emergency enrollment prerelease
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="dpc-aio-emergency-enrollment"

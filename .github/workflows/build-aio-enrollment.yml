@@ -63,6 +63,11 @@ on:
 permissions:
   contents: read
 
+env:
+  DPC_AIO_BUILD_ARTIFACT_NAME: DPC-AIO-enterpriseRelease-enrollment-${{ github.run_id }}-${{ github.run_attempt }}
+  DPC_AIO_RUNTIME_ARTIFACT_NAME: DPC-AIO-android-runtime-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+  DPC_AIO_ENVIRONMENT_ARTIFACT_NAME: DPC-AIO-build-environment-${{ github.run_id }}-${{ github.run_attempt }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -333,19 +338,19 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: DPC-AIO-android-runtime-smoke
+          name: ${{ env.DPC_AIO_RUNTIME_ARTIFACT_NAME }}
           path: dist/android-runtime-smoke.json
           if-no-files-found: warn
       - name: Upload full build + enrollment artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: DPC-AIO-enterpriseRelease-enrollment
+          name: ${{ env.DPC_AIO_BUILD_ARTIFACT_NAME }}
           path: dist/
       - name: Upload build environment evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: DPC-AIO-build-environment
+          name: ${{ env.DPC_AIO_ENVIRONMENT_ARTIFACT_NAME }}
           path: dist/build-environment.json
           if-no-files-found: ignore
       - name: Cleanup release signing material fallback
@@ -364,13 +369,14 @@ jobs:
     permissions:
       contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
       DPC_AIO_CONTINUOUS_RELEASE_TAG: dpc-aio-continuous
     steps:
       - name: Download verified build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: DPC-AIO-enterpriseRelease-enrollment
+          name: ${{ env.DPC_AIO_BUILD_ARTIFACT_NAME }}
           path: dist
 
       - name: Resolve published APK URL
@@ -388,8 +394,6 @@ jobs:
       - name: Publish continuous enrollment assets
         if: github.event_name == 'workflow_dispatch' && inputs.apk_url == ''
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="$DPC_AIO_CONTINUOUS_RELEASE_TAG"
@@ -428,8 +432,6 @@ jobs:
       - name: Publish tag release assets
         if: github.ref_type == 'tag'
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
