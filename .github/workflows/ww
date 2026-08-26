@@ -1,0 +1,361 @@
+name: Emergency enrollment (ephemeral signing + protected signer bundle)
+
+on:
+  workflow_dispatch:
+    inputs:
+      policy_profile:
+        description: "Policy profile placed in admin extras"
+        required: false
+        default: "default"
+        type: string
+      provisioning_mode:
+        description: "Compatibility QR mode; dedicated Work Profile and Device Owner QRs are always generated"
+        required: true
+        default: "work-profile"
+        type: choice
+        options:
+          - auto
+          - work-profile
+          - fully-managed
+      allow_offline:
+        description: "Allow Android offline provisioning when supported"
+        required: false
+        default: false
+        type: boolean
+      enrollment_offline_mode:
+        description: "DPC route after Setup Wizard installs the APK"
+        required: false
+        default: "ONLINE"
+        type: choice
+        options:
+          - ONLINE
+          - ONLINE_PREFERRED
+          - FULL_OFFLINE
+          - OFFLINE_THEN_SYNC
+      offline_bundle_id:
+        description: "Signed local bundle/profile id for FULL_OFFLINE/OFFLINE_THEN_SYNC"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dpc-aio-emergency-enrollment
+  cancel-in-progress: true
+
+env:
+  DPC_AIO_EMERGENCY_RELEASE_TAG: dpc-aio-emergency-enrollment
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+    env:
+      DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
+      DPC_AIO_CONTINUOUS_RELEASE_TAG: dpc-aio-emergency-enrollment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools'
+
+      - name: Install Android 17 SDK + native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(command -v sdkmanager)"
+          SDK_LIST="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$SDKMANAGER" --list --channel=3 > "$SDK_LIST"
+
+          has_package() {
+            awk -F'|' -v wanted="$1" '
+              { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+              $1 == wanted { found=1 }
+              END { exit(found ? 0 : 1) }
+            ' "$SDK_LIST"
+          }
+
+          platform_pkg=""
+          if has_package "platforms;android-37"; then
+            platform_pkg="platforms;android-37"
+          else
+            platform_pkg="$(
+              awk -F'|' '
+                { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+                $1 ~ /^platforms;android-37\.[0-9]+$/ { print $1 }
+              ' "$SDK_LIST" | sort -V | tail -n1
+            )"
+          fi
+          if [[ -z "$platform_pkg" ]] && has_package "platforms;android-CinnamonBun"; then
+            platform_pkg="platforms;android-CinnamonBun"
+          fi
+          if [[ -z "$platform_pkg" ]]; then
+            echo "Android 17 platform not found." >&2
+            grep -E 'platforms;android-(37|CinnamonBun)' "$SDK_LIST" || true
+            exit 1
+          fi
+
+          build_tools_pkg="$(
+            awk -F'|' '
+              { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+              $1 ~ /^build-tools;37\./ { print $1 }
+            ' "$SDK_LIST" | sort -V | tail -n1
+          )"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg="build-tools;36.0.0"
+
+          "$SDKMANAGER" \
+            "$platform_pkg" \
+            "$build_tools_pkg" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1" \
+            --channel=3
+
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]]; then
+            installed_name="${platform_pkg#platforms;}"
+            installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"
+            [[ ! -d "$installed_path" ]] || ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+
+      - name: Set up Python QR dependencies
+        run: python3 -m pip install -r tools/provisioning/requirements.txt
+
+      - name: Resolve emergency public APK URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_EMERGENCY_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
+          echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
+          echo "Provisioning APK URL: $url"
+
+      - name: Create ephemeral PKCS12 enterprise signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/dpc-aio-emergency-release.p12"
+          alias="dpc-aio-emergency-ci"
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          umask 077
+          keytool -genkeypair \
+            -storetype PKCS12 \
+            -keystore "$keystore" \
+            -storepass "$password" \
+            -keypass "$password" \
+            -alias "$alias" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -sigalg SHA256withRSA \
+            -validity 3650 \
+            -dname "CN=DPC-AIO Emergency CI, OU=GitHub Actions, O=DPC-AIO, C=PL" \
+            -noprompt
+
+          fingerprint="$(keytool -list -v -keystore "$keystore" -storetype PKCS12 -storepass "$password" -alias "$alias" | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          test -n "$fingerprint"
+          {
+            echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$keystore"
+            echo "DPC_AIO_RELEASE_STORE_PASSWORD=$password"
+            echo "DPC_AIO_RELEASE_KEY_ALIAS=$alias"
+            echo "DPC_AIO_RELEASE_KEY_PASSWORD=$password"
+            echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$fingerprint"
+            echo "DPC_AIO_SIGNING_MODE=ephemeral"
+          } >> "$GITHUB_ENV"
+          echo "Emergency signer fingerprint: $fingerprint"
+          echo "WARNING: this signer is run-specific; independent runs cannot update each other in place."
+
+      - name: Verify Android build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python3 tools/android_build_preflight.py --require-signing --json-out dist/build-environment.json
+
+      - name: Validate source and release contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_gradle_source_completeness.py
+          python3 tools/tests/test_app_android_classpath_114_contract.py
+          python3 tools/tests/test_installer_android_compile_114_contract.py
+          python3 tools/tests/test_114_qr_release_bundle_contract.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          python3 tools/tests/test_release_secret_scan.py
+
+      - name: Build signed enterpriseRelease
+        env:
+          DPC_AIO_POLICY_PROFILE: ${{ inputs.policy_profile || 'default' }}
+          DPC_AIO_PROVISIONING_MODE: ${{ inputs.provisioning_mode || 'work-profile' }}
+          DPC_AIO_ALLOW_OFFLINE: ${{ inputs.allow_offline || false }}
+          DPC_AIO_ENROLLMENT_OFFLINE_MODE: ${{ inputs.enrollment_offline_mode || 'ONLINE' }}
+          DPC_AIO_OFFLINE_BUNDLE_ID: ${{ inputs.offline_bundle_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app-dpc:assembleEnterpriseRelease
+
+      - name: Verify APK signer and collect enrollment artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk="$(find apps/dpc/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
+          test -n "$apk"
+          apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          test -x "$apksigner_bin"
+          observed="$($apksigner_bin verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          [[ -n "$observed" && "$observed" == "$expected" ]] || { echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
+
+          cp "$apk" dist/DPC-AIO-enterprise-release.apk
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-qr.png dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning-payload.txt dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning-metadata.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-qr.png dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
+          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
+          printf '%s\n' "$DPC_AIO_SIGNING_MODE" > dist/signing-mode.txt
+          printf '%s\n' "$observed" > dist/signing-cert-sha256.txt
+          sha256sum dist/DPC-AIO-enterprise-release.apk > dist/DPC-AIO-enterprise-release.apk.sha256
+
+      # NEW STEP: package the ephemeral signing material into a password-protected ZIP
+      - name: Package signing material into protected ZIP
+        shell: bash
+        env:
+          ZIP_PASSWORD: "9966"
+        run: |
+          set -euo pipefail
+          # Create a temporary directory with the files to be zipped
+          tmpdir="$RUNNER_TEMP/signing-bundle"
+          mkdir -p "$tmpdir"
+          cp "${DPC_AIO_RELEASE_KEYSTORE_PATH}" "$tmpdir/dpc-aio-emergency-release.p12"
+          cat > "$tmpdir/signing-info.txt" <<EOF
+DPC-AIO Emergency Signing Bundle
+================================
+Alias: ${DPC_AIO_RELEASE_KEY_ALIAS}
+Store password: ${DPC_AIO_RELEASE_STORE_PASSWORD}
+Key password: ${DPC_AIO_RELEASE_KEY_PASSWORD}
+Signing certificate SHA-256: ${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256}
+ZIP password: ${ZIP_PASSWORD}
+
+This keystore is run‑specific and intended for emergency use only.
+EOF
+          # Create the ZIP with password encryption (ZipCrypto, supported by `zip`)
+          cd "$tmpdir"
+          zip -q -r -P "$ZIP_PASSWORD" "../../dist/dpc-aio-signing-material.zip" .
+          cd -
+          # Optional: remove the temporary directory
+          rm -rf "$tmpdir"
+
+      - name: Cleanup ephemeral signer before runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
+
+      - name: Enable KVM group perms
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AOSP Device Owner runtime smoke
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          script: >-
+            python3 tools/runtime/android_device_owner_smoke.py
+            --apk dist/DPC-AIO-enterprise-release.apk
+            --out dist/android-runtime-smoke.json
+            --expected-version 1.1.4
+
+      - name: Build QR release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/release/build_qr_release_bundle.py --dist dist --version 1.1.4 --apk-url "$DPC_AIO_PROVISIONING_APK_URL"
+
+      - name: Upload verified emergency enrollment artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: DPC-AIO-emergency-enrollment
+          path: dist/
+
+      - name: Cleanup signing material fallback
+        if: always()
+        shell: bash
+        run: rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}" || true
+
+  publish:
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: DPC-AIO-emergency-enrollment
+          path: dist
+
+      - name: Publish emergency enrollment prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="dpc-aio-emergency-enrollment"
+          notes="Run-specific emergency DPC-AIO 1.1.4 enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this build is not update-stable across independent runs. Signing material is bundled in dpc-aio-signing-material.zip (password: 9966)."
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "DPC-AIO Emergency Enrollment" --notes "$notes" --prerelease
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "DPC-AIO Emergency Enrollment" --notes "$notes" --prerelease
+          fi
+          gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify public APK byte identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-emergency-enrollment/DPC-AIO-enterprise-release.apk"
+          downloaded="$RUNNER_TEMP/DPC-AIO-enterprise-release.downloaded.apk"
+          matched=0
+          for attempt in 1 2 3 4 5 6; do
+            rm -f "$downloaded"
+            if curl -fL --connect-timeout 15 --max-time 180 "$url" -o "$downloaded" && cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded"; then
+              matched=1
+              break
+            fi
+            echo "Release asset not public/matching yet (attempt $attempt/6)."
+            sleep 5
+          done
+          [[ "$matched" == "1" ]] || { echo "EMERGENCY_APK_PUBLIC_VERIFY_FAILED" >&2; exit 1; }
+          echo "Emergency APK is public and byte-identical to the QR-bound build."
