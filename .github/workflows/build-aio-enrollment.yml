@@ -211,23 +211,6 @@ jobs:
           echo "AUTO CONFIG: release_tag=$release_tag apk=$release_apk profile=$profile mode=$mode allow_offline=$allow offline_mode=$offline"
           echo "AUTO CONFIG: endpoint=$([[ -n "$endpoint" ]] && echo configured || echo standalone-default), token=$([[ -n "$token" ]] && echo configured || echo none), public_key=$([[ -n "$public_key" ]] && echo configured || echo none)"
 
-      - name: Resolve target APK URL
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${DPC_AIO_RELEASE_APK_NAME}"
-          else
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/${DPC_AIO_RELEASE_APK_NAME}"
-          fi
-          signing_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_CONTINUOUS_RELEASE_TAG}/DPC-AIO-signing-keystore.enc"
-          {
-            echo "DPC_AIO_PROVISIONING_APK_URL=$url"
-            echo "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL=$signing_url"
-          } >> "$GITHUB_ENV"
-          echo "Target APK URL (created after local validation): $url"
-          echo "Persistent signing keystore source (optional; first run may return 404): $signing_url"
-
       - name: Load manual signing password
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -279,7 +262,6 @@ jobs:
           chmod 600 "$resolved"
           echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$resolved" >> "$GITHUB_ENV"
           echo "Verified signing keystore path: $resolved"
-
       - name: Require stable signing key for tag release
         if: ${{ github.ref_type == 'tag' && steps.signing.outputs.mode != 'stable-secrets' }}
         run: |
@@ -363,10 +345,6 @@ jobs:
           if [[ -n "${DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH:-}" && -f "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" ]]; then
             cp "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" dist/DPC-AIO-signing-keystore.enc
           fi
-
-      - name: Validate enrollment QR files locally
-        shell: bash
-        run: |
           set -uo pipefail
           compat="$(python3 -c 'import json; print(json.load(open("dist/provisioning-metadata.json"))["provisioningMode"])')"
           signer="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
@@ -393,6 +371,12 @@ jobs:
       - name: Enable KVM group perms
         shell: bash
         run: |
+          set -euo pipefail
+          sudo groupadd -f kvm || true
+          sudo usermod -a -G kvm $USER || true
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
@@ -418,7 +402,6 @@ jobs:
           name: ${{ env.DPC_AIO_RUNTIME_ARTIFACT_NAME }}
           path: dist/android-runtime-smoke.json
           if-no-files-found: error
-
       - name: Build QR release bundle
         shell: bash
         run: |
@@ -481,6 +464,28 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      - name: Create or update release and upload assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ steps.release.outputs.tag }}'
+          title='${{ steps.release.outputs.title }}'
+          notes="DPC-AIO $DPC_AIO_APP_VERSION release from commit $GITHUB_SHA. Includes enterprise APK, Work Profile QR, Device Owner QR, validation reports and $DPC_AIO_QR_BUNDLE_NAME. Signing mode: ${{ needs.build.outputs.signing_mode }}."
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [[ '${{ steps.release.outputs.prerelease }}' == true ]]; then
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes" --prerelease
+            else
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes"
+            fi
+          else
+            if [[ '${{ steps.release.outputs.prerelease }}' == true ]]; then
+              gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease
+            else
+              gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes"
+            fi
+          fi
+          gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
       - name: Publish continuous enrollment assets
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -516,7 +521,11 @@ jobs:
               matched=1
               break
             fi
-            echo "Continuous asset not ready/matching yet (attempt $attempt/6)."
+            echo "Release asset not ready yet ($attempt/6)"
+            sleep 5
+          done
+            fi
+            echo "Release asset not ready yet ($attempt/6)"
             sleep 5
           done
           if [[ "$matched" != "1" ]]; then
