@@ -52,6 +52,10 @@ on:
         description: "Signed local offline bundle/profile id (required for FULL_OFFLINE/OFFLINE_THEN_SYNC)"
         required: false
         type: string
+      release_signing_password:
+        description: "Manual bootstrap signing password (12+ chars; run-scoped; use repository secrets for update-compatible production releases)"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -166,7 +170,25 @@ jobs:
           fi
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
           echo "Provisioning APK URL: $url"
-      - name: Prepare stable enterprise release signing
+      - name: Load manual signing password
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              payload = json.load(handle)
+          print(payload.get('inputs', {}).get('release_signing_password', ''), end='')
+          PY
+          )"
+          if [[ -n "$password" ]]; then
+            printf '::add-mask::%s\n' "$password"
+            printf 'DPC_AIO_MANUAL_SIGNING_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
+          fi
+      - name: Prepare enterprise release signing
+        id: signing
         env:
           DPC_AIO_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
           DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
@@ -174,24 +196,8 @@ jobs:
           DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
           DPC_AIO_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
         shell: bash
-        run: |
-          set -euo pipefail
-          for name in DPC_AIO_RELEASE_KEYSTORE_B64 DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_EXPECTED_SIGNING_CERT_SHA256; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "STABLE_SIGNING_KEY_REQUIRED: $name is not configured" >&2
-              exit 1
-            fi
-          done
-          keystore="$RUNNER_TEMP/dpc-aio-enterprise-release.jks"
-          umask 077
-          printf '%s' "$DPC_AIO_RELEASE_KEYSTORE_B64" | base64 --decode > "$keystore"
-          test -s "$keystore"
-          echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+        run: bash tools/release/prepare_enterprise_signing.sh
       - name: Verify Android build environment
-        env:
-          DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
-          DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
-          DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
@@ -214,13 +220,8 @@ jobs:
           DPC_AIO_ALLOW_OFFLINE: ${{ inputs.allow_offline || false }}
           DPC_AIO_ENROLLMENT_OFFLINE_MODE: ${{ inputs.enrollment_offline_mode || vars.DPC_AIO_ENROLLMENT_OFFLINE_MODE || 'ONLINE' }}
           DPC_AIO_OFFLINE_BUNDLE_ID: ${{ inputs.offline_bundle_id || vars.DPC_AIO_OFFLINE_BUNDLE_ID }}
-          DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
-          DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
-          DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app-dpc:assembleEnterpriseRelease
       - name: Verify enterprise release signing certificate
-        env:
-          DPC_AIO_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
         shell: bash
         run: |
           set -euo pipefail
