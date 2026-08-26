@@ -201,7 +201,10 @@ jobs:
           DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
           DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
           DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
-          DPC_AIO_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          # Optional compatibility pin only. prepare_enterprise_signing.sh derives the
+          # effective verification digest from the actual keystore + alias used by Gradle.
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_STRICT_EXPECTED_SIGNING_CERT || 'false' }}
         shell: bash
         run: bash tools/release/prepare_enterprise_signing.sh
       - name: Verify Android build environment

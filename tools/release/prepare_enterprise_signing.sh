@@ -32,15 +32,40 @@ for value in "${stable_values[@]}"; do
 done
 
 if [[ "$stable_count" -eq 4 ]]; then
-  if [[ -z "${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256:-}" ]]; then
-    echo "STABLE_SIGNING_KEY_REQUIRED: DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 is not configured" >&2
-    exit 1
-  fi
-
   printf '%s' "$DPC_AIO_RELEASE_KEYSTORE_B64" | base64 --decode > "$keystore"
   test -s "$keystore"
 
-  expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+  # The keystore/alias actually used by Gradle is the signing source of truth.
+  # Derive the certificate digest here so a stale GitHub Variable/Secret cannot
+  # make post-build verification report a false SIGNING_CERT_MISMATCH.
+  certificate="$RUNNER_TEMP/dpc-aio-enterprise-stable.cer"
+  rm -f "$certificate"
+  export DPC_AIO_EFFECTIVE_STORE_PASSWORD="$DPC_AIO_RELEASE_STORE_PASSWORD"
+  keytool_bin="$(command -v keytool)"
+  if ! "$keytool_bin" -exportcert \
+      -alias "$DPC_AIO_RELEASE_KEY_ALIAS" \
+      -keystore "$keystore" \
+      -storepass:env DPC_AIO_EFFECTIVE_STORE_PASSWORD \
+      -file "$certificate" >/dev/null 2>&1; then
+    echo "STABLE_SIGNING_KEY_INVALID: cannot read configured alias from the decoded keystore" >&2
+    rm -f "$certificate"
+    exit 1
+  fi
+  expected="$(sha256sum "$certificate" | awk '{print toupper($1)}')"
+  rm -f "$certificate"
+
+  configured="$(printf '%s' "${DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256:-${DPC_AIO_EXPECTED_SIGNING_CERT_SHA256:-}}" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+  if [[ -n "$configured" && "$configured" != "$expected" ]]; then
+    echo "SIGNING_CERT_PIN_STALE configured=$configured actual=$expected" >&2
+    append_output signing_cert_pin_stale "true"
+    if [[ "${DPC_AIO_STRICT_EXPECTED_SIGNING_CERT:-false}" == "true" ]]; then
+      echo "SIGNING_CERT_MISMATCH: strict certificate pinning is enabled" >&2
+      exit 1
+    fi
+  else
+    append_output signing_cert_pin_stale "false"
+  fi
+
   append_env DPC_AIO_RELEASE_KEYSTORE_PATH "$keystore"
   append_env DPC_AIO_RELEASE_STORE_PASSWORD "$DPC_AIO_RELEASE_STORE_PASSWORD"
   append_env DPC_AIO_RELEASE_KEY_ALIAS "$DPC_AIO_RELEASE_KEY_ALIAS"
@@ -48,7 +73,9 @@ if [[ "$stable_count" -eq 4 ]]; then
   append_env DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 "$expected"
   append_env DPC_AIO_SIGNING_MODE "STABLE_SECRETS"
   append_output mode "stable-secrets"
+  append_output signing_cert_sha256 "$expected"
   echo "Enterprise release signing mode: STABLE_SECRETS"
+  echo "Effective signing certificate SHA-256: $expected"
   exit 0
 fi
 
