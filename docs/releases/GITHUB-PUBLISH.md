@@ -82,6 +82,13 @@ gh run watch --repo OWNER/REPOSITORY
 
 The build job has read-only repository permissions. Signing secrets are scoped only to the signing/build steps and the keystore is removed before the external emulator action. The separate publish job is the only job with `contents: write`.
 
+The publish job uses the run-scoped `${{ github.token }}` supplied automatically by
+GitHub Actions; no personal access token or manually configured `GH_TOKEN` secret is
+required. Uploaded Actions artifact names include `github.run_id` and
+`github.run_attempt`, so retries and concurrent runs cannot reuse a fixed artifact
+name. The publish job resolves that same dynamic name when downloading the verified
+bundle.
+
 ## 6. Evidence expected from GitHub Actions
 
 A successful run should publish/download evidence including:
