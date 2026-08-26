@@ -168,8 +168,9 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 val apk = apkDir.walkTopDown().firstOrNull { it.isFile && it.extension == "apk" }
                     ?: throw GradleException("No APK found under $apkDir; assemble $variant first")
 
-                val configuredUrl = provisioningApkUrl.orNull
-                val repository = provisioningGithubRepository.orNull
+                val configuredUrlRaw = provisioningApkUrl.orNull?.trim()?.takeIf { it.isNotEmpty() }
+                val configuredUrl = configuredUrlRaw?.takeIf { it.startsWith("https://", ignoreCase = true) }
+                val repository = provisioningGithubRepository.orNull?.trim()?.takeIf { it.isNotEmpty() }
                 val repositoryFallbackUrl = if (flavor == "enterprise" && buildType == "debug") {
                     repository?.let {
                         "https://github.com/$it/releases/download/${provisioningContinuousReleaseTag.get()}/DPC-AIO-enterprise-debug.apk"
@@ -177,10 +178,13 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 } else {
                     null
                 }
+                if (configuredUrlRaw != null && configuredUrl == null) {
+                    logger.warn("Ignoring invalid DPC_AIO_PROVISIONING_APK_URL for $variant: HTTPS is required")
+                }
                 val apkUrl = configuredUrl ?: repositoryFallbackUrl
                 if (apkUrl == null) {
                     logger.lifecycle(
-                        "Provisioning QR skipped for $variant: set DPC_AIO_PROVISIONING_APK_URL " +
+                        "Provisioning QR skipped for $variant: set an HTTPS DPC_AIO_PROVISIONING_APK_URL " +
                             "or DPC_AIO_GITHUB_REPOSITORY/GITHUB_REPOSITORY"
                     )
                     return@doLast
@@ -195,6 +199,27 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
 
                 fun generate(mode: String, targetDir: java.io.File) {
                     targetDir.mkdirs()
+
+                    val allowedOfflineModes = setOf("ONLINE", "ONLINE_PREFERRED", "FULL_OFFLINE", "OFFLINE_THEN_SYNC")
+                    val requestedOfflineMode = provisioningOfflineMode.get().trim().uppercase().replace('-', '_')
+                    var effectiveOfflineMode = if (requestedOfflineMode in allowedOfflineModes) {
+                        requestedOfflineMode
+                    } else {
+                        logger.warn(
+                            "Ignoring invalid DPC_AIO_ENROLLMENT_OFFLINE_MODE='$requestedOfflineMode' for $variant; " +
+                                "falling back to ONLINE"
+                        )
+                        "ONLINE"
+                    }
+                    val offlineBundleId = provisioningOfflineBundleId.get().trim()
+                    if (effectiveOfflineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC") && offlineBundleId.isBlank()) {
+                        logger.warn(
+                            "DPC_AIO_OFFLINE_BUNDLE_ID is empty for $effectiveOfflineMode; " +
+                                "falling back to ONLINE so provisioning QR generation can continue"
+                        )
+                        effectiveOfflineMode = "ONLINE"
+                    }
+
                     val args = mutableListOf(
                         "python3",
                         rootProject.file("tools/provisioning/generate_provisioning.py").absolutePath,
@@ -204,19 +229,41 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                         "--checksum-mode", "auto",
                         "--policy-profile", provisioningPolicyProfile.get(),
                         "--provisioning-mode", mode,
-                        "--offline-mode", provisioningOfflineMode.get(),
+                        "--offline-mode", effectiveOfflineMode,
                     )
-                    provisioningEnrollmentToken.orNull?.takeIf { it.isNotBlank() }?.let {
+                    provisioningEnrollmentToken.orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
                         args += listOf("--enrollment-token", it)
                     }
-                    enrollmentEndpoint.orNull?.takeIf { it.isNotBlank() }?.let {
-                        args += listOf("--enrollment-endpoint", it, "--enrollment-source", "qr")
+                    enrollmentEndpoint.orNull?.trim()?.takeIf { it.isNotEmpty() }?.let { endpoint ->
+                        if (endpoint.startsWith("https://", ignoreCase = true)) {
+                            args += listOf("--enrollment-endpoint", endpoint, "--enrollment-source", "qr")
+                        } else {
+                            logger.warn(
+                                "Ignoring invalid DPC_AIO_ENROLLMENT_ENDPOINT for $variant (HTTPS required); " +
+                                    "QR will use local/default enrollment routing"
+                            )
+                        }
                     }
-                    provisioningOfflineBundleId.get().takeIf { it.isNotBlank() }?.let { args += listOf("--offline-bundle-id", it) }
-                    if (provisioningAllowOffline.get()) {
+                    offlineBundleId.takeIf { it.isNotEmpty() }?.let { args += listOf("--offline-bundle-id", it) }
+                    if (provisioningAllowOffline.get() || effectiveOfflineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC")) {
                         args += "--allow-offline"
                     }
-                    providers.exec { commandLine(args) }.result.get().assertNormalExitValue()
+
+                    val execOutput = providers.exec {
+                        commandLine(args)
+                        isIgnoreExitValue = true
+                    }
+                    val result = execOutput.result.get()
+                    val stdout = execOutput.standardOutput.asText.get().trim()
+                    val stderr = execOutput.standardError.asText.get().trim()
+                    if (stdout.isNotEmpty()) logger.lifecycle(stdout)
+                    if (stderr.isNotEmpty()) logger.error(stderr)
+                    if (result.exitValue != 0) {
+                        throw GradleException(
+                            "Provisioning generator failed for $variant/$mode with exit code ${result.exitValue}. " +
+                                "See the Python diagnostic immediately above."
+                        )
+                    }
                 }
 
                 generate(configuredMode, outDir)
