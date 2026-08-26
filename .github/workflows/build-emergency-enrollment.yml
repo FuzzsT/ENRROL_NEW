@@ -213,7 +213,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          apk="$(find apps/dpc/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
+          apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
           test -n "$apk"
           apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
           test -x "$apksigner_bin"
@@ -222,18 +222,18 @@ jobs:
           [[ -n "$observed" && "$observed" == "$expected" ]] || { echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
 
           cp "$apk" dist/DPC-AIO-enterprise-release.apk
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/provisioning-qr.png dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning-payload.txt dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-provisioning-metadata.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/work-profile-qr.png dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
-          cp apps/dpc/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-qr.png dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-payload.txt dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-metadata.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-qr.png dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
+          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
           printf '%s\n' "$DPC_AIO_SIGNING_MODE" > dist/signing-mode.txt
           printf '%s\n' "$observed" > dist/signing-cert-sha256.txt
           sha256sum dist/DPC-AIO-enterprise-release.apk > dist/DPC-AIO-enterprise-release.apk.sha256
