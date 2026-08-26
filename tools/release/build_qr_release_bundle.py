@@ -8,7 +8,6 @@ from pathlib import Path
 import zipfile
 
 REQUIRED_PRIMARY_ASSETS = [
-    'DPC-AIO-enterprise-release.apk',
     'provisioning-qr.png',
     'provisioning.json',
     'provisioning-payload.txt',
@@ -51,7 +50,7 @@ def require_valid_validation(path: Path) -> None:
         raise SystemExit(f'validation is not PASS: {path.name}')
 
 
-def write_readme(dist: Path, version: str, apk_url: str) -> None:
+def write_readme(dist: Path, version: str, apk_url: str, apk_name: str) -> None:
     text = f'''# DPC-AIO {version} — QR Release Bundle
 
 This bundle is generated only after the enterprise release APK has been built, signed, QR-validated, and AOSP Device Owner runtime smoke has completed in CI.
@@ -68,7 +67,7 @@ All QR payloads point to:
 
 `{apk_url}`
 
-The payloads are bound to `DPC-AIO-enterprise-release.apk` by the generated package/signing checksum. CI validates QR-to-JSON equality, APK checksum/signature binding, and the expected public APK URL before this bundle is created.
+The payloads are bound to `{apk_name}` by the generated package/signing checksum. CI validates QR-to-JSON equality, APK checksum/signature binding, and the expected public APK URL before this bundle is created.
 
 ## Integrity
 
@@ -81,11 +80,11 @@ Do not reuse a QR from another APK build or release URL. Regenerate QR assets wh
     (dist / README_NAME).write_text(text, 'utf-8')
 
 
-def write_index(dist: Path, version: str, apk_url: str, bundle_name: str, sidecar_name: str) -> None:
+def write_index(dist: Path, version: str, apk_url: str, apk_name: str, bundle_name: str, sidecar_name: str) -> None:
     obj = {
         'schema': 1,
         'version': version,
-        'apk': 'DPC-AIO-enterprise-release.apk',
+        'apk': apk_name,
         'apkUrl': apk_url,
         'qr': [
             {
@@ -148,6 +147,7 @@ def main() -> int:
     ap.add_argument('--dist', type=Path, required=True)
     ap.add_argument('--version', required=True)
     ap.add_argument('--apk-url', required=True)
+    ap.add_argument('--apk-name', default='DPC-AIO-enterprise-release.apk')
     args = ap.parse_args()
 
     dist = args.dist.resolve()
@@ -155,8 +155,12 @@ def main() -> int:
         raise SystemExit(f'dist directory not found: {dist}')
     if not args.apk_url.lower().startswith('https://'):
         raise SystemExit('--apk-url must use HTTPS')
+    apk_name = args.apk_name.strip()
+    if not apk_name or Path(apk_name).name != apk_name or apk_name in {'.', '..'}:
+        raise SystemExit('--apk-name must be a safe file name without path separators')
 
-    missing = [name for name in REQUIRED_PRIMARY_ASSETS if not (dist / name).is_file()]
+    primary_assets = [apk_name, *REQUIRED_PRIMARY_ASSETS]
+    missing = [name for name in primary_assets if not (dist / name).is_file()]
     if missing:
         raise SystemExit('missing release assets: ' + ', '.join(missing))
     for name in ['provisioning-validation.json', 'work-profile-validation.json', 'device-owner-validation.json']:
@@ -167,9 +171,9 @@ def main() -> int:
     bundle = dist / bundle_name
     sidecar = dist / sidecar_name
 
-    write_readme(dist, args.version, args.apk_url)
-    write_index(dist, args.version, args.apk_url, bundle_name, sidecar_name)
-    checksum_names = REQUIRED_PRIMARY_ASSETS + [README_NAME, INDEX_NAME]
+    write_readme(dist, args.version, args.apk_url, apk_name)
+    write_index(dist, args.version, args.apk_url, apk_name, bundle_name, sidecar_name)
+    checksum_names = primary_assets + [README_NAME, INDEX_NAME]
     write_sums(dist, checksum_names)
     zip_names = checksum_names + [SUMS_NAME]
     build_zip(dist, bundle, zip_names)

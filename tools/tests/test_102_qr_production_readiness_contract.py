@@ -44,7 +44,7 @@ def main():
     for needle in (
         'build-tools;36.0.0',
         '$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner',
-        'verify --print-certs "$apk" 2>&1',
+        'verify --verbose --print-certs "$apk" 2>&1',
         'apps/dpc/app/build/outputs/apk/enterprise/release',
         'DPC-AIO-enterprise-release.apk',
     ):

@@ -22,8 +22,11 @@ workflow=read('.github/workflows/build-aio-enrollment.yml')
 for token in [
     'Build QR release bundle',
     'tools/release/build_qr_release_bundle.py',
-    'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip',
-    'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip.sha256',
+    'DPC_AIO_APP_VERSION',
+    'DPC_AIO_QR_BUNDLE_NAME',
+    '--version "$DPC_AIO_APP_VERSION"',
+    'test -f "dist/$DPC_AIO_QR_BUNDLE_NAME"',
+    'test -f "dist/$DPC_AIO_QR_BUNDLE_NAME.sha256"',
     'QR-README.md',
     'RELEASE-INDEX.json',
     'SHA256SUMS.txt',
