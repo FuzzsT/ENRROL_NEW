@@ -23,10 +23,10 @@
 ### Task 1: Capability model and execution planner
 
 **Files:**
-- Create: `core-model/src/main/kotlin/io/dpcaio/core/model/Capability.kt`
-- Create: `core-model/src/main/kotlin/io/dpcaio/core/model/ExecutionRoute.kt`
-- Create: `core-execution/src/main/kotlin/io/dpcaio/execution/ExecutionPlanner.kt`
-- Test: `core-execution/src/test/kotlin/io/dpcaio/execution/ExecutionPlannerTest.kt`
+- Create: `modules/core/model/src/main/kotlin/io/dpcaio/core/model/Capability.kt`
+- Create: `modules/core/model/src/main/kotlin/io/dpcaio/core/model/ExecutionRoute.kt`
+- Create: `modules/core/execution/src/main/kotlin/io/dpcaio/execution/ExecutionPlanner.kt`
+- Test: `modules/core/execution/src/test/kotlin/io/dpcaio/execution/ExecutionPlannerTest.kt`
 
 **Interfaces:**
 - Consumes: `CapabilityRequest`, `ExecutionRoute`.
@@ -41,9 +41,9 @@
 ### Task 2: Effective permission/capability state
 
 **Files:**
-- Create: `permission-manager/src/main/kotlin/io/dpcaio/permission/PermissionState.kt`
-- Create: `permission-manager/src/main/kotlin/io/dpcaio/permission/EffectiveCapabilityResolver.kt`
-- Test: `permission-manager/src/test/kotlin/io/dpcaio/permission/EffectiveCapabilityResolverTest.kt`
+- Create: `modules/permissions/core/src/main/kotlin/io/dpcaio/permission/PermissionState.kt`
+- Create: `modules/permissions/core/src/main/kotlin/io/dpcaio/permission/EffectiveCapabilityResolver.kt`
+- Test: `modules/permissions/core/src/test/kotlin/io/dpcaio/permission/EffectiveCapabilityResolverTest.kt`
 
 **Interfaces:**
 - Consumes: direct permission state plus verified route result.
@@ -58,9 +58,9 @@
 ### Task 3: Platform and CPU compatibility model
 
 **Files:**
-- Create: `platform-compat/src/main/kotlin/io/dpcaio/platform/PlatformProfile.kt`
-- Create: `platform-compat/src/main/kotlin/io/dpcaio/platform/CompatibilityGate.kt`
-- Test: `platform-compat/src/test/kotlin/io/dpcaio/platform/CompatibilityGateTest.kt`
+- Create: `modules/platform/compat/src/main/kotlin/io/dpcaio/platform/PlatformProfile.kt`
+- Create: `modules/platform/compat/src/main/kotlin/io/dpcaio/platform/CompatibilityGate.kt`
+- Test: `modules/platform/compat/src/test/kotlin/io/dpcaio/platform/CompatibilityGateTest.kt`
 
 **Interfaces:**
 - Consumes: API level, ABI, process bitness, page size.
@@ -78,7 +78,7 @@
 - Create: `settings.gradle.kts`
 - Create: root `build.gradle.kts`, `gradle.properties`
 - Create module build descriptors and manifests for `app-dpc`, `policy-core`, `app-manager`, `activity-launcher`, `installer-core`, `delegation-core`, `dhizuku-compat`, `shizuku-adapter`, `native-diagnostics`, `lab-tools`.
-- Create: `app-dpc/src/main/AndroidManifest.xml`
+- Create: `apps/dpc/src/main/AndroidManifest.xml`
 
 **Interfaces:**
 - `app-dpc` may depend on production modules only.

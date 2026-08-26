@@ -24,9 +24,9 @@
 
 ### Task 1: Pure account order planner
 **Files:**
-- Create: `account-manager/src/main/kotlin/io/dpcaio/account/AccountModel.kt`
-- Create: `account-manager/src/main/kotlin/io/dpcaio/account/AccountPriorityPlanner.kt`
-- Create: `account-manager/src/test/kotlin/io/dpcaio/account/AccountPriorityPlannerTest.kt`
+- Create: `modules/account/core/src/main/kotlin/io/dpcaio/account/AccountModel.kt`
+- Create: `modules/account/core/src/main/kotlin/io/dpcaio/account/AccountPriorityPlanner.kt`
+- Create: `modules/account/core/src/test/kotlin/io/dpcaio/account/AccountPriorityPlannerTest.kt`
 
 **Interfaces:**
 - Produces: `AccountRecord`, `AccountPriorityPlan`, `AccountPriorityPlanner.plan()`.
@@ -38,12 +38,12 @@
 
 ### Task 2: Android account inventory and chooser
 **Files:**
-- Create: `account-android/build.gradle.kts`
-- Create: `account-android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt`
-- Create: `account-android/src/main/kotlin/io/dpcaio/account/android/GoogleAccountIntentFactory.kt`
+- Create: `modules/account/android/build.gradle.kts`
+- Create: `modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt`
+- Create: `modules/account/android/src/main/kotlin/io/dpcaio/account/android/GoogleAccountIntentFactory.kt`
 - Modify: `settings.gradle.kts`
-- Modify: `app-dpc/build.gradle.kts`
-- Modify: `app-dpc/src/main/AndroidManifest.xml`
+- Modify: `apps/dpc/build.gradle.kts`
+- Modify: `apps/dpc/src/main/AndroidManifest.xml`
 
 **Interfaces:**
 - Produces: account inventory from `AccountManager.getAccountsByType("com.google")` and chooser/add-account intents.
@@ -55,9 +55,9 @@
 
 ### Task 3: Guided system-order reorder coordinator
 **Files:**
-- Create: `account-manager/src/main/kotlin/io/dpcaio/account/AccountReorderCoordinator.kt`
-- Create: `account-manager/src/test/kotlin/io/dpcaio/account/AccountReorderCoordinatorTest.kt`
-- Create: `account-android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt`
+- Create: `modules/account/core/src/main/kotlin/io/dpcaio/account/AccountReorderCoordinator.kt`
+- Create: `modules/account/core/src/test/kotlin/io/dpcaio/account/AccountReorderCoordinatorTest.kt`
+- Create: `modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt`
 
 **Interfaces:**
 - Produces typed steps `REMOVE_BEFORE_TARGET`, `RE_ADD_AFTER_TARGET`, `VERIFY_ORDER` and Android removal/policy capabilities.

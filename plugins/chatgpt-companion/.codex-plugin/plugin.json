@@ -1,0 +1,38 @@
+{
+  "name": "dpc-aio-companion",
+  "version": "0.2.1",
+  "description": "Build, diagnose, enroll, verify, and package DPC-AIO 1.1.4 Enterprise + Samsung OEM AIO using bounded repository-native workflows.",
+  "author": {
+    "name": "DPC-AIO Project"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DPC-AIO Companion",
+    "shortDescription": "Build and verify DPC-AIO 1.1.4",
+    "longDescription": "A skills-only companion for DPC-AIO 1.1.4. It guides production release builds, root-cause-first CI diagnosis, Android Enterprise QR verification, protected-operation and Package Trust checks, Samsung/Knox/SEM/OEM capability evidence, QR release-bundle validation, and bounded pre-push verification without owning device-management execution.",
+    "developerName": "DPC-AIO Project",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Build DPC-AIO Gradle variants using the repository wrapper",
+      "Diagnose GitHub Actions build failures from concrete logs",
+      "Verify production work-profile and fully-managed provisioning QR artifacts",
+      "Verify 1.0.2 production signing/public-APK/Full Offline prerequisites",
+      "Verify Protected Targets and Enterprise Transaction contracts",
+      "Verify deterministic Android/Knox/SEM/OEM capability routing without bypasses",
+      "Verify Package Trust 2.0 and hardened APK+ importer contracts",
+      "Verify Work Profile Lifecycle 2.0 and Credential Recovery 2.0 contracts",
+      "Run repository-native pre-push, secret and non-SDK safety checks",
+      "Resolve exact Gradle/JDK/Android SDK build readiness without silent substitution",
+      "Run SAFE device preflight and functional verification harnesses"
+    ],
+    "defaultPrompt": [
+      "Build the EnterpriseRelease DPC-AIO variant and report the first blocker.",
+      "Diagnose this DPC-AIO GitHub Actions failure from the log.",
+      "Verify DPC-AIO 1.1.4 including QR release bundle, protected operations, Package Trust and Samsung capability gates."
+    ],
+    "logo": "./assets/logo.svg",
+    "composerIcon": "./assets/icon.svg",
+    "brandColor": "#245A8D",
+    "brandColorDark": "#6FB1E7"
+  }
+}

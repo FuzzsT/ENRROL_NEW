@@ -1,0 +1,4 @@
+dpc-aio-lab-private.pem
+dpc-aio-lab-klm.token
+dpc-aio-lab-public.pem
+public-key-x509-base64.txt

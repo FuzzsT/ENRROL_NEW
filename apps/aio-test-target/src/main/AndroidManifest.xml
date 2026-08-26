@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.dpcaio.testtarget">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <application android:label="DPC-AIO Test Target" android:allowBackup="false">
+        <activity android:name=".TestEnabledActivity" android:enabled="true" android:exported="false" />
+        <activity android:name=".TestDisabledActivity" android:enabled="false" android:exported="false" />
+        <activity-alias android:name=".TestAlias" android:targetActivity=".TestEnabledActivity" android:enabled="true" android:exported="false" />
+        <receiver android:name=".TestReceiver" android:enabled="true" android:exported="false" />
+        <service android:name=".TestService" android:enabled="true" android:exported="false" />
+    </application>
+</manifest>

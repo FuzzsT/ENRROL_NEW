@@ -1,0 +1,38 @@
+{
+  "androidContracts": "PASS",
+  "apkBuildVerified": false,
+  "apkInstalledVerified": false,
+  "buildReadiness": {
+    "javaMajor": 21,
+    "reasons": [
+      "GRADLE_EXACT_VERSION_MISSING",
+      "ANDROID_SDK_MISSING",
+      "DEPENDENCIES_MISSING"
+    ],
+    "requiredGradle": "9.7.0",
+    "status": "BLOCKED"
+  },
+  "companionPlugin": "0.1.8",
+  "componentsRuntimeVerified": false,
+  "deviceOwnerVerified": false,
+  "devicePreflight": {
+    "reasons": [
+      "ADB_NOT_FOUND"
+    ],
+    "status": "BLOCKED"
+  },
+  "fullOfflineRuntimeVerified": false,
+  "kotlinTestMains": "50/50 PASS",
+  "new101Contracts": "PASS",
+  "nonSdkScan": "PASS",
+  "permissionsRuntimeVerified": false,
+  "pluginDeterminism": true,
+  "pluginSha256": "4845865b79a44cd9bef415abf37afb908713d434f36329178321866050c87cab",
+  "projectVerify": "PASS",
+  "provisioningServer": "12/12 PASS",
+  "release": "1.0.1",
+  "secretScan": "PASS",
+  "sourceVerified": true,
+  "versionCode": 19,
+  "workProfileVerified": false
+}

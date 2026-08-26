@@ -1,0 +1,25 @@
+{
+  "release": "DPC-AIO 0.6.3",
+  "versionCode": 10,
+  "versionName": "0.6.3",
+  "sourceVerification": {
+    "verifyBeforePush": "PASS",
+    "hostTestSuite": "PASS",
+    "provisioningBuildIntegration": "PASS",
+    "releaseVersionContract": "PASS",
+    "pluginChecks": "PASS"
+  },
+  "provisioning": {
+    "defaultContinuousTag": "dpc-aio-continuous",
+    "repositoryFallbackScope": "enterpriseDebug only",
+    "publicApkRedownloadMustMatchBuild": true
+  },
+  "androidApkBuild": {
+    "status": "NOT_RUN_LOCALLY",
+    "reason": "Requires Android SDK/API 37 and native toolchain; GitHub Actions workflow is the intended build path"
+  },
+  "remotePublication": {
+    "status": "NOT_PUBLISHED_FROM_THIS_SESSION",
+    "reason": "The expected GitHub repository was not accessible through the connected GitHub account"
+  }
+}

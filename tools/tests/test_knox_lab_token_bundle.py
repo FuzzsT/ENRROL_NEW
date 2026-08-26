@@ -10,8 +10,8 @@ def unb64(s:str)->bytes:
     return base64.urlsafe_b64decode(s + '=' * ((4-len(s)%4)%4))
 
 def main():
-    token=(ROOT/'lab-license/dpc-aio-lab-klm.token').read_text().strip()
-    public=serialization.load_pem_public_key((ROOT/'lab-license/dpc-aio-lab-public.pem').read_bytes())
+    token=(ROOT/'lab/license/dpc-aio-lab-klm.token').read_text().strip()
+    public=serialization.load_pem_public_key((ROOT/'lab/license/dpc-aio-lab-public.pem').read_bytes())
     parts=token.split('.')
     assert len(parts)==3 and parts[0]=='DPC-AIO-LAB1'
     payload=unb64(parts[1])
@@ -23,9 +23,9 @@ def main():
     assert claims['licenseType']=='KLM_TEST_ONLY'
     assert int(claims['exp'])>int(claims['iat'])
     assert 'knox.mock.active' in claims['scopes'].split(',')
-    app_asset=ROOT/'app-dpc/src/lab/assets/knox_lab/dpc-aio-lab-klm.token'
+    app_asset=ROOT/'apps/dpc/app/src/lab/assets/knox_lab/dpc-aio-lab-klm.token'
     assert app_asset.read_text().strip()==token
-    assert not (ROOT/'app-dpc/src/lab/assets/knox_lab/dpc-aio-lab-private.pem').exists()
+    assert not (ROOT/'apps/dpc/app/src/lab/assets/knox_lab/dpc-aio-lab-private.pem').exists()
     print('test_knox_lab_token_bundle: PASS')
 
 if __name__=='__main__': main()

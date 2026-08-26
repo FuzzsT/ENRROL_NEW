@@ -14,11 +14,11 @@ def must(path: Path, token: str):
 
 
 def main():
-    runtime = ROOT / "shizuku-adapter/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt"
-    service = ROOT / "shizuku-adapter/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt"
-    client = ROOT / "shizuku-adapter/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt"
-    activity_executor = ROOT / "shizuku-adapter/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt"
-    manifest = ROOT / "shizuku-adapter/src/main/AndroidManifest.xml"
+    runtime = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt"
+    service = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt"
+    client = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt"
+    activity_executor = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt"
+    manifest = ROOT / "apps/dpc/integrations/shizuku/src/main/AndroidManifest.xml"
     catalog = ROOT / "gradle/libs.versions.toml"
 
     runtime_text = must(runtime, "Shizuku.checkSelfPermission()")

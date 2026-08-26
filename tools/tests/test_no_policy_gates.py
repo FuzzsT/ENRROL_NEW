@@ -12,7 +12,7 @@ def require(cond, msg):
 def main():
     contracts = (ROOT / 'tools/verify_android_contracts.py').read_text(encoding='utf-8')
     project = (ROOT / 'tools/verify_project.py').read_text(encoding='utf-8')
-    app = (ROOT / 'app-dpc/build.gradle.kts').read_text(encoding='utf-8')
+    app = (ROOT / 'apps/dpc/app/build.gradle.kts').read_text(encoding='utf-8')
 
     for token in [
         'GLOBAL_FORBIDDEN',

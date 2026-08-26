@@ -1,0 +1,42 @@
+{
+  "release": "0.8.0",
+  "versionCode": 16,
+  "companionVersion": "0.1.5",
+  "features": {
+    "enterpriseOperationsCenter": true,
+    "securityLogging": true,
+    "networkLogging": true,
+    "systemUpdatePolicy": true,
+    "freezePeriodEditor": true,
+    "credentialSafImport": true,
+    "pkcs12Import": true,
+    "privateKeyExport": false,
+    "deviceLifecycleCenter": true,
+    "wipeTrigger": false,
+    "workProfileCope": true,
+    "managedProfilePackagePolicyApi34": true,
+    "knoxPublicCapabilitySurface": true,
+    "knoxPrivateProtocolReimplementation": false
+  },
+  "verification": {
+    "tddRedObserved": true,
+    "coreKotlin": "39/39 PASS",
+    "enterpriseOperationsContracts": "PASS",
+    "credentialContracts": "PASS",
+    "deviceLifecycleContracts": "PASS",
+    "copeKnoxContracts": "PASS",
+    "diagnosticsContract": "PASS",
+    "releaseVersionContract": "PASS",
+    "releaseGateContract": "PASS",
+    "verifyBeforePush": "10/10 PASS",
+    "provisioningService": "6/6 PASS",
+    "androidContracts": "PASS",
+    "projectVerify": "PASS",
+    "releaseAudit": "PASS",
+    "moduleCenter": "PASS: 34 modules represented; 35 Gradle projects reachable",
+    "companionPlugin": "PASS: skills-only, 4 skills, deterministic package",
+    "companionPluginSha256": "05d289c446ef34dcb97a61029678dbf1532a54471b46618151159d90211318ac",
+    "hostSuiteScript": "TIMEOUT after test_dual_provisioning_qr in sandbox; remaining constituent gates executed separately and passed",
+    "androidAssemble": "BLOCKED_BY_ENVIRONMENT: Gradle 9.7.0 distribution fetch failed with UnknownHostException services.gradle.org; host downloader also could not fetch the official distribution"
+  }
+}

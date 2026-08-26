@@ -3,17 +3,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 def main():
-    app = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/DpcAioApplication.kt'
-    manifest = (ROOT/'app-dpc/src/main/AndroidManifest.xml').read_text()
+    app = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcAioApplication.kt'
+    manifest = (ROOT/'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
     assert app.exists(), 'DpcAioApplication missing'
     text = app.read_text()
     assert 'KnoxStartupController.evaluateAndPersist' in text
     assert 'android:name=".DpcAioApplication"' in manifest
 
     knox_files = [
-        ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxStartupController.kt',
-        ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxBootReceiver.kt',
-        ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/AioDeviceAdminReceiver.kt',
+        ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxStartupController.kt',
+        ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxBootReceiver.kt',
+        ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDeviceAdminReceiver.kt',
     ]
     forbidden = ['reboot(', 'shutdown(', 'wipeData(', 'MASTER_CLEAR', 'ACTION_FACTORY_RESET']
     for p in knox_files:

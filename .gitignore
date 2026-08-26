@@ -8,3 +8,14 @@ local.properties
 keystore.properties
 __pycache__/
 *.pyc
+dist/
+.env
+.env.*
+*.log
+*.apk
+*.aab
+.cxx/
+
+*.pyo
+*.p12
+*.pfx

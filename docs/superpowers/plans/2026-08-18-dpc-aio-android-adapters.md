@@ -24,9 +24,9 @@
 ### Task 1: Typed policy gateway contract
 
 **Files:**
-- Create: `policy-core/src/main/kotlin/io/dpcaio/policy/PolicyResult.kt`
-- Create: `policy-core/src/main/kotlin/io/dpcaio/policy/DevicePolicyGateway.kt`
-- Test: `policy-core/src/test/kotlin/io/dpcaio/policy/PolicyResultTest.kt`
+- Create: `modules/policy/core/src/main/kotlin/io/dpcaio/policy/PolicyResult.kt`
+- Create: `modules/policy/core/src/main/kotlin/io/dpcaio/policy/DevicePolicyGateway.kt`
+- Test: `modules/policy/core/src/test/kotlin/io/dpcaio/policy/PolicyResultTest.kt`
 
 **Interfaces:**
 - Produces: `PolicyResult<T>`, `PackagePolicyGateway`, `PermissionPolicyGateway`.
@@ -41,7 +41,7 @@
 ### Task 2: Android DevicePolicyManager adapter
 
 **Files:**
-- Create: `policy-core/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt`
+- Create: `modules/policy/core/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt`
 - Create: `tools/verify_android_contracts.py`
 - Test: extend `tools/verify_android_contracts.py` self-check fixture behavior through `tools/tests/test_android_contracts.py`.
 
@@ -58,10 +58,10 @@
 ### Task 3: Permission inspection and action planning
 
 **Files:**
-- Create: `permission-manager/src/main/kotlin/io/dpcaio/permission/PermissionInspection.kt`
-- Create: `permission-manager/src/main/kotlin/io/dpcaio/permission/PermissionActionPlanner.kt`
-- Create: `permission-manager/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt`
-- Test: `permission-manager/src/test/kotlin/io/dpcaio/permission/PermissionActionPlannerTest.kt`
+- Create: `modules/permissions/core/src/main/kotlin/io/dpcaio/permission/PermissionInspection.kt`
+- Create: `modules/permissions/core/src/main/kotlin/io/dpcaio/permission/PermissionActionPlanner.kt`
+- Create: `modules/permissions/core/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt`
+- Test: `modules/permissions/core/src/test/kotlin/io/dpcaio/permission/PermissionActionPlannerTest.kt`
 
 **Interfaces:**
 - Produces: raw runtime state, AppOp state, DPC-manageability and ordered recommended actions.
@@ -76,10 +76,10 @@
 ### Task 4: Activity/component access planning
 
 **Files:**
-- Create: `activity-launcher/src/main/kotlin/io/dpcaio/activity/ComponentModel.kt`
-- Create: `activity-launcher/src/main/kotlin/io/dpcaio/activity/ActivityAccessPlanner.kt`
-- Create: `activity-launcher/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt`
-- Test: `activity-launcher/src/test/kotlin/io/dpcaio/activity/ActivityAccessPlannerTest.kt`
+- Create: `modules/activity/core/src/main/kotlin/io/dpcaio/activity/ComponentModel.kt`
+- Create: `modules/activity/core/src/main/kotlin/io/dpcaio/activity/ActivityAccessPlanner.kt`
+- Create: `modules/activity/core/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt`
+- Test: `modules/activity/core/src/test/kotlin/io/dpcaio/activity/ActivityAccessPlannerTest.kt`
 
 **Interfaces:**
 - Produces: explicit/launcher/deep-link/cross-profile/companion/Shizuku route candidates based on exported/enabled/user/profile state.
@@ -94,10 +94,10 @@
 ### Task 5: Installer plan and public PackageInstaller adapter
 
 **Files:**
-- Create: `installer-core/src/main/kotlin/io/dpcaio/installer/InstallPlan.kt`
-- Create: `installer-core/src/main/kotlin/io/dpcaio/installer/InstallPlanner.kt`
-- Create: `installer-core/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt`
-- Test: `installer-core/src/test/kotlin/io/dpcaio/installer/InstallPlannerTest.kt`
+- Create: `modules/installer/core/src/main/kotlin/io/dpcaio/installer/InstallPlan.kt`
+- Create: `modules/installer/core/src/main/kotlin/io/dpcaio/installer/InstallPlanner.kt`
+- Create: `modules/installer/core/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt`
+- Test: `modules/installer/core/src/test/kotlin/io/dpcaio/installer/InstallPlannerTest.kt`
 
 **Interfaces:**
 - Produces: route choice among managed Play, DPC PackageInstaller, system privileged, Shizuku, user confirmation.

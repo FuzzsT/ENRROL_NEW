@@ -4,6 +4,8 @@ kotlin = "2.4.10"
 compileSdk = "37"
 minSdk = "29"
 targetSdk = "37"
+ndk = "28.2.13676358"
+cmake = "3.22.1"
 androidxCore = "1.19.0"
 shizuku = "13.1.5"
 

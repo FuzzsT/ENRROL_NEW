@@ -26,37 +26,37 @@ def main():
         root = Path(td)
         policy = write(
             root,
-            "policy-android/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt",
+            "apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt",
             "setApplicationHidden(\nsetPackagesSuspended(\nsetPermissionGrantState(\ngetPermissionGrantState(\n",
         )
         write(
             root,
-            "permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt",
+            "apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt",
             "checkPermission(\ncheckOpNoThrow(\n",
         )
         write(
             root,
-            "activity-android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt",
-            "getPackageInfo(\ngetActivityList(\nisActivityEnabled(\n",
+            "apps/dpc/modules/activity/android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt",
+            "getPackageInfo(\ngetActivityList(\ngetComponentEnabledSetting(\n",
         )
         write(
             root,
-            "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt",
+            "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt",
             "AccountManager.get(\ngetAccountsByType(\ncom.google\n",
         )
         write(
             root,
-            "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt",
+            "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt",
             "removeAccount(\nsetAccountManagementDisabled(\ngetAccountTypesWithManagementDisabled(\n",
         )
         write(
             root,
-            "installer-android/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt",
+            "apps/dpc/modules/installer/android/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt",
             "SessionParams(\ncreateSession(\nsetPackageSource(\nsetInstallerPackageName(\nsetPermissionState(\nopenSession(\nopenWrite(\nfsync(\ncommit(\n",
         )
         app_inventory = write(
             root,
-            "app-android/src/main/kotlin/io/dpcaio/appmanager/android/AndroidAppInventory.kt",
+            "apps/dpc/modules/app-management/android/src/main/kotlin/io/dpcaio/appmanager/android/AndroidAppInventory.kt",
             "class AndroidAppInventory",
         )
         findings = verify_android_contracts(root)
@@ -69,7 +69,7 @@ def main():
         findings = verify_android_contracts(root)
         assert_true(not findings, "technology names must not be rejected by Android contract verifier")
 
-        permission = root / "permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt"
+        permission = root / "apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt"
         permission.write_text(permission.read_text() + "\nsetUidMode(\nsetMode(\n", encoding="utf-8")
         findings = verify_android_contracts(root)
         assert_true(not findings, "AppOps mutation helpers must not be policy-blocked by verifier")

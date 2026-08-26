@@ -1,0 +1,43 @@
+{
+  "release": "1.0.0",
+  "versionCode": 18,
+  "companionVersion": "0.1.7",
+  "provisioningServerVersion": "0.4.0",
+  "sourceVerification": {
+    "status": "SOURCE_VERIFIED",
+    "coreKotlinMains": "50/50 PASS",
+    "provisioningServer": "12/12 PASS",
+    "projectVerify": "PASS",
+    "androidContracts": "PASS",
+    "moduleCenter": "36 modules / 37 Gradle projects PASS",
+    "releaseAudit": "PASS",
+    "nonSdkScan": "PASS",
+    "secretScan": "PASS",
+    "offlineContracts": "PASS",
+    "permissionManagerContracts": "PASS",
+    "componentManagerContracts": "PASS",
+    "compatibility080": "PASS",
+    "compatibility090": "PASS",
+    "prePushWrapper": "TIMEOUT_AFTER_GREEN_CONSTITUENTS",
+    "prePushConstituents": "PASS"
+  },
+  "pluginVerification": {
+    "status": "PASS",
+    "deterministicPackaging": true,
+    "sha256": "e7f672c3e4e0449eeaa31d0f5f55726eab5ea499a91b46082e7e1c239a7ddc4e"
+  },
+  "buildVerification": {
+    "apkBuildVerified": false,
+    "status": "ENVIRONMENT_BLOCKED",
+    "command": "./gradlew :app-dpc:assembleEnterpriseDebug",
+    "blocker": "java.net.UnknownHostException: services.gradle.org while downloading Gradle 9.7.0"
+  },
+  "liveVerification": {
+    "androidOfflineVerified": false,
+    "deviceOwnerOfflineVerified": false,
+    "workProfileOfflineVerified": false,
+    "permissionManagerVerified": false,
+    "componentManagerVerified": false,
+    "syncVerified": false
+  }
+}

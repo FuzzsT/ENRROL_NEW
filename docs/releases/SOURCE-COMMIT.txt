@@ -1,0 +1,7 @@
+DPC-AIO 1.1.4 GitHub Upload Ready / Hardened source package provenance
+Base package: DPC-AIO 1.1.2 CI Runtime Smoke final source archive
+Base archive SHA-256: 678ba2610208bdbef10339e233188050e26d4aea617f35c8dfbeaf0a97fdc3ca
+Repository commit SHA: UNAVAILABLE until this source package is imported/committed to GitHub
+CI provenance: GitHub Actions records GITHUB_SHA and publishes verified release artifacts from that commit
+
+Destination repository: local-localhost-app-system/dpc_android

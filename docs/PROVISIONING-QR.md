@@ -1,69 +1,86 @@
-# DPC-AIO Android Setup QR provisioning
+# DPC-AIO Android Enterprise QR provisioning
 
-DPC-AIO follows the Device Owner QR structure used by Google's TestDPC sample.
+DPC-AIO 1.0.1 generates two explicit enrollment artifacts from the final APK:
+
+- `work-profile-*` for managed-profile / Profile Owner enrollment;
+- `device-owner-*` for fully managed / Device Owner enrollment.
+
+A legacy compatibility `provisioning-*` set is retained. Its default mode is now `work-profile`; `auto` remains available only when explicitly selected.
 
 ## Build locally
 
-Install the QR build dependency once:
+Install the QR dependency:
 
 ```bash
 python3 -m pip install -r tools/provisioning/requirements.txt
 ```
 
-Set a HTTPS URL that Android Setup Wizard can reach after factory reset:
+Set an HTTPS URL reachable by Android Setup Wizard:
 
 ```bash
 export DPC_AIO_PROVISIONING_APK_URL="https://mdm.example.org/DPC-AIO-enterprise-debug.apk"
 export DPC_AIO_ENROLLMENT_TOKEN="optional-one-time-token"
 export DPC_AIO_POLICY_PROFILE="default"
+export DPC_AIO_PROVISIONING_MODE="work-profile"
+export DPC_AIO_ALLOW_OFFLINE="false"
 ./gradlew :app-dpc:assembleEnterpriseDebug
 ```
 
-`assembleEnterpriseDebug` finalizes with `generateEnterpriseDebugProvisioningQr` and creates:
+The build finalizer creates:
 
 ```text
-app-dpc/build/outputs/provisioning/enterprise/debug/
+apps/dpc/build/outputs/provisioning/enterprise/debug/
 ├── provisioning.json
 ├── provisioning-payload.txt
 ├── provisioning-metadata.json
-└── provisioning-qr.png
+├── provisioning-qr.png
+├── work-profile-provisioning.json
+├── work-profile-provisioning-payload.txt
+├── work-profile-provisioning-metadata.json
+├── work-profile-qr.png
+├── device-owner-provisioning.json
+├── device-owner-provisioning-payload.txt
+├── device-owner-provisioning-metadata.json
+└── device-owner-qr.png
 ```
 
-The generator runs against the final APK. It prefers the SHA-256 digest of the signing certificate when
-`apksigner verify --print-certs` is available. If the signer certificate cannot be read, it uses the SHA-256
-package checksum of the final APK.
+The generator prefers the APK signing-certificate SHA-256 checksum when `apksigner` can read it. Otherwise it uses the SHA-256 checksum of the APK file. Exactly one checksum field is emitted.
 
-## GitHub build
+`android.app.extra.PROVISIONING_ALLOW_OFFLINE` is kept as a top-level provisioning extra. Set `DPC_AIO_ALLOW_OFFLINE=true` only for deployments that intentionally need Android 13+ offline provisioning.
 
-`.github/workflows/build-aio-enrollment.yml` builds `enterpriseDebug`, generates the matching QR and uploads:
+## Validate both QR files
 
-```text
-DPC-AIO-enterprise-debug.apk
-provisioning.json
-provisioning-payload.txt
-provisioning-metadata.json
-provisioning-qr.png
-SHA256SUMS.txt
+```bash
+python3 tools/provisioning/verify_provisioning_qr.py \
+  --json work-profile-provisioning.json \
+  --qr work-profile-qr.png \
+  --apk DPC-AIO-enterprise-debug.apk \
+  --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
+  --expected-mode work-profile
+
+python3 tools/provisioning/verify_provisioning_qr.py \
+  --json device-owner-provisioning.json \
+  --qr device-owner-qr.png \
+  --apk DPC-AIO-enterprise-debug.apk \
+  --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" \
+  --expected-mode fully-managed
 ```
 
-For `v*` tags the same files are published as GitHub Release assets. The QR download URL is calculated before
-the build, so its checksum and URL correspond to the APK uploaded to that tag release.
+Validation covers the DPC component, HTTPS download URL, optional exact release-URL binding, exactly one checksum, requested mode, QR-to-JSON equality and APK checksum/signature agreement. The release workflow also downloads the published APK and requires it to be byte-identical to the APK used to generate the QR, for both continuous and tag releases.
 
-For a manual workflow run, `apk_url` can override the download location.
+## Android 12+ admin-integrated provisioning
 
-## Android Setup Wizard
+`ProvisioningModeActivity` handles `android.app.action.GET_PROVISIONING_MODE`. It only returns a mode that Android included in `EXTRA_PROVISIONING_ALLOWED_PROVISIONING_MODES`:
 
-1. Factory-reset the test device.
-2. On the initial Android welcome screen, invoke QR provisioning (commonly six taps on supported Android builds).
-3. Connect the device to the network required by the provisioning URL.
-4. Scan `provisioning-qr.png`.
-5. Android downloads the DPC, validates the configured checksum and starts Device Owner provisioning.
+- `work-profile` → `PROVISIONING_MODE_MANAGED_PROFILE`;
+- `fully-managed` → `PROVISIONING_MODE_FULLY_MANAGED_DEVICE`.
 
-The DPC component encoded by default is:
+If the requested explicit mode is not allowed, provisioning is cancelled rather than silently switching ownership mode.
+
+The DPC component is:
 
 ```text
 io.dpcaio.app/io.dpcaio.app.AioDeviceAdminReceiver
 ```
 
-The download location must be HTTPS and accessible to Setup Wizard. A GitHub Actions artifact URL that requires
-a signed-in GitHub session is not suitable; use a public Release asset or another HTTPS server.
+The APK URL must be HTTPS and reachable without a signed-in GitHub session.

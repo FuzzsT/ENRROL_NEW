@@ -34,7 +34,7 @@ dd3414875e67ad3dddd7d1d721fb8c88e74bab67b742975e7c078177a7d6993c  /mnt/data/dpt-
 ## Dhizuku-API compatibility contracts
 - Source supplied by the user: `Dhizuku-API-main.zip`.
 - Upstream project: `iamr0s/Dhizuku-API`.
-- License: MIT. The copied AIDL compatibility contracts retain the upstream MIT license in `dhizuku-compat/LICENSE-DHIZUKU-API-MIT.txt`.
+- License: MIT. The copied AIDL compatibility contracts retain the upstream MIT license in `apps/dpc/integrations/dhizuku/LICENSE-DHIZUKU-API-MIT.txt`.
 - DPC-AIO implements a restricted enterprise compatibility service: raw Binder forwarding, arbitrary remote processes, and arbitrary user-service loading are deliberately disabled.
 
 ## Shizuku API

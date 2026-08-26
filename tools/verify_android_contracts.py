@@ -12,16 +12,16 @@ class Finding:
 
 
 ADAPTERS = {
-    "permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt": {
+    "apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt": {
         "required": ("getAllPermissionGroups(", "queryPermissionsByGroup(", "getInstalledPackages("),
     },
-    "permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionGrantCoordinator.kt": {
+    "apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionGrantCoordinator.kt": {
         "required": ("setPermissionGrantState(", "checkPermission("),
     },
-    "samsung-settings-android/src/main/kotlin/io/dpcaio/samsung/settings/android/AndroidSamsungSettingGateway.kt": {
+    "apps/dpc/modules/samsung/android/src/main/kotlin/io/dpcaio/samsung/settings/android/AndroidSamsungSettingGateway.kt": {
         "required": ("Settings.System.getString", "Settings.Secure.getString", "Settings.Global.getString", "WRITE_SECURE_SETTINGS"),
     },
-    "policy-android/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt": {
+    "apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/AndroidDevicePolicyGateway.kt": {
         "required": (
             "setApplicationHidden(",
             "setPackagesSuspended(",
@@ -29,22 +29,22 @@ ADAPTERS = {
             "getPermissionGrantState(",
         ),
     },
-    "permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt": {
+    "apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionInspector.kt": {
         "required": ("checkPermission(", "checkOpNoThrow("),
     },
-    "app-android/src/main/kotlin/io/dpcaio/appmanager/android/AndroidAppInventory.kt": {
+    "apps/dpc/modules/app-management/android/src/main/kotlin/io/dpcaio/appmanager/android/AndroidAppInventory.kt": {
         "required": ("getInstalledPackages(", "isApplicationHidden(", "isPackageSuspended("),
     },
-    "activity-android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt": {
-        "required": ("getPackageInfo(", "getActivityList(", "isActivityEnabled("),
+    "apps/dpc/modules/activity/android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt": {
+        "required": ("getPackageInfo(", "getActivityList(", "getComponentEnabledSetting("),
     },
-    "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt": {
+    "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt": {
         "required": ("AccountManager.get(", "getAccountsByType(", "com.google"),
     },
-    "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt": {
+    "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt": {
         "required": ("removeAccount(", "setAccountManagementDisabled(", "getAccountTypesWithManagementDisabled("),
     },
-    "installer-android/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt": {
+    "apps/dpc/modules/installer/android/src/main/kotlin/io/dpcaio/installer/android/AndroidPackageInstallerAdapter.kt": {
         "required": (
             "SessionParams(",
             "createSession(",

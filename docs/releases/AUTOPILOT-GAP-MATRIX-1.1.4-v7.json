@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "target": "DPC-AIO 1.1.4",
+  "date": "2026-08-25",
+  "sourceCompleteness": {
+    "state": "SOURCE_COMPLETE",
+    "moduleCount": 43,
+    "emptyModules": 0,
+    "duplicateIncludes": 0,
+    "note": "Gradle NO-SOURCE is expected for task types with no matching inputs and is not an empty-module signal."
+  },
+  "implemented": [
+    "device_owner_and_work_profile_qr",
+    "full_offline_routing",
+    "permission_manager",
+    "activity_component_control",
+    "security_network_logging",
+    "system_update_policy",
+    "credential_center",
+    "lock_task_device_security",
+    "cope_cross_profile",
+    "frp_policy",
+    "organization_affiliation",
+    "application_control_extended",
+    "protected_operations_transaction",
+    "package_trust_apk_plus",
+    "credential_recovery",
+    "oem_lab_isolation"
+  ],
+  "partial": [
+    {
+      "id": "knox_official_execution",
+      "reason": "Class/prerequisite inventory exists, but official bounded call/readback adapters are not implemented for advertised capability families."
+    },
+    {
+      "id": "sem_execution",
+      "reason": "Class/method probe exists; bounded invocation and readback evidence remain incomplete."
+    },
+    {
+      "id": "runtime_hardware_evidence",
+      "reason": "Device Owner, Work Profile, Knox, SEM and OEM runtime verification still require compatible hardware/emulator evidence."
+    }
+  ],
+  "missingOrDeferred": [
+    "managed_subscriptions",
+    "preferential_network_service",
+    "nearby_streaming_enterprise_policy",
+    "knox_geofencing_adapter",
+    "dex_execution_adapter",
+    "knox_application_policy_execution_adapter",
+    "knox_certificate_policy_execution_adapter",
+    "knox_kiosk_execution_adapter",
+    "knox_firewall_vpn_execution_adapter",
+    "knox_enhanced_attestation_execution_adapter"
+  ],
+  "plugin": {
+    "version": "0.2.1",
+    "deterministicPackaging": true,
+    "repositoryNativeChecks": "PASS",
+    "missingPublicBrandAssets": [
+      "assets/logo-light.svg",
+      "assets/logo-dark.svg"
+    ],
+    "publicationBlockers": [
+      "verified publisher identity not established in this workspace",
+      "stable public website/privacy/terms/support URLs not verified",
+      "writable publication credentials not available in this workspace"
+    ]
+  },
+  "releaseEvidence": {
+    "fullAndroidBuildAfterV7": "NOT_RUN",
+    "productionStableSigning": "NOT_CONFIGURED_IN_EVIDENCE",
+    "emergencyEphemeralSigning": "SUPPORTED_BUT_NOT_UPDATE_STABLE",
+    "publicApkByteIdentity": "NOT_VERIFIED_UNTIL_BUILD_AND_RELEASE_COMPLETE"
+  }
+}

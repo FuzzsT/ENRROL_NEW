@@ -1,0 +1,28 @@
+{
+  "generatedAtUtc": "2026-08-23T12:12:42.768785+00:00",
+  "limitations": [
+    "No production enterpriseDebug APK was available in this source-only environment.",
+    "No physical/emulated Android Setup Wizard scan was executed.",
+    "Runtime Device Owner enrollment remains unverified until the final APK is built, published at the QR URL, and scanned after factory reset."
+  ],
+  "qrProvisioning": {
+    "android12AdminIntegratedContract": "PASS",
+    "apkChecksumBinding": "PASS",
+    "continuousReleaseByteIdentityContract": "PASS",
+    "deviceOwnerGeneratorContract": "PASS",
+    "expectedReleaseUrlBinding": "PASS",
+    "qrJsonEquality": "PASS",
+    "realSetupWizardScan": "NOT_RUN",
+    "tagReleaseByteIdentityContract": "PASS",
+    "workProfileGeneratorContract": "PASS",
+    "workflowYaml": "PASS"
+  },
+  "security": {
+    "privateKeyMaterialFound": 0,
+    "publicPemFiles": 2,
+    "publicPemNote": "Both PEM files contain BEGIN PUBLIC KEY and are intentionally public verification keys.",
+    "releaseSecretScan": "PASS"
+  },
+  "variant": "QR Setup Hardened",
+  "version": "1.0.1"
+}

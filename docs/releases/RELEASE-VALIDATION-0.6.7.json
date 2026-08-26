@@ -1,0 +1,32 @@
+{
+  "release": "0.6.7",
+  "versionCode": 14,
+  "companionVersion": "0.1.4",
+  "provisioning": {
+    "defaultCompatibilityMode": "work-profile",
+    "explicitModes": ["work-profile", "fully-managed"],
+    "workProfileArtifact": "work-profile-qr.png",
+    "deviceOwnerArtifact": "device-owner-qr.png",
+    "generalValidator": "tools/provisioning/verify_provisioning_qr.py",
+    "offlineBuildSwitch": "DPC_AIO_ALLOW_OFFLINE",
+    "offlinePayloadLocation": "top-level provisioning extra"
+  },
+  "verification": {
+    "tddRedObserved": true,
+    "dualProvisioningQr": "PASS",
+    "workProfileProvisioning": "PASS",
+    "provisioningBuildIntegration": "PASS",
+    "releaseVersionContract": "PASS",
+    "provisioningService": "6/6 PASS",
+    "androidContracts": "PASS",
+    "projectVerify": "PASS",
+    "releaseAudit": "PASS",
+    "workflowYaml": "PASS",
+    "verifyBeforePush": "PASS",
+    "moduleCenter": "PASS: 34 modules represented; 35 Gradle projects reachable",
+    "companionPlugin": "PASS: skills-only, 4 skills, deterministic package",
+    "companionPluginSha256": "8c71b2a1c2bc95e4f644893e2748d05f909a3c551e6954f6829f2159bdfb9d78",
+    "hostSuiteScript": "TIMEOUT after test_work_profile_provisioning in sandbox; remaining constituent gates were executed separately and passed",
+    "androidAssemble": "BLOCKED_BY_ENVIRONMENT: Gradle 9.7 distribution fetch failed with UnknownHostException services.gradle.org"
+  }
+}

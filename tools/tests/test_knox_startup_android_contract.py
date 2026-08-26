@@ -3,14 +3,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 def main():
-    manifest = (ROOT/'app-dpc/src/main/AndroidManifest.xml').read_text()
-    receiver = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxBootReceiver.kt'
-    controller = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxStartupController.kt'
-    store = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxRuntimeStateStore.kt'
-    admin = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/AioDeviceAdminReceiver.kt'
-    package_control = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxAwarePackageController.kt'
-    gate = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxRuntimeGate.kt'
-    bridge = ROOT/'app-dpc/src/main/kotlin/io/dpcaio/app/KnoxRealLicenseStateBridge.kt'
+    manifest = (ROOT/'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
+    receiver = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxBootReceiver.kt'
+    controller = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxStartupController.kt'
+    store = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxRuntimeStateStore.kt'
+    admin = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDeviceAdminReceiver.kt'
+    package_control = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxAwarePackageController.kt'
+    gate = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxRuntimeGate.kt'
+    bridge = ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxRealLicenseStateBridge.kt'
 
     for p in [receiver, controller, store, package_control, gate, bridge]:
         assert p.exists(), f'missing {p.name}'

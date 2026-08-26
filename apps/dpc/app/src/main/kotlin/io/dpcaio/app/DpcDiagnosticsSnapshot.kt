@@ -1,0 +1,148 @@
+package io.dpcaio.app
+
+import android.content.ComponentName
+import android.content.Context
+import android.os.Build
+import io.dpcaio.core.model.CapabilityResolver
+import io.dpcaio.core.model.VisibilityClass
+import io.dpcaio.policy.android.AndroidDevicePolicyGateway
+import io.dpcaio.shizuku.AndroidShizukuRuntime
+import org.json.JSONObject
+
+data class DpcDiagnosticsSnapshot(
+    val apiLevel: Int,
+    val manufacturer: String,
+    val model: String,
+    val dpcVersion: String,
+    val deviceOwner: Boolean,
+    val profileOwner: Boolean,
+    val organizationOwnedProfile: Boolean,
+    val affiliatedUser: Boolean,
+    val samsungDevice: Boolean,
+    val knoxAvailable: Boolean,
+    val knoxLicenseActive: Boolean,
+    val shizukuBinderAlive: Boolean,
+    val shizukuPermissionGranted: Boolean,
+    val dhizukuCompiled: Boolean,
+    val securityLoggingEnabled: Boolean?,
+    val networkLoggingEnabled: Boolean?,
+    val pendingNetworkBatchToken: Long?,
+    val securityLogsPending: Boolean,
+    val systemUpdateMode: String?,
+    val freezePeriodCount: Int?,
+    val caCertificateCount: Int?,
+    val crossProfilePackageCount: Int?,
+    val managedProfileMaximumTimeOffMillis: Long?,
+    val offlineBundleId: String?,
+    val offlineStage: String?,
+    val offlineSyncPending: Boolean,
+    val offlineLastError: String?,
+    val moduleCounts: ModuleCounts,
+) {
+    data class ModuleCounts(
+        val integrated: Int,
+        val visible: Int,
+        val hidden: Int,
+        val available: Int,
+        val unavailable: Int,
+        val lab: Int,
+    )
+
+    fun toJson(): String = JSONObject().apply {
+        put("apiLevel", apiLevel)
+        put("manufacturer", manufacturer)
+        put("model", model)
+        put("dpcVersion", dpcVersion)
+        put("deviceOwner", deviceOwner)
+        put("profileOwner", profileOwner)
+        put("organizationOwnedProfile", organizationOwnedProfile)
+        put("affiliatedUser", affiliatedUser)
+        put("samsungDevice", samsungDevice)
+        put("knoxAvailable", knoxAvailable)
+        put("knoxLicenseActive", knoxLicenseActive)
+        put("shizukuBinderAlive", shizukuBinderAlive)
+        put("shizukuPermissionGranted", shizukuPermissionGranted)
+        put("dhizukuCompiled", dhizukuCompiled)
+        putNullable("securityLoggingEnabled", securityLoggingEnabled)
+        putNullable("networkLoggingEnabled", networkLoggingEnabled)
+        putNullable("pendingNetworkBatchToken", pendingNetworkBatchToken)
+        put("securityLogsPending", securityLogsPending)
+        putNullable("systemUpdateMode", systemUpdateMode)
+        putNullable("freezePeriodCount", freezePeriodCount)
+        putNullable("caCertificateCount", caCertificateCount)
+        putNullable("crossProfilePackageCount", crossProfilePackageCount)
+        putNullable("managedProfileMaximumTimeOffMillis", managedProfileMaximumTimeOffMillis)
+        putNullable("offlineBundleId", offlineBundleId)
+        putNullable("offlineStage", offlineStage)
+        put("offlineSyncPending", offlineSyncPending)
+        putNullable("offlineLastError", offlineLastError)
+        put("moduleCounts", JSONObject().apply {
+            put("integrated", moduleCounts.integrated)
+            put("visible", moduleCounts.visible)
+            put("hidden", moduleCounts.hidden)
+            put("available", moduleCounts.available)
+            put("unavailable", moduleCounts.unavailable)
+            put("lab", moduleCounts.lab)
+        })
+    }.toString(2)
+
+    companion object {
+        private fun JSONObject.putNullable(key: String, value: Any?) {
+            put(key, value ?: JSONObject.NULL)
+        }
+
+        fun capture(context: Context): DpcDiagnosticsSnapshot {
+            val management = ManagementContextFactory.create(context)
+            val resolutions = DpcModuleRegistry.modules.map { module ->
+                module to CapabilityResolver.resolve(module.requirements, management)
+            }
+            val shizuku = runCatching { AndroidShizukuRuntime().probe() }.getOrNull()
+            val version = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+            }.getOrDefault("unknown")
+            val gateway = AndroidDevicePolicyGateway(context, ComponentName(context, AioDeviceAdminReceiver::class.java))
+            val logState = EnterpriseLogStateStore(context)
+            val update = gateway.getSystemUpdatePolicySpec().value
+            val cope = gateway.getCopePolicySnapshot().value
+            val offline = OfflineDeploymentStore(context).load()
+
+            return DpcDiagnosticsSnapshot(
+                apiLevel = management.apiLevel,
+                manufacturer = Build.MANUFACTURER,
+                model = Build.MODEL,
+                dpcVersion = version,
+                deviceOwner = management.ownership == io.dpcaio.core.model.OwnershipMode.DEVICE_OWNER,
+                profileOwner = management.ownership == io.dpcaio.core.model.OwnershipMode.PROFILE_OWNER,
+                organizationOwnedProfile = management.organizationOwnedProfile,
+                affiliatedUser = management.affiliatedUser,
+                samsungDevice = management.samsungDevice,
+                knoxAvailable = management.knoxAvailable,
+                knoxLicenseActive = management.knoxLicenseActive,
+                shizukuBinderAlive = shizuku?.binderAlive ?: false,
+                shizukuPermissionGranted = shizuku?.permissionGranted ?: false,
+                dhizukuCompiled = runCatching { Class.forName("io.dpcaio.delegation.dhizuku.DhizukuCompatRuntime") }.isSuccess,
+                securityLoggingEnabled = gateway.isSecurityLoggingEnabled().value,
+                networkLoggingEnabled = gateway.isNetworkLoggingEnabled().value,
+                pendingNetworkBatchToken = logState.networkBatchToken(),
+                securityLogsPending = logState.securityLogsAvailable(),
+                systemUpdateMode = update?.mode?.name,
+                freezePeriodCount = update?.freezePeriods?.size,
+                caCertificateCount = gateway.getInstalledCaCertificates().value?.size,
+                crossProfilePackageCount = cope?.crossProfilePackages?.size,
+                managedProfileMaximumTimeOffMillis = cope?.maximumTimeOffMillis,
+                offlineBundleId = offline?.bundleId,
+                offlineStage = offline?.stage?.name,
+                offlineSyncPending = offline?.syncPending ?: false,
+                offlineLastError = offline?.lastError,
+                moduleCounts = ModuleCounts(
+                    integrated = resolutions.size,
+                    visible = resolutions.count { it.second.visible },
+                    hidden = resolutions.count { !it.second.visible },
+                    available = resolutions.count { it.second.executable },
+                    unavailable = resolutions.count { !it.second.executable },
+                    lab = resolutions.count { it.first.requirements.visibility == VisibilityClass.LAB },
+                ),
+            )
+        }
+    }
+}

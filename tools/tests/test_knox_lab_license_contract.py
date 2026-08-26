@@ -3,12 +3,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 def main():
-    gradle=(ROOT/'app-dpc/build.gradle.kts').read_text()
-    provider=ROOT/'app-dpc/src/lab/java/io/dpcaio/app/KnoxLabLicenseProvider.kt'
-    flavor_provider=ROOT/'app-dpc/src/lab/java/io/dpcaio/app/KnoxFlavorLicenseProvider.kt'
-    token=ROOT/'app-dpc/src/lab/assets/knox_lab/dpc-aio-lab-klm.token'
-    lab_module=ROOT/'knox-license-lab/src/main/kotlin/io/dpcaio/knox/license/lab/KnoxLabLicense.kt'
-    main_tree=ROOT/'app-dpc/src/main'
+    gradle=(ROOT/'apps/dpc/app/build.gradle.kts').read_text()
+    provider=ROOT/'apps/dpc/app/src/lab/java/io/dpcaio/app/KnoxLabLicenseProvider.kt'
+    flavor_provider=ROOT/'apps/dpc/app/src/lab/java/io/dpcaio/app/KnoxFlavorLicenseProvider.kt'
+    token=ROOT/'apps/dpc/app/src/lab/assets/knox_lab/dpc-aio-lab-klm.token'
+    lab_module=ROOT/'apps/dpc/lab/knox-license/src/main/kotlin/io/dpcaio/knox/license/lab/KnoxLabLicense.kt'
+    main_tree=ROOT/'apps/dpc/app/src/main'
     assert provider.exists() and flavor_provider.exists(), 'lab providers missing'
     assert token.exists(), 'lab token asset missing'
     assert lab_module.exists(), 'lab verifier module missing'

@@ -15,6 +15,12 @@ PACKAGE_SUM = 'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM'
 SIGNATURE_SUM = 'android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM'
 EXTRAS = 'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'
 ALLOW_OFFLINE = 'android.app.extra.PROVISIONING_ALLOW_OFFLINE'
+REQUESTED_MODE = 'io.dpcaio.extra.PROVISIONING_MODE'
+ENROLLMENT_ENDPOINT = 'io.dpcaio.extra.ENROLLMENT_ENDPOINT'
+ENROLLMENT_SOURCE = 'io.dpcaio.extra.ENROLLMENT_SOURCE'
+ENROLLMENT_OFFLINE_MODE = 'io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE'
+OFFLINE_BUNDLE_ID = 'io.dpcaio.extra.OFFLINE_BUNDLE_ID'
+OFFLINE_MODES = ('ONLINE', 'ONLINE_PREFERRED', 'FULL_OFFLINE', 'OFFLINE_THEN_SYNC')
 
 
 def b64url(raw: bytes) -> str:
@@ -64,13 +70,20 @@ def main() -> int:
     p.add_argument('--apksigner')
     p.add_argument('--enrollment-token', default='')
     p.add_argument('--policy-profile', default='default')
+    p.add_argument('--enrollment-endpoint', default='')
+    p.add_argument('--enrollment-source', default='qr', choices=('qr', 'kme', 'zero-touch', 'nfc', 'manual-token', 'byod-work-profile'))
+    p.add_argument('--provisioning-mode', choices=('auto', 'work-profile', 'fully-managed'), default='work-profile')
     p.add_argument('--allow-offline', action='store_true')
+    p.add_argument('--offline-mode', choices=OFFLINE_MODES, default='ONLINE')
+    p.add_argument('--offline-bundle-id', default='')
     args = p.parse_args()
 
     if not args.apk.is_file():
         p.error(f'APK not found: {args.apk}')
     if not args.apk_url.lower().startswith('https://'):
         p.error('--apk-url must use https:// for Android setup provisioning')
+    if args.enrollment_endpoint and not args.enrollment_endpoint.lower().startswith('https://'):
+        p.error('--enrollment-endpoint must use https://')
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     apk_hex, apk_b64 = sha256_file(args.apk)
@@ -83,7 +96,7 @@ def main() -> int:
     payload = {
         COMPONENT: f'{args.package}/{args.receiver}',
         DOWNLOAD: args.apk_url,
-        ALLOW_OFFLINE: bool(args.allow_offline),
+        ALLOW_OFFLINE: bool(args.allow_offline or args.offline_mode in ('FULL_OFFLINE', 'OFFLINE_THEN_SYNC')),
     }
     metadata = {
         'schema': 1,
@@ -93,6 +106,11 @@ def main() -> int:
         'apkFile': args.apk.name,
         'apkSha256Hex': apk_hex,
         'checksumMode': mode,
+        'provisioningMode': args.provisioning_mode,
+        'enrollmentEndpoint': args.enrollment_endpoint or None,
+        'enrollmentSource': args.enrollment_source,
+        'offlineMode': args.offline_mode,
+        'offlineBundleId': args.offline_bundle_id or None,
     }
     if mode == 'signature':
         cert_hex, cert_b64 = cert
@@ -101,17 +119,34 @@ def main() -> int:
     else:
         payload[PACKAGE_SUM] = apk_b64
 
+    admin_extras = {
+        REQUESTED_MODE: args.provisioning_mode,
+        ENROLLMENT_SOURCE: args.enrollment_source,
+        ENROLLMENT_OFFLINE_MODE: args.offline_mode,
+    }
+    if args.enrollment_endpoint:
+        admin_extras[ENROLLMENT_ENDPOINT] = args.enrollment_endpoint
+    if args.offline_bundle_id:
+        admin_extras[OFFLINE_BUNDLE_ID] = args.offline_bundle_id
+    if args.offline_mode in ('FULL_OFFLINE', 'OFFLINE_THEN_SYNC') and not args.offline_bundle_id:
+        p.error('--offline-bundle-id is required for FULL_OFFLINE/OFFLINE_THEN_SYNC')
     if args.enrollment_token:
-        payload[EXTRAS] = {
+        admin_extras.update({
             'enrollmentToken': args.enrollment_token,
             'policyProfile': args.policy_profile,
-        }
+        })
+    payload[EXTRAS] = admin_extras
 
     compact = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
     (args.out_dir / 'provisioning.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n', 'utf-8')
     (args.out_dir / 'provisioning-payload.txt').write_text(compact + '\n', 'utf-8')
     (args.out_dir / 'provisioning-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n', 'utf-8')
     render_png(compact, args.out_dir / 'provisioning-qr.png')
+    if args.provisioning_mode == 'work-profile':
+        render_png(compact, args.out_dir / 'work-profile-qr.png')
+    elif args.provisioning_mode == 'fully-managed':
+        render_png(compact, args.out_dir / 'device-owner-qr.png')
+        render_png(compact, args.out_dir / 'fully-managed-qr.png')
     print(json.dumps(metadata, sort_keys=True))
     return 0
 

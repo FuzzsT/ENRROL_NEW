@@ -17,7 +17,7 @@ def assert_true(value, message):
 def main():
     with TemporaryDirectory() as td:
         root = Path(td)
-        source = root / 'app-dpc/src/main/Research.kt'
+        source = root / 'apps/dpc/app/src/main/Research.kt'
         source.parent.mkdir(parents=True)
         source.write_text(
             '\n'.join([
@@ -34,7 +34,7 @@ def main():
             ]),
             encoding='utf-8',
         )
-        gradle = root / 'app-dpc/build.gradle.kts'
+        gradle = root / 'apps/dpc/app/build.gradle.kts'
         gradle.parent.mkdir(parents=True, exist_ok=True)
         gradle.write_text('dependencies { implementation(project(":lab-tools")) }', encoding='utf-8')
 

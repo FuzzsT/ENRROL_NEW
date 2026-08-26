@@ -14,11 +14,11 @@ def require(path: Path, token: str):
 
 
 def main():
-    aidl = ROOT / "dhizuku-compat/src/main/aidl/com/rosan/dhizuku/aidl/IDhizuku.aidl"
-    provider = ROOT / "dhizuku-compat/src/main/kotlin/io/dpcaio/delegation/dhizuku/SafeDhizukuProvider.kt"
-    service = ROOT / "dhizuku-compat/src/main/kotlin/io/dpcaio/delegation/dhizuku/SafeDhizukuService.kt"
-    manifest = ROOT / "dhizuku-compat/src/main/AndroidManifest.xml"
-    license_file = ROOT / "dhizuku-compat/LICENSE-DHIZUKU-API-MIT.txt"
+    aidl = ROOT / "apps/dpc/integrations/dhizuku/src/main/aidl/com/rosan/dhizuku/aidl/IDhizuku.aidl"
+    provider = ROOT / "apps/dpc/integrations/dhizuku/src/main/kotlin/io/dpcaio/delegation/dhizuku/SafeDhizukuProvider.kt"
+    service = ROOT / "apps/dpc/integrations/dhizuku/src/main/kotlin/io/dpcaio/delegation/dhizuku/SafeDhizukuService.kt"
+    manifest = ROOT / "apps/dpc/integrations/dhizuku/src/main/AndroidManifest.xml"
+    license_file = ROOT / "apps/dpc/integrations/dhizuku/LICENSE-DHIZUKU-API-MIT.txt"
 
     require(aidl, "interface IDhizuku")
     require(provider, 'METHOD_CLIENT = "client"')

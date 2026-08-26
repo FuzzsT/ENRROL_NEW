@@ -1,0 +1,31 @@
+{
+  "release": "0.9.0",
+  "versionCode": 17,
+  "companionVersion": "0.1.6",
+  "provisioningServerVersion": "0.4.0",
+  "sourceVerification": {
+    "coreKotlinMains": "41/41 PASS",
+    "enrollmentContracts": "PASS",
+    "existingAndroidContracts": "PASS",
+    "dualProvisioningQr": "PASS",
+    "projectVerify": "PASS",
+    "releaseAudit": "PASS",
+    "plugin": "PASS; deterministic packaging",
+    "hostSuiteWrapper": "TIMEOUT in constrained sandbox after Kotlin 41/41 and enrollment/QR contracts; all remaining constituent gates executed separately and passed",
+    "provisioningServerTests": "12/12 PASS",
+    "pluginSha256": "d55f08e4b4e4ebf4db1aa9205a4e8ccc3c11d450c030e6100098b780a8394580",
+    "stagingFileCount": 459,
+    "releaseSecretScan": "PASS",
+    "nonSdkScan": "PASS"
+  },
+  "buildVerification": {
+    "apkBuildVerified": false,
+    "status": "BLOCKED_BY_ENVIRONMENT",
+    "reason": "Gradle wrapper cannot resolve services.gradle.org to download Gradle 9.7.0"
+  },
+  "liveVerification": {
+    "androidProvisioningVerified": false,
+    "kmeVerified": false,
+    "zeroTouchVerified": false
+  }
+}

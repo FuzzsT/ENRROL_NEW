@@ -1,8 +1,8 @@
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
-module=root/'knox-zt-android'
+module=root/'apps/dpc/modules/knox/zero-trust/android'
 assert module.exists(), 'missing knox-zt-android'
-texts='\n'.join(p.read_text(errors='ignore') for base in [root/'knox-zt-core', module, root/'shizuku-adapter'] for p in base.rglob('*') if p.is_file())
+texts='\n'.join(p.read_text(errors='ignore') for base in [root/'apps/dpc/modules/knox/zero-trust/core', module, root/'apps/dpc/integrations/shizuku'] for p in base.rglob('*') if p.is_file())
 for required in [
     'com.samsung.android.knox.zt.framework',
     'enableSystemApp',

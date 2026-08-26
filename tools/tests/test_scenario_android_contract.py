@@ -1,6 +1,6 @@
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
-module=root/'scenario-android'
+module=root/'apps/dpc/modules/scenario/android'
 assert module.exists(), 'missing scenario-android'
 texts='\n'.join(p.read_text(errors='ignore') for p in module.rglob('*') if p.is_file())
 for required in ['ActivityLifecycleCallbacks','TYPE_APPLICATION_OVERLAY','Settings.canDrawOverlays','ScenarioArchiveCodec','ScenarioOverlayService','recordIntent','recordBroadcast']:

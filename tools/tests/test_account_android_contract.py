@@ -3,11 +3,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-REPOSITORY = ROOT / "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt"
-INTENTS = ROOT / "account-android/src/main/kotlin/io/dpcaio/account/android/GoogleAccountIntentFactory.kt"
-GATEWAY = ROOT / "account-android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt"
-MANIFEST = ROOT / "app-dpc/src/main/AndroidManifest.xml"
-SYSTEM_MANIFEST = ROOT / "app-dpc/src/systemPrivileged/AndroidManifest.xml"
+REPOSITORY = ROOT / "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidGoogleAccountRepository.kt"
+INTENTS = ROOT / "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/GoogleAccountIntentFactory.kt"
+GATEWAY = ROOT / "apps/dpc/modules/account/android/src/main/kotlin/io/dpcaio/account/android/AndroidAccountReorderGateway.kt"
+MANIFEST = ROOT / "apps/dpc/app/src/main/AndroidManifest.xml"
+SYSTEM_MANIFEST = ROOT / "apps/dpc/app/src/systemPrivileged/AndroidManifest.xml"
 
 
 def require(path: Path, tokens: list[str]):

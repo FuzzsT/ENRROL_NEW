@@ -20,7 +20,7 @@
 ---
 
 ### Task 1: Typed delegation broker
-**Files:** `delegation-core/src/main/kotlin/io/dpcaio/delegation/DelegationBroker.kt`, test counterpart.
+**Files:** `modules/delegation/core/src/main/kotlin/io/dpcaio/delegation/DelegationBroker.kt`, test counterpart.
 **Interfaces:** `DelegationBroker.execute(DelegatedRequest): DelegatedResult`; `DelegatedOperationExecutor.execute(DelegatedRequest)`.
 - [x] Write RED tests for allowed, scope-denied, identity-mismatch, and executor-failure paths.
 - [x] Implement the minimal typed broker.
@@ -28,7 +28,7 @@
 - [x] Commit.
 
 ### Task 2: Safe Dhizuku-compatible provider subset
-**Files:** Dhizuku AIDL under `dhizuku-compat/src/main/aidl`, `SafeDhizukuProvider.kt`, `SafeDhizukuService.kt`, manifest and provenance.
+**Files:** Dhizuku AIDL under `integrations/dhizuku/src/main/aidl`, `SafeDhizukuProvider.kt`, `SafeDhizukuService.kt`, manifest and provenance.
 **Interfaces:** supports provider `client` handshake, version/permission/delegated-scope calls; rejects raw remote transact/process/user-service operations.
 - [x] Add contract test that requires provider/AIDL handshake and explicit rejection of unrestricted operations.
 - [x] Copy MIT AIDL compatibility contracts and preserve license notice.
@@ -46,7 +46,7 @@
 - [x] Commit.
 
 ### Task 4: Enrollment/provisioning server
-**Files:** `provisioning-server/src/*.mjs`, Node tests, settings/project verifier integration.
+**Files:** `services/provisioning/src/*.mjs`, Node tests, settings/project verifier integration.
 **Interfaces:** one-time token create/peek/consume and deterministic Android Enterprise provisioning payload builder.
 - [x] Write RED Node tests for TTL, one-time consumption, and payload fields/checksum.
 - [x] Implement token store and payload builder using Node built-ins only.

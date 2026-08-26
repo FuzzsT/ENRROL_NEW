@@ -1,0 +1,6 @@
+DPC-AIO 1.1.4
+Variant: Enterprise + Samsung OEM AIO
+Production enrollment artifact: DPC-AIO-enterprise-release.apk
+Baseline invariant: DPC-AIO 1.0.2 QR Production Readiness
+Source verification: tools/run_host_tests.sh + tools/tests/test_110_release_gate_contract.py
+Runtime verification: reported separately; never inferred from source tests

@@ -1,0 +1,16 @@
+DPC-AIO 1.1.0 verification
+
+Required source gates:
+- DPC-AIO 1.0.2 QR Production Readiness prerequisite
+- Protected Targets / Protected Operations
+- Enterprise Transaction Engine and CAS rollback
+- Knox Official / SEM / OEM Internals safety and capability routing
+- Package Trust 2.0 and hardened APK+ importer
+- Work Profile Lifecycle 2.0 and Credential Recovery 2.0
+- application restrictions / whole-app / Device Owner location contracts
+- non-SDK and release-secret scans
+- Android contracts, project verification, provisioning server tests
+- companion plugin contract, scripts and deterministic Autopilot packaging
+- fresh-extract release/security/core verification
+
+APK assemble remains environment-dependent and requires the exact Gradle 9.7.0 + Android SDK/API 37 toolchain and dependencies. Hardware/runtime verification remains separate from source verification.

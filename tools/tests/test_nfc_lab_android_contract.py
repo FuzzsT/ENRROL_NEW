@@ -1,6 +1,6 @@
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
-module=root/'nfc-lab-android'
+module=root/'apps/dpc/modules/nfc-lab/android'
 assert module.exists(), 'missing nfc-lab-android'
 texts='\n'.join(p.read_text(errors='ignore') for p in module.rglob('*') if p.is_file())
 for required in [

@@ -1,0 +1,28 @@
+{
+  "name": "DPC-AIO",
+  "version": "0.6.4",
+  "versionCode": 11,
+  "date": "2026-08-22",
+  "layout": {
+    "model": "domain-oriented",
+    "stableGradleProjectIds": true,
+    "app": "apps/dpc",
+    "modules": "modules",
+    "integrations": "integrations",
+    "services": "services/provisioning",
+    "lab": "lab",
+    "plugin": "plugins/chatgpt-companion",
+    "orphanKnoxLicenseAndroidRemoved": true
+  },
+  "verification": {
+    "projectLayout": true,
+    "projectVerify": true,
+    "hostTestSuite": true,
+    "verifyBeforePush": true,
+    "workflowYaml": true,
+    "companionPluginChecks": true,
+    "provisioningNodeTests": "5/5"
+  },
+  "apkBuildClaimed": false,
+  "notes": "Android APK compilation/public enrollment URL validation remains a GitHub Actions responsibility."
+}

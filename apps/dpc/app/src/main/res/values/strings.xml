@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">DPC-AIO</string>
+    <string name="device_admin_description">Enterprise device policy controller</string>
+    <string name="enterprise_policy_hub">Enterprise Policy Hub</string>
+    <string name="dpc_diagnostics">DPC Diagnostics</string>
+</resources>

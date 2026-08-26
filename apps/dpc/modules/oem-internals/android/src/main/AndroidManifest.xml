@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service
+            android:name="io.dpcaio.oem.android.OemLabProbeService"
+            android:exported="false"
+            android:process=":oem_lab"
+            android:stopWithTask="true" />
+    </application>
+</manifest>

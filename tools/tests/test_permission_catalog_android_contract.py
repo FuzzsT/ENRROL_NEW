@@ -8,19 +8,19 @@ def need(path, tokens):
         assert token in text, f'{path} missing {token}'
 
 def main():
-    need('permission-android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt', [
+    need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt', [
         'getAllPermissionGroups(', 'queryPermissionsByGroup(', 'GET_PERMISSIONS',
         'Manifest.permission::class.java.fields', 'Manifest.permission_group::class.java.fields'
     ])
-    need('permission-android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessInspector.kt', [
+    need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessInspector.kt', [
         'OPSTR_GET_USAGE_STATS', 'canRequestPackageInstalls(', 'getEnabledListenerPackages('
     ])
-    need('permission-android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessIntentFactory.kt', [
+    need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessIntentFactory.kt', [
         'ACTION_MANAGE_OVERLAY_PERMISSION', 'ACTION_MANAGE_WRITE_SETTINGS',
         'ACTION_MANAGE_UNKNOWN_APP_SOURCES', 'ACTION_USAGE_ACCESS_SETTINGS',
         'ACTION_NOTIFICATION_LISTENER_SETTINGS'
     ])
-    need('app-dpc/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt', [
+    need('apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt', [
         'AndroidPermissionCatalog', 'PermissionCatalogClassifier', 'PermissionManager'
     ])
     print('test_permission_catalog_android_contract: PASS')
