@@ -34,7 +34,10 @@ def main():
         assert needle in workflow, f"workflow missing {needle!r}"
     assert 'assembleEnterpriseDebug' not in workflow, 'production workflow still builds debug APK'
     assert 'outputs/apk/enterprise/debug' not in workflow, 'production workflow still collects debug APK bytes'
-    assert 'outputs/apk/enterprise/release' in workflow, 'production workflow must collect enterpriseRelease APK bytes'
+    assert 'apps/dpc/app/build/outputs/apk/enterprise/release' in workflow, 'production workflow must collect enterpriseRelease APK from :app-dpc output directory'
+    assert 'apps/dpc/app/build/outputs/provisioning/enterprise/release' in workflow, 'production workflow must collect provisioning files from :app-dpc output directory'
+    assert 'apps/dpc/build/outputs/apk/enterprise/release' not in workflow, 'production workflow uses obsolete root-level APK output path'
+    assert 'apps/dpc/build/outputs/provisioning/enterprise/release' not in workflow, 'production workflow uses obsolete root-level provisioning output path'
     print('test_102_qr_production_readiness_contract: PASS')
 
 if __name__ == '__main__':
