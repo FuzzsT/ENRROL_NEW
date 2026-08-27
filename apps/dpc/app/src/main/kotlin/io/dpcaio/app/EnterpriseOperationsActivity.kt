@@ -100,7 +100,7 @@ class EnterpriseOperationsActivity : Activity() {
             }
         }
         root.addView(TextView(this).apply { text = "Stored log batches: ${store.batches().size}. Manual redacted export only." })
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(DpcUiShell.scroll(this, root))
     }
 
     private fun addUpdateButton(root: LinearLayout, label: String, spec: SystemUpdatePolicySpec, freezeText: EditText) =

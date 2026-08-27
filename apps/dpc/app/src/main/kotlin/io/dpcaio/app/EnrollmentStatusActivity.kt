@@ -51,7 +51,7 @@ class EnrollmentStatusActivity : Activity() {
             text = "Export enrollment-diagnostics.json"
             setOnClickListener { export(snapshot.toJson()) }
         })
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
     }
 
     private fun export(json: String) {

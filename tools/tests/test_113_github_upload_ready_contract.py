@@ -38,11 +38,11 @@ m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 24: errors.append('versionCode >=24 required')
 
 readme=read('README.md')
-if 'DPC-AIO 1.1.' not in readme:
-    errors.append('README does not identify a 1.1.x release')
+if not re.search(r'DPC-AIO 1\.\d+\.\d+', readme):
+    errors.append('README does not identify a stable DPC-AIO 1.x release')
 
 prov=read('docs/releases/SOURCE-COMMIT.txt')
-if '0.6.7' in prov or '1.1.' not in prov:
+if '0.6.7' in prov or not re.search(r'1\.\d+\.\d+', prov):
     errors.append('SOURCE-COMMIT provenance is stale')
 
 gitignore=read('.gitignore')

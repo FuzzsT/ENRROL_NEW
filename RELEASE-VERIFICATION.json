@@ -1,6 +1,6 @@
 {
-  "version": "1.1.4",
-  "target": "DPC-AIO 1.1.4 QR Release Bundle + GitHub Publish Ready / Hardened + CI Android Runtime Smoke + Enterprise + Samsung OEM AIO",
+  "version": "1.2.0",
+  "target": "DPC-AIO 1.2.0 QR Release Bundle + GitHub Publish Ready / Hardened + CI Android Runtime Smoke + Enterprise + Samsung OEM AIO",
   "generatedAtUtc": "2026-08-24T13:51:34Z",
   "evidenceStates": {
     "SOURCE_VERIFIED": "PASS",
@@ -161,7 +161,7 @@
       "pluginAutopilot": "PASS",
       "runtimeSourceParity": "PASS: 278/278 byte-identical to final 1.1.3"
     },
-    "note": "1.1.4 QR Release PREVERIFY archive was extracted with password 123 and verified from the extracted tree. Actual signed APK/QR release bundle generation remains a CI runtime action and is not promoted to PASS locally."
+    "note": "1.2.0 QR Release PREVERIFY archive was extracted with password 123 and verified from the extracted tree. Actual signed APK/QR release bundle generation remains a CI runtime action and is not promoted to PASS locally."
   },
   "securityBoundaries": [
     "No signature-permission bypass or hidden-API exemption",
@@ -179,12 +179,12 @@
     "artifact": "dist/android-runtime-smoke.json",
     "requiredReadback": [
       "deviceOwner=true",
-      "dpcVersion=1.1.4",
+      "dpcVersion=1.2.0",
       "moduleCounts.integrated>0"
     ],
     "publicationGate": true,
     "note": "The local execution environment has no Android SDK/emulator and the linked GitHub connector cannot access the project repository, so CI runtime evidence is not promoted to PASS here.",
-    "qrReleaseBundle": "dist/DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip",
+    "qrReleaseBundle": "dist/DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip",
     "qrReleaseBundleStatus": "NOT_RUN: requires successful signed APK build + QR validation + emulator runtime smoke in GitHub Actions"
   }
 }

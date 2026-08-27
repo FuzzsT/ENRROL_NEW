@@ -44,7 +44,7 @@ class OfflineSetupActivity : Activity() {
         body.addView(Button(this).apply { text = "Refresh state"; setOnClickListener { showPersistedState() } })
         output = TextView(this).apply { setTextIsSelectable(true) }
         body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
         showPersistedState()
     }
 

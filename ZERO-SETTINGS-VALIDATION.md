@@ -16,7 +16,7 @@ Validated configuration target: manual `Build AIO + enrollment QR` with no repos
 - QR release bundle contracts: PASS
 - Runtime smoke contract: PASS
 - GitHub artifact/release/publish contracts: PASS
-- Release gate contracts through 1.1.4: PASS
+- Release gate contracts through 1.2.0: PASS
 - Secret scan: PASS
 - Kotlin host model tests: PASS
 - Python host contract suite: PASS (segmented execution due local command time limits)

@@ -1,10 +1,10 @@
-# DPC-AIO 1.1.4 — Enterprise + Samsung OEM AIO
+# DPC-AIO 1.2.0 — Enterprise + Samsung OEM AIO
 
 Android Enterprise DPC workspace with production QR enrollment, protected enterprise operations, deterministic capability routing and explicit verification evidence.
 
-## 1.1.4 highlights
+## 1.2.0 highlights
 
-- **QR Release Bundle:** tagged/continuous GitHub releases now include dedicated Work Profile, Device Owner and compatibility QR assets plus JSON/payload/metadata, validation reports, `SHA256SUMS.txt`, `RELEASE-INDEX.json`, `QR-README.md` and a single `DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip`.
+- **QR Release Bundle:** tagged/continuous GitHub releases now include dedicated Work Profile, Device Owner and compatibility QR assets plus JSON/payload/metadata, validation reports, `SHA256SUMS.txt`, `RELEASE-INDEX.json`, `QR-README.md` and a single `DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip`.
 - The bundle is created only after the signed APK, QR/APK binding checks and AOSP Device Owner runtime smoke succeed in CI.
 
 - **GitHub Upload Ready / Hardened:** read-only build permissions, isolated write-only publish job, step-scoped signing secrets, immutable SHA-pinned GitHub Actions and signing-material cleanup before emulator execution.

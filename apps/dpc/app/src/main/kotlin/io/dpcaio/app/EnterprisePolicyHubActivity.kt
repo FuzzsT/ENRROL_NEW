@@ -52,7 +52,7 @@ class EnterprisePolicyHubActivity : Activity() {
             })
             entries.forEach { (entry, resolution) -> addEntry(entry, resolution) }
         }
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(DpcUiShell.scroll(this, root))
     }
 
     private fun addEntry(entry: EnterprisePolicyDescriptor, resolution: CapabilityResolution) {

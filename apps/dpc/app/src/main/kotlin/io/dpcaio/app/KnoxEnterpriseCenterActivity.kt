@@ -127,6 +127,6 @@ class KnoxEnterpriseCenterActivity : Activity() {
         root.addView(TextView(this).apply {
             text = "No hidden-API exemptions, guessed Binder transactions, signature-permission bypass, root/su fallback, forged Knox state, or private KPE material."
         })
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(DpcUiShell.scroll(this, root))
     }
 }

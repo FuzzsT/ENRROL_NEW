@@ -33,6 +33,7 @@ class KnoxZtManagerActivity : Activity() {
         val activities = Button(this).apply { text = "Prepare + list KnoxZT activities"; setOnClickListener { listActivities() } }
         root.addView(url); root.addView(apkSha); root.addView(signerSha); root.addView(save); root.addView(ensure); root.addView(activities)
         root.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        DpcUiShell.install(this, root)
         setContentView(root)
     }
 

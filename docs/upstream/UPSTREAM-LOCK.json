@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "dpc_aio": {
+    "version_name": "1.2.0",
+    "version_code": 26
+  },
+  "upstreams": {
+    "google_testdpc": {
+      "repository": "googlesamples/android-testdpc",
+      "branch": "master",
+      "observed_commit": "d42d7f196d2db3d22ba4fca1e74faa5bc9b58d4e",
+      "observed_tree": "11ff224d270d97309a5b1b41312f720232f7acaa",
+      "license": "Apache-2.0",
+      "integration": "reference-only"
+    },
+    "admin_dpc": {
+      "repository": "ser-mk/admin-dpc",
+      "branch": "master",
+      "observed_commit": "2bc77ccd902f9b23de24fffbbf8336f22e502276",
+      "observed_tree": "a927bfd15184bab1c82d41c0f1316c4183d2cb68",
+      "release": "v0.1",
+      "license": "Apache-2.0",
+      "integration": "reference-only"
+    }
+  }
+}

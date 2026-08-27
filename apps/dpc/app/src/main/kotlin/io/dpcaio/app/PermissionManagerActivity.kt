@@ -92,7 +92,7 @@ class PermissionManagerActivity : Activity() {
 
         output = TextView(this).apply { setTextIsSelectable(true) }
         body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
         shizuku.bind()
     }
 

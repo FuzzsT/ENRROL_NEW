@@ -1,4 +1,4 @@
-DPC-AIO 1.1.4 GitHub Upload Ready / Hardened source package provenance
+DPC-AIO 1.2.0 GitHub Upload Ready / Hardened source package provenance
 Base package: DPC-AIO 1.1.2 CI Runtime Smoke final source archive
 Base archive SHA-256: 678ba2610208bdbef10339e233188050e26d4aea617f35c8dfbeaf0a97fdc3ca
 Repository commit SHA: UNAVAILABLE until this source package is imported/committed to GitHub

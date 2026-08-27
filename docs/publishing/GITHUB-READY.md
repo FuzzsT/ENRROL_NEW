@@ -1,8 +1,8 @@
-> Current release target: DPC-AIO 1.1.4 Enterprise + Samsung OEM AIO
+> Current release target: DPC-AIO 1.2.0 Enterprise + Samsung OEM AIO
 
 # GitHub-ready release source
 
-DPC-AIO 1.1.4 preserves the 1.0.2 QR Production Readiness invariants and adds protected operations, transactional mutation/rollback, capability-routed Android/Knox/SEM/OEM handling, Package Trust 2.0, hardened APK+ import, Work Profile Lifecycle 2.0 and Credential Recovery 2.0.
+DPC-AIO 1.2.0 preserves the 1.0.2 QR Production Readiness invariants and adds protected operations, transactional mutation/rollback, capability-routed Android/Knox/SEM/OEM handling, Package Trust 2.0, hardened APK+ import, Work Profile Lifecycle 2.0 and Credential Recovery 2.0.
 
 ## Production enrollment invariants
 - Production provisioning builds `:app-dpc:assembleEnterpriseRelease`.

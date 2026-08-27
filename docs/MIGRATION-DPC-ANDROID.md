@@ -2,7 +2,7 @@
 
 Destination repository: `https://github.com/local-localhost-app-system/dpc_android`
 
-This repository is the expanded DPC-AIO 1.1.4 source tree. The Android application is built directly from the repository root; source is not hidden inside a release archive.
+This repository is the expanded DPC-AIO 1.2.0 source tree. The Android application is built directly from the repository root; source is not hidden inside a release archive.
 
 ## Enrollment release paths
 

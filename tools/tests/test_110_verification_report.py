@@ -29,8 +29,10 @@ ALLOWED = {'PASS','FAIL','BLOCKED','NOT_RUN','UNAVAILABLE','STALE','PARTIAL','CO
 
 def main() -> None:
     data = json.loads(REPORT.read_text('utf-8'))
-    if not str(data.get('version', '')).startswith('1.1.'):
-        raise AssertionError(f"report version must remain in 1.1.x, got {data.get('version')!r}")
+    version = str(data.get('version', ''))
+    parts = version.split('.')
+    if len(parts) != 3 or not all(part.isdigit() for part in parts) or int(parts[0]) != 1 or tuple(map(int, parts)) < (1, 1, 0):
+        raise AssertionError(f"report version must remain stable 1.x >=1.1.0, got {data.get('version')!r}")
     states = data.get('evidenceStates', {})
     missing = sorted(REQUIRED - set(states))
     if missing:

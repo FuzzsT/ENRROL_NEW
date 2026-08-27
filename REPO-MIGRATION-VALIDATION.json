@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "DPC-AIO",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "targetRepository": "local-localhost-app-system/dpc_android",
   "layout": "expanded-source-root",
   "applicationModule": ":app-dpc",

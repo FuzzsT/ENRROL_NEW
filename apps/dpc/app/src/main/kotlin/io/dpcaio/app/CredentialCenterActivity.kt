@@ -108,7 +108,7 @@ class CredentialCenterActivity : Activity() {
                     .show()
             }
         })
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(DpcUiShell.scroll(this, root))
     }
 
     private fun openCaDocument() {

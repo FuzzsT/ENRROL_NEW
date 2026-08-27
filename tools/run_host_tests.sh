@@ -72,6 +72,7 @@ KOTLIN_TEST_MAINS=(
   io.dpcaio.activity.ActivityLaunchCoordinatorTestKt
   io.dpcaio.activity.ActivityExecutorRouterTestKt
   io.dpcaio.activity.ComponentControlTestKt
+  io.dpcaio.activity.ActivityBrowserModelTestKt
   io.dpcaio.offline.OfflineAndroidCompatibilityTestKt
   io.dpcaio.samsung.settings.SamsungSettingEditCoordinatorTestKt
   io.dpcaio.samsung.settings.SamsungSettingRoutePlannerTestKt
@@ -239,3 +240,10 @@ python3 "$ROOT/tools/tests/test_github_publish_kit_contract.py"
 python3 "$ROOT/tools/tests/test_113_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_qr_release_bundle_builder.py"
 python3 "$ROOT/tools/tests/test_114_qr_release_bundle_contract.py"
+
+python3 "$ROOT/tools/tests/test_115_app_pin_and_provisioning_modes_contract.py"
+python3 "$ROOT/tools/tests/test_116_safe_insets_ui_contract.py"
+python3 "$ROOT/tools/tests/test_117_activity_manager_persistence_contract.py"
+python3 "$ROOT/tools/tests/test_118_activity_manager_3_contract.py"
+python3 "$ROOT/tools/tests/test_119_dashboard_menu_contract.py"
+python3 "$ROOT/tools/tests/test_120_device_lifecycle_expanded_controls.py"

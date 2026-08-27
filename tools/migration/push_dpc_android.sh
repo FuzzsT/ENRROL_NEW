@@ -24,7 +24,7 @@ if git diff --cached --quiet; then
 fi
 
 git -c user.name="DPC-AIO Migration" -c user.email="dpc-aio@users.noreply.github.com" \
-  commit -m "Migrate DPC-AIO 1.1.4 enrollment-ready source"
+  commit -m "Migrate DPC-AIO 1.2.0 enrollment-ready source"
 
 if [[ -n "$old_sha" ]]; then
   echo "Replacing $BRANCH with force-with-lease against $old_sha"

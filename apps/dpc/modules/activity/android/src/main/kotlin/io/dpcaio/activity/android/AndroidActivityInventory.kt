@@ -2,6 +2,7 @@ package io.dpcaio.activity.android
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.os.Process
@@ -9,11 +10,33 @@ import android.os.UserHandle
 import io.dpcaio.activity.ComponentOverrideState
 import io.dpcaio.activity.ComponentStateResolver
 import io.dpcaio.activity.DiscoveredActivity
+import io.dpcaio.activity.InstalledAppDescriptor
 
 class AndroidActivityInventory(context: Context) {
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
+
+    @Suppress("DEPRECATION")
+    fun listApps(user: UserHandle): List<InstalledAppDescriptor> {
+        val userAccessible = launcherApps.profiles.contains(user)
+        if (!userAccessible && user != Process.myUserHandle()) return emptyList()
+        return packageManager.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS).mapNotNull { app ->
+            runCatching {
+                val info = packageManager.getPackageInfo(
+                    app.packageName,
+                    PackageManager.GET_ACTIVITIES or PackageManager.MATCH_DISABLED_COMPONENTS
+                )
+                InstalledAppDescriptor(
+                    packageName = app.packageName,
+                    label = runCatching { packageManager.getApplicationLabel(app).toString() }.getOrDefault(app.packageName),
+                    systemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0 || (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
+                    enabled = app.enabled,
+                    activityCount = info.activities.orEmpty().size,
+                )
+            }.getOrNull()
+        }
+    }
 
     @Suppress("DEPRECATION")
     fun list(packageName: String, user: UserHandle): List<DiscoveredActivity> {

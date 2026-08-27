@@ -8,7 +8,6 @@ import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 class AioDashboardActivity : Activity() {
@@ -77,44 +76,78 @@ class AioDashboardActivity : Activity() {
                 }
             }
         })
+        DpcUiShell.install(this, body)
         setContentView(body)
     }
 
     private fun showDashboard() {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         val versionName = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "unknown"
-        body.addView(TextView(this).apply { text = "DPC-AIO $versionName\nDevice Owner / policy / research toolkit" })
+        body.addView(TextView(this).apply {
+            text = "DPC-AIO $versionName\nEnterprise provisioning, policy, app/component and diagnostics toolkit"
+            setTypeface(typeface, Typeface.BOLD)
+        })
 
-        add(body, "App PIN / Security") { DpcPinSettingsActivity::class.java }
+        section(body, "Enrollment")
         add(body, "Enrollment Engine") { EnrollmentManualActivity::class.java }
         add(body, "Full Offline Setup") { OfflineSetupActivity::class.java }
         add(body, "Enrollment Status") { EnrollmentStatusActivity::class.java }
+
+        section(body, "Apps & Components")
+        add(body, "Activity Manager 3.0") { ActivityExplorerActivity::class.java }
+        addIntent(body, "Favorites") { Intent(this, ActivityExplorerActivity::class.java).putExtra("favoritesOnly", true) }
+        add(body, "Permission Manager") { PermissionManagerActivity::class.java }
+        add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
+
+        section(body, "Device & Policy")
         add(body, "Enterprise Policy Hub") { EnterprisePolicyHubActivity::class.java }
         add(body, "Enterprise Operations Center") { EnterpriseOperationsActivity::class.java }
-        add(body, "Certificate & Credential Center") { CredentialCenterActivity::class.java }
         add(body, "Device Lifecycle Center") { DeviceLifecycleActivity::class.java }
-        add(body, "Work Profile / COPE") { WorkProfileCopeActivity::class.java }
-        add(body, "Knox Enterprise Center") { KnoxEnterpriseCenterActivity::class.java }
-        add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
-        add(body, "Activity Explorer") { ActivityExplorerActivity::class.java }
-        add(body, "Permission Manager") { PermissionManagerActivity::class.java }
-        add(body, "Samsung Settings") { SamsungSettingsEditorActivity::class.java }
+
+        section(body, "Security & Credentials")
+        add(body, "App PIN / Security") { DpcPinSettingsActivity::class.java }
+        add(body, "Certificate & Credential Center") { CredentialCenterActivity::class.java }
         add(body, "Google Account Manager") { GoogleAccountManagerActivity::class.java }
-        add(body, "KnoxZT Framework") { KnoxZtManagerActivity::class.java }
+
+        section(body, "Network")
         add(body, "Network / DNS / DoH") { NetworkControlActivity::class.java }
+
+        section(body, "Work Profile / COPE")
+        add(body, "Work Profile / COPE") { WorkProfileCopeActivity::class.java }
+
+        section(body, "OEM / Knox")
+        add(body, "Knox Enterprise Center") { KnoxEnterpriseCenterActivity::class.java }
+        add(body, "Samsung Settings") { SamsungSettingsEditorActivity::class.java }
+        add(body, "KnoxZT Framework") { KnoxZtManagerActivity::class.java }
+
+        section(body, "Diagnostics")
         add(body, "Diagnostics") { DpcDiagnosticsActivity::class.java }
 
         val preferences = DpcUiPreferences.read(this)
         if (preferences.developerMode) {
-            body.addView(TextView(this).apply {
-                text = "Advanced / Lab"
-                setTypeface(typeface, Typeface.BOLD)
-            })
+            section(body, "Advanced / Lab")
             add(body, "Scenario Recorder / Replay") { ScenarioLabActivity::class.java }
             add(body, "NFC Lab") { NfcLabActivity::class.java }
+            add(body, "Verification Toggle") { VerificationToggleActivity::class.java }
         }
 
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
+    }
+
+    private fun section(root: LinearLayout, title: String) {
+        root.addView(TextView(this).apply {
+            text = title
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, 20, 0, 4)
+        })
+    }
+
+    private fun addIntent(root: LinearLayout, label: String, intentFactory: () -> Intent) {
+        root.addView(Button(this).apply {
+            text = label
+            setOnClickListener { startActivity(intentFactory()) }
+        })
     }
 
     private fun add(root: LinearLayout, label: String, target: () -> Class<out Activity>) {

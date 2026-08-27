@@ -3,8 +3,8 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPECTED = '1.1.4'
-EXPECTED_CODE = '25'
+EXPECTED = '1.2.0'
+EXPECTED_CODE = '26'
 
 def read(path: str) -> str:
     return (ROOT / path).read_text('utf-8', errors='strict')

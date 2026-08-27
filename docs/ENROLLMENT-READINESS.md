@@ -1,4 +1,4 @@
-# Enrollment readiness — DPC-AIO 1.1.4 / dpc_android
+# Enrollment readiness — DPC-AIO 1.2.0 / dpc_android
 
 Target repository: `local-localhost-app-system/dpc_android`.
 

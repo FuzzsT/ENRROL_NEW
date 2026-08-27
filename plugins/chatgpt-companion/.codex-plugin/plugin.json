@@ -1,15 +1,15 @@
 {
   "name": "dpc-aio-companion",
   "version": "0.2.1",
-  "description": "Build, diagnose, enroll, verify, and package DPC-AIO 1.1.4 Enterprise + Samsung OEM AIO using bounded repository-native workflows.",
+  "description": "Build, diagnose, enroll, verify, and package DPC-AIO 1.2.0 Enterprise + Samsung OEM AIO using bounded repository-native workflows.",
   "author": {
     "name": "DPC-AIO Project"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "DPC-AIO Companion",
-    "shortDescription": "Build and verify DPC-AIO 1.1.4",
-    "longDescription": "A skills-only companion for DPC-AIO 1.1.4. It guides production release builds, root-cause-first CI diagnosis, Android Enterprise QR verification, protected-operation and Package Trust checks, Samsung/Knox/SEM/OEM capability evidence, QR release-bundle validation, and bounded pre-push verification without owning device-management execution.",
+    "shortDescription": "Build and verify DPC-AIO 1.2.0",
+    "longDescription": "A skills-only companion for DPC-AIO 1.2.0. It guides production release builds, root-cause-first CI diagnosis, Android Enterprise QR verification, protected-operation and Package Trust checks, Samsung/Knox/SEM/OEM capability evidence, QR release-bundle validation, and bounded pre-push verification without owning device-management execution.",
     "developerName": "DPC-AIO Project",
     "category": "Developer Tools",
     "capabilities": [
@@ -28,7 +28,7 @@
     "defaultPrompt": [
       "Build the EnterpriseRelease DPC-AIO variant and report the first blocker.",
       "Diagnose this DPC-AIO GitHub Actions failure from the log.",
-      "Verify DPC-AIO 1.1.4 including QR release bundle, protected operations, Package Trust and Samsung capability gates."
+      "Verify DPC-AIO 1.2.0 including QR release bundle, protected operations, Package Trust and Samsung capability gates."
     ],
     "logo": "./assets/logo.svg",
     "composerIcon": "./assets/icon.svg",

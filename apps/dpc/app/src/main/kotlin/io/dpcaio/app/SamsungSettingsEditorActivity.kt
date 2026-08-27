@@ -41,6 +41,7 @@ class SamsungSettingsEditorActivity : Activity() {
         val write = Button(this).apply { text = "Write + verify stability"; setOnClickListener { writeValue() } }
         root.addView(namespace); root.addView(key); root.addView(value); root.addView(read); root.addView(write)
         root.addView(status, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        DpcUiShell.install(this, root)
         setContentView(root)
         shizuku.bind()
     }

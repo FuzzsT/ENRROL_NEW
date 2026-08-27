@@ -2,7 +2,7 @@
 
 For the command-line import/preflight workflow, see `docs/releases/GITHUB-PUBLISH.md` and `docs/releases/GITHUB-SECRETS.example`.
 
-DPC-AIO 1.1.4 is structured for GitHub upload with a read-only build job and a separate publish job that alone receives `contents: write`. Release signing secrets are scoped only to the shell steps that need them, and the decoded keystore is deleted before third-party emulator/runtime actions execute. External GitHub Actions are pinned to immutable full commit SHAs.
+DPC-AIO 1.2.0 is structured for GitHub upload with a read-only build job and a separate publish job that alone receives `contents: write`. Release signing secrets are scoped only to the shell steps that need them, and the decoded keystore is deleted before third-party emulator/runtime actions execute. External GitHub Actions are pinned to immutable full commit SHAs.
 
 ## GitHub Actions
 

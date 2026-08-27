@@ -26,6 +26,7 @@ class NetworkControlActivity : Activity() {
         root.addView(host); root.addView(Button(this).apply { text = "Apply Device Owner Private DNS"; setOnClickListener { applyPrivateDns() } })
         root.addView(Button(this).apply { text = "Private DNS opportunistic"; setOnClickListener { opportunistic() } })
         root.addView(endpoint); root.addView(queryHex); root.addView(Button(this).apply { text = "DoH query"; setOnClickListener { doh() } }); root.addView(output)
+        DpcUiShell.install(this, root)
         setContentView(root)
     }
 

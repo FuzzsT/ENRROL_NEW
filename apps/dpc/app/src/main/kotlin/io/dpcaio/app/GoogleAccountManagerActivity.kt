@@ -35,7 +35,9 @@ class GoogleAccountManagerActivity : Activity() {
         repository = AndroidGoogleAccountRepository(this)
         selectionStore = AioAccountSelectionStore(this)
         reorderGateway = AndroidAccountReorderGateway(this, AioDeviceAdminReceiver.componentName(this))
-        setContentView(buildUi())
+        val content = buildUi()
+        DpcUiShell.install(this, content)
+        setContentView(content)
         ensureAccountPermission()
     }
 

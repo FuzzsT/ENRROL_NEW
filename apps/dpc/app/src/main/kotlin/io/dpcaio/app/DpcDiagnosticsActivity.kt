@@ -57,7 +57,7 @@ class DpcDiagnosticsActivity : Activity() {
             text = "Export dpc-diagnostics.json"
             setOnClickListener { export(snapshot.toJson()) }
         })
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
     }
 
     private fun export(json: String) {

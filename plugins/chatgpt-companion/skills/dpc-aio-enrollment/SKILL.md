@@ -11,7 +11,7 @@ Treat provisioning as verified only when the referenced APK exists and the check
 
 ## Production QR / Full Offline prerequisite
 
-For DPC-AIO 1.1.4, retain the 1.0.2 production invariant: production Setup QR uses `enterpriseRelease`, a stable secret-managed signing identity, an anonymously downloadable HTTPS APK URL, and checksum/certificate data derived from that exact APK. `FULL_OFFLINE` and `OFFLINE_THEN_SYNC` must carry the DPC-owned `io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE` admin extra; a `FULL_OFFLINE` failure must not silently fall through to online enrollment.
+For DPC-AIO 1.2.0, retain the 1.0.2 production invariant: production Setup QR uses `enterpriseRelease`, a stable secret-managed signing identity, an anonymously downloadable HTTPS APK URL, and checksum/certificate data derived from that exact APK. `FULL_OFFLINE` and `OFFLINE_THEN_SYNC` must carry the DPC-owned `io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE` admin extra; a `FULL_OFFLINE` failure must not silently fall through to online enrollment.
 
 ## Enrollment Engine 0.9.0
 

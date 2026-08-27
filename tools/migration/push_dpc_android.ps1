@@ -35,7 +35,7 @@ if ($LASTEXITCODE -eq 0) {
     exit 0
 }
 
-git -c user.name="DPC-AIO Migration" -c user.email="dpc-aio@users.noreply.github.com" commit -m "Migrate DPC-AIO 1.1.4 enrollment-ready source"
+git -c user.name="DPC-AIO Migration" -c user.email="dpc-aio@users.noreply.github.com" commit -m "Migrate DPC-AIO 1.2.0 enrollment-ready source"
 if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
 
 if ($oldSha) {

@@ -89,6 +89,6 @@ class EnrollmentManualActivity : Activity() {
                 setOnClickListener { startActivity(android.content.Intent(this@EnrollmentManualActivity, EnrollmentStatusActivity::class.java)) }
             })
         }
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
     }
 }

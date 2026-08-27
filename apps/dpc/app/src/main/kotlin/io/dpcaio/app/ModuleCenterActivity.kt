@@ -93,7 +93,7 @@ class ModuleCenterActivity : Activity() {
             grouped.forEach { (module, resolution) -> addModule(body, module, resolution) }
         }
 
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(DpcUiShell.scroll(this, body))
     }
 
     private fun shouldShow(

@@ -424,6 +424,36 @@ class AndroidDevicePolicyGateway(
     private val certificateDelegationScopes: Set<String>
         get() = setOf(DevicePolicyManager.DELEGATION_CERT_INSTALL, DevicePolicyManager.DELEGATION_CERT_SELECTION)
 
+    fun setStatusBarDisabledPolicy(disabled: Boolean): PolicyResult<Boolean> {
+        if (Build.VERSION.SDK_INT < 23) return unsupported("Status-bar control requires API 23+")
+        return policyCall {
+            val accepted = dpm.setStatusBarDisabled(admin, disabled)
+            PolicyResult.success(accepted, if (accepted) null else "DevicePolicyManager rejected status-bar state")
+        }
+    }
+
+    fun setKeyguardDisabledPolicy(disabled: Boolean): PolicyResult<Boolean> {
+        if (Build.VERSION.SDK_INT < 23) return unsupported("Keyguard control requires API 23+")
+        return policyCall {
+            val accepted = dpm.setKeyguardDisabled(admin, disabled)
+            PolicyResult.success(accepted, if (accepted) null else "Keyguard could not be disabled, typically because a credential is set")
+        }
+    }
+
+    fun lockDeviceNow(): PolicyResult<Unit> = policyCall {
+        dpm.lockNow()
+        PolicyResult.success()
+    }
+
+    fun enableSystemAppPolicy(packageName: String): PolicyResult<Unit> = policyCall {
+        if (packageName.isBlank()) {
+            PolicyResult.failure(PolicyStatus.PACKAGE_NOT_FOUND, "Target package is empty")
+        } else {
+            dpm.enableSystemApp(admin, packageName)
+            PolicyResult.success()
+        }
+    }
+
     override fun getLockTaskPolicySpec(): PolicyResult<LockTaskPolicySpec> = policyCall {
         val packages = dpm.getLockTaskPackages(admin).toSet()
         val features = if (Build.VERSION.SDK_INT >= 28) dpm.getLockTaskFeatures(admin) else 0

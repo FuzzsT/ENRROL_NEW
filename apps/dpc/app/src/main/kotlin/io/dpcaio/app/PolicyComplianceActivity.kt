@@ -15,10 +15,12 @@ class PolicyComplianceActivity : Activity() {
     }
 
     private fun runEnrollment() {
-        setContentView(TextView(this).apply {
+        val checkingView = TextView(this).apply {
             text = "Checking enterprise enrollment…"
             setPadding(32, 32, 32, 32)
-        })
+        }
+        DpcUiShell.install(this, checkingView)
+        setContentView(checkingView)
         Thread {
             val outcome = EnrollmentExecutionRouter(this).execute(intent)
             runOnUiThread {
@@ -48,6 +50,7 @@ class PolicyComplianceActivity : Activity() {
             text = "Enrollment diagnostics"
             setOnClickListener { startActivity(Intent(this@PolicyComplianceActivity, EnrollmentStatusActivity::class.java)) }
         })
+        DpcUiShell.install(this, body)
         setContentView(body)
     }
 }

@@ -10,7 +10,7 @@ README = PLUGIN / "README.md"
 ENROLL = PLUGIN / "skills" / "dpc-aio-enrollment" / "SKILL.md"
 VERIFY = PLUGIN / "skills" / "dpc-aio-verify" / "SKILL.md"
 
-PROJECT_VERSION = "1.1.4"
+PROJECT_VERSION = "1.2.0"
 PLUGIN_VERSION = "0.2.1"
 
 
@@ -29,12 +29,12 @@ def test_plugin_readme_and_skills_reference_current_release() -> None:
 
     assert f"DPC-AIO Companion {PLUGIN_VERSION}" in readme
     assert f"DPC-AIO {PROJECT_VERSION}" in readme
-    assert "## 1.1.4 verification coverage" in readme
+    assert "## 1.2.0 verification coverage" in readme
 
     assert f"For DPC-AIO {PROJECT_VERSION}" in enroll
     assert "For DPC-AIO 1.1.0" not in enroll
 
-    assert "## DPC-AIO 1.1.4 Enterprise + Samsung OEM coverage" in verify
+    assert "## DPC-AIO 1.2.0 Enterprise + Samsung OEM coverage" in verify
     assert "test_114_qr_release_bundle_contract.py" in verify
     assert "test_113_release_gate_contract.py" in verify
     assert "test_112_release_gate_contract.py" in verify

@@ -70,7 +70,7 @@ class DpcPinSettingsActivity : Activity() {
             setPadding(0, 24, 0, 0)
         })
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(DpcUiShell.scroll(this, root))
     }
 
     private fun showSetOrChangeDialog(requireCurrent: Boolean) {

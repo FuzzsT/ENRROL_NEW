@@ -28,6 +28,7 @@ class NfcLabActivity : Activity(), NfcAdapter.ReaderCallback {
         root.addView(Button(this).apply { text = "Install replay trace"; setOnClickListener { installTrace() } })
         root.addView(Button(this).apply { text = "Clear replay"; setOnClickListener { SyntheticNfcReplayRegistry.clear(); output.text = "replay cleared" } })
         root.addView(output)
+        DpcUiShell.install(this, root)
         setContentView(root)
     }
 
