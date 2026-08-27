@@ -22,7 +22,7 @@ class EnrollmentStatusActivity : Activity() {
         val snapshot = EnrollmentDiagnosticsSnapshot.capture(this)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 28, 28, 28)
+            setPaddingDp(28, 28, 28, 28)
         }
         body.addView(TextView(this).apply {
             text = if (session == null) {

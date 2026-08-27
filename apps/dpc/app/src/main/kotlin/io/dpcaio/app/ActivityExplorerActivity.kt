@@ -89,7 +89,7 @@ class ActivityExplorerActivity : Activity() {
     private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 16, 16, 16)
+            setPaddingDp(16, 16, 16, 16)
         }
         root.addView(TextView(this).apply {
             text = "Activity Manager 3.0\nAll installed applications • expand app → activities • favorites • groups • filters"
@@ -121,33 +121,24 @@ class ActivityExplorerActivity : Activity() {
         groupFilterButton = Button(this).apply { setOnClickListener { cycleGroupFilter() } }
         sortButton = filterButton("Sort", filter.sortMode) { filter = filter.copy(sortMode = next(filter.sortMode)); refreshFilterButtons() }
 
-        root.addView(twoButtonRow(scopeButton, enabledButton))
-        root.addView(twoButtonRow(exportedButton, launcherButton))
-        root.addView(twoButtonRow(permissionButton, favoritesButton))
-        root.addView(twoButtonRow(groupFilterButton, sortButton))
+        root.addView(horizontalScrollRow(scopeButton, enabledButton, exportedButton, launcherButton))
+        root.addView(horizontalScrollRow(permissionButton, favoritesButton, groupFilterButton, sortButton))
         refreshFilterButtons()
 
-        root.addView(twoButtonRow(
-            Button(this).apply { text = "Search / Apply filters"; setOnClickListener { applyFiltersDeep() } },
-            Button(this).apply { text = "Rescan apps"; setOnClickListener { scanAllApps(forceReload = true) } },
-        ))
-        root.addView(twoButtonRow(
-            Button(this).apply { text = "Manage favorite groups"; setOnClickListener { showGroupManager() } },
-            Button(this).apply { text = "Collapse all"; setOnClickListener { expandedPackages.clear(); renderApps() } },
+        root.addView(horizontalScrollRow(
+            Button(this).apply { text = "Search / Apply filters"; isAllCaps = false; setOnClickListener { applyFiltersDeep() } },
+            Button(this).apply { text = "Rescan apps"; isAllCaps = false; setOnClickListener { scanAllApps(forceReload = true) } },
+            Button(this).apply { text = "Manage favorite groups"; isAllCaps = false; setOnClickListener { showGroupManager() } },
+            Button(this).apply { text = "Collapse all"; isAllCaps = false; setOnClickListener { expandedPackages.clear(); renderApps() } },
         ))
 
         root.addView(TextView(this).apply { text = "Batch actions apply only to currently loaded + filtered activities. Protected components remain blocked." })
-        root.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(twoButtonRow(
-                Button(this@ActivityExplorerActivity).apply { text = "Preview Batch Enable"; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.ENABLED) } },
-                Button(this@ActivityExplorerActivity).apply { text = "Preview Batch Disable"; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.DISABLED) } },
-            ))
-            addView(twoButtonRow(
-                Button(this@ActivityExplorerActivity).apply { text = "Preview Restore Default"; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.DEFAULT) } },
-                Button(this@ActivityExplorerActivity).apply { text = "Apply batch"; setOnClickListener { applyBatch() } },
-            ))
-        })
+        root.addView(horizontalScrollRow(
+            Button(this).apply { text = "Preview Enable"; isAllCaps = false; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.ENABLED) } },
+            Button(this).apply { text = "Preview Disable"; isAllCaps = false; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.DISABLED) } },
+            Button(this).apply { text = "Preview Restore"; isAllCaps = false; setOnClickListener { batchPreviewFiltered(ComponentOverrideState.DEFAULT) } },
+            Button(this).apply { text = "Apply batch"; isAllCaps = false; setOnClickListener { applyBatch() } },
+        ))
         status = TextView(this).apply { setTextIsSelectable(true) }
         root.addView(status)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -275,12 +266,15 @@ class ActivityExplorerActivity : Activity() {
     private fun addAppBlock(app: InstalledAppDescriptor) {
         val block = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 10, 0, 14)
+            setPaddingDp(0, 10, 0, 14)
         }
         val favorite = favoriteStore.isAppFavorite(app.packageName)
         val expanded = app.packageName in expandedPackages
         val titleButton = Button(this).apply {
             text = "${if (expanded) "▼" else "▶"} ${if (favorite) "★" else "☆"} ${app.label}\n${app.packageName} • activities=${app.activityCount}${if (app.systemApp) " • SYSTEM" else " • USER"}"
+            isAllCaps = false
+            textAlignment = android.view.View.TEXT_ALIGNMENT_VIEW_START
+            setPaddingDp(12, 10, 12, 10)
             setOnClickListener { toggleExpanded(app) }
         }
         block.addView(titleButton)
@@ -314,7 +308,7 @@ class ActivityExplorerActivity : Activity() {
         val favorite = favoriteStore.isActivityFavorite(activity.packageName, activity.className)
         val block = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 8, 0, 12)
+            setPaddingDp(16, 8, 0, 12)
         }
         block.addView(TextView(this).apply {
             text = buildString {
@@ -638,6 +632,7 @@ class ActivityExplorerActivity : Activity() {
 
     private fun <T> filterButton(prefix: String, initial: T, action: () -> Unit): Button = Button(this).apply {
         text = "$prefix: $initial"
+        isAllCaps = false
         setOnClickListener { action() }
     }
 

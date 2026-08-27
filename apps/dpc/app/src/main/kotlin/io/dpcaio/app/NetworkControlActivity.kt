@@ -18,7 +18,7 @@ class NetworkControlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Network / DNS / DoH"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20,20,20,20) }
         host = EditText(this).apply { hint = "Private DNS DoT hostname" }
         endpoint = EditText(this).apply { hint = "DoH endpoint https://..." }
         queryHex = EditText(this).apply { hint = "DNS wire query hex" }

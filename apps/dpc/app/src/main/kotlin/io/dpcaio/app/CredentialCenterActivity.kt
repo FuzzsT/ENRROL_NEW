@@ -39,7 +39,7 @@ class CredentialCenterActivity : Activity() {
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24, 24, 24, 24) }
         val cap = CapabilityResolver.resolve(
             CapabilityRequirements(
                 minApi = 21,

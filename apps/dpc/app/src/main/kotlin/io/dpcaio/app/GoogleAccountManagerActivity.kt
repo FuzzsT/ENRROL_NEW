@@ -50,14 +50,14 @@ class GoogleAccountManagerActivity : Activity() {
     private fun buildUi(): View {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
+            setPaddingDp(32, 32, 32, 32)
         }
         content.addView(TextView(this).apply {
             text = "Google Account Priority"
             textSize = 24f
             setTypeface(typeface, Typeface.BOLD)
         })
-        status = TextView(this).apply { setPadding(0, 20, 0, 20) }
+        status = TextView(this).apply { setPaddingDp(0, 20, 0, 20) }
         accounts = TextView(this).apply { setTextIsSelectable(true) }
         content.addView(status)
         content.addView(accounts)

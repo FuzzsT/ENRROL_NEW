@@ -38,7 +38,7 @@ class EnrollmentManualActivity : Activity() {
         val status = TextView(this)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 28, 28, 28)
+            setPaddingDp(28, 28, 28, 28)
             addView(endpoint)
             addView(token)
             addView(profile)

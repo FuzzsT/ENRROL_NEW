@@ -21,7 +21,7 @@ class DpcDiagnosticsActivity : Activity() {
         val snapshot = DpcDiagnosticsSnapshot.capture(this)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+            setPaddingDp(24, 24, 24, 24)
         }
         body.addView(TextView(this).apply {
             text = buildString {

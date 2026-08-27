@@ -17,7 +17,7 @@ class PolicyComplianceActivity : Activity() {
     private fun runEnrollment() {
         val checkingView = TextView(this).apply {
             text = "Checking enterprise enrollment…"
-            setPadding(32, 32, 32, 32)
+            setPaddingDp(32, 32, 32, 32)
         }
         DpcUiShell.install(this, checkingView)
         setContentView(checkingView)
@@ -39,7 +39,7 @@ class PolicyComplianceActivity : Activity() {
     private fun renderFailure(message: String, retryable: Boolean) {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
+            setPaddingDp(32, 32, 32, 32)
         }
         body.addView(TextView(this).apply { text = message })
         if (retryable) body.addView(Button(this).apply {

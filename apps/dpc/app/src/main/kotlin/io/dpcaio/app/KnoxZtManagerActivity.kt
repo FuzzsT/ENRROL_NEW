@@ -23,7 +23,7 @@ class KnoxZtManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "KnoxZT Framework"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20,20,20,20) }
         output = TextView(this).apply { setTextIsSelectable(true) }
         url = EditText(this).apply { hint = "Trusted HTTPS APK URL" }
         apkSha = EditText(this).apply { hint = "APK SHA-256" }

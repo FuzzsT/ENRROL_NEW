@@ -34,7 +34,7 @@ class EnterpriseOperationsActivity : Activity() {
 
     private fun render() {
         val management = ManagementContextFactory.create(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
         root.addView(TextView(this).apply { text = "Compliance & Logs / System Update Policy"; textSize = 20f })
 
         val logging = CapabilityResolver.resolve(

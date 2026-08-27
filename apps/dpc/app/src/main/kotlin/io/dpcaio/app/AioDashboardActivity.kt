@@ -41,7 +41,7 @@ class AioDashboardActivity : Activity() {
     private fun showPinUnlock() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 48, 24, 24)
+            setPaddingDp(24, 48, 24, 24)
         }
         body.addView(TextView(this).apply {
             text = "DPC-AIO is locked\nEnter the application PIN to continue."
@@ -81,7 +81,7 @@ class AioDashboardActivity : Activity() {
     }
 
     private fun showDashboard() {
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24, 24, 24, 24) }
         val versionName = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "unknown"
         body.addView(TextView(this).apply {
             text = "DPC-AIO $versionName\nEnterprise provisioning, policy, app/component and diagnostics toolkit"
@@ -139,13 +139,16 @@ class AioDashboardActivity : Activity() {
             text = title
             textSize = 18f
             setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, 20, 0, 4)
+            setPaddingDp(0, 20, 0, 4)
         })
     }
 
     private fun addIntent(root: LinearLayout, label: String, intentFactory: () -> Intent) {
         root.addView(Button(this).apply {
             text = label
+            isAllCaps = false
+            textAlignment = android.view.View.TEXT_ALIGNMENT_VIEW_START
+            setPaddingDp(16, 10, 16, 10)
             setOnClickListener { startActivity(intentFactory()) }
         })
     }
@@ -153,6 +156,9 @@ class AioDashboardActivity : Activity() {
     private fun add(root: LinearLayout, label: String, target: () -> Class<out Activity>) {
         root.addView(Button(this).apply {
             text = label
+            isAllCaps = false
+            textAlignment = android.view.View.TEXT_ALIGNMENT_VIEW_START
+            setPaddingDp(16, 10, 16, 10)
             setOnClickListener { startActivity(Intent(this@AioDashboardActivity, target())) }
         })
     }

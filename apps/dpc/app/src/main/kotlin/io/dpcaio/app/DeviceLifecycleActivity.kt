@@ -27,7 +27,7 @@ class DeviceLifecycleActivity : Activity() {
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
 
         section(root, "Kiosk / Lock Task")
         val kiosk = EditText(this).apply { hint = "Comma-separated allowed packages" }

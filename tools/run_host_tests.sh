@@ -247,3 +247,5 @@ python3 "$ROOT/tools/tests/test_117_activity_manager_persistence_contract.py"
 python3 "$ROOT/tools/tests/test_118_activity_manager_3_contract.py"
 python3 "$ROOT/tools/tests/test_119_dashboard_menu_contract.py"
 python3 "$ROOT/tools/tests/test_120_device_lifecycle_expanded_controls.py"
+
+python3 tools/tests/test_121_responsive_ui_contract.py

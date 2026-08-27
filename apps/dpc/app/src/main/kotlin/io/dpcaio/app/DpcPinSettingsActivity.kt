@@ -23,7 +23,7 @@ class DpcPinSettingsActivity : Activity() {
     private fun render() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+            setPaddingDp(24, 24, 24, 24)
         }
         val configured = DpcPinManager.isConfigured(this)
         val enabled = DpcPinManager.isEnabled(this)
@@ -67,7 +67,7 @@ class DpcPinSettingsActivity : Activity() {
 
         root.addView(TextView(this).apply {
             text = "PIN protects only the human-facing DPC application UI. Android provisioning callbacks remain available so work-profile and fully-managed enrollment are not blocked. After 5 incorrect attempts, PIN entry is delayed for 30 seconds."
-            setPadding(0, 24, 0, 0)
+            setPaddingDp(0, 24, 0, 0)
         })
 
         setContentView(DpcUiShell.scroll(this, root))
@@ -76,7 +76,7 @@ class DpcPinSettingsActivity : Activity() {
     private fun showSetOrChangeDialog(requireCurrent: Boolean) {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 8, 32, 0)
+            setPaddingDp(32, 8, 32, 0)
         }
         val current = pinField("Current PIN").also { if (requireCurrent) body.addView(it) }
         val next = pinField("New PIN").also { body.addView(it) }

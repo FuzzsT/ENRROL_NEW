@@ -3,9 +3,54 @@ package io.dpcaio.app
 import android.app.Activity
 import android.os.Build
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import kotlin.math.max
+import kotlin.math.roundToInt
+
+/** Density-safe padding for programmatic UI. Arguments are dp, not raw pixels. */
+fun View.setPaddingDp(left: Int, top: Int, right: Int, bottom: Int) {
+    val density = resources.displayMetrics.density
+    setPadding(
+        (left * density).roundToInt(),
+        (top * density).roundToInt(),
+        (right * density).roundToInt(),
+        (bottom * density).roundToInt(),
+    )
+}
+
+/**
+ * Compact row for filters/actions that must remain usable on narrow displays.
+ * Children keep their intrinsic width and the row scrolls horizontally instead of
+ * forcing long labels into 50/50 columns.
+ */
+fun horizontalScrollRow(vararg views: View): HorizontalScrollView {
+    require(views.isNotEmpty()) { "horizontalScrollRow requires at least one child" }
+    val context = views.first().context
+    return HorizontalScrollView(context).apply {
+        isHorizontalScrollBarEnabled = false
+        isFillViewport = false
+        clipToPadding = false
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            views.forEach { child ->
+                if (child.parent is ViewGroup) {
+                    (child.parent as ViewGroup).removeView(child)
+                }
+                addView(
+                    child,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+        })
+    }
+}
 
 object DpcUiShell {
     fun install(
@@ -15,8 +60,8 @@ object DpcUiShell {
         baseVerticalDp: Int = 0,
     ) {
         val density = activity.resources.displayMetrics.density
-        val extraHorizontal = (baseHorizontalDp * density).toInt()
-        val extraVertical = (baseVerticalDp * density).toInt()
+        val extraHorizontal = (baseHorizontalDp * density).roundToInt()
+        val extraVertical = (baseVerticalDp * density).roundToInt()
         val baseLeft = content.paddingLeft + extraHorizontal
         val baseTop = content.paddingTop + extraVertical
         val baseRight = content.paddingRight + extraHorizontal
@@ -70,6 +115,7 @@ object DpcUiShell {
         baseVerticalDp: Int = 0,
     ): ScrollView = ScrollView(activity).apply {
         isFillViewport = true
+        clipToPadding = false
         addView(child)
         install(activity, this, baseHorizontalDp, baseVerticalDp)
     }

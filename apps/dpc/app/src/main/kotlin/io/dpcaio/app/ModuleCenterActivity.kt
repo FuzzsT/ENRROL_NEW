@@ -34,7 +34,7 @@ class ModuleCenterActivity : Activity() {
 
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+            setPaddingDp(24, 24, 24, 24)
         }
         val visibleCount = resolved.count { shouldShow(it.first, it.second, state.selectedFilter) }
         body.addView(TextView(this).apply {
@@ -115,7 +115,7 @@ class ModuleCenterActivity : Activity() {
     private fun addModule(root: LinearLayout, module: DpcModuleDescriptor, resolution: CapabilityResolution) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 12, 0, 12)
+            setPaddingDp(0, 12, 0, 12)
         }
         row.addView(TextView(this).apply {
             text = "${module.title}  [${module.id}]"

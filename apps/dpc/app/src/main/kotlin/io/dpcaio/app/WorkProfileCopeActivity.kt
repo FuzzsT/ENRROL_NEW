@@ -21,7 +21,7 @@ class WorkProfileCopeActivity : Activity() {
     private lateinit var gateway:AndroidDevicePolicyGateway
     override fun onCreate(savedInstanceState: Bundle?){ super.onCreate(savedInstanceState); title="Work Profile / COPE"; gateway=AndroidDevicePolicyGateway(this,ComponentName(this,AioDeviceAdminReceiver::class.java)); render() }
     private fun render(){
-        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,24,24,24) }
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
         val cap=CapabilityResolver.resolve(CapabilityRequirements(minApi=30,ownership=OwnershipRequirement.PROFILE_OWNER),ManagementContextFactory.create(this))
         root.addView(TextView(this).apply { text="Work Profile / COPE\n${cap.availability}"; textSize=20f })
         root.addView(TextView(this).apply { text="Current: ${gateway.getCopePolicySnapshot()}" })

@@ -34,7 +34,7 @@ class OfflineSetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Full Offline Setup"
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20, 20, 20, 20) }
         body.addView(TextView(this).apply { text = "FULL OFFLINE / OFFLINE THEN SYNC\nFinal state: OFFLINE_VERIFIED only after package/policy readback" })
         body.addView(Button(this).apply { text = "FULL OFFLINE"; setOnClickListener { mode = OfflineMode.FULL_OFFLINE; renderState("Mode: FULL OFFLINE") } })
         body.addView(Button(this).apply { text = "OFFLINE THEN SYNC"; setOnClickListener { mode = OfflineMode.OFFLINE_THEN_SYNC; renderState("Mode: OFFLINE THEN SYNC") } })

@@ -20,7 +20,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
         val ownerSatisfied = management.ownership == OwnershipMode.DEVICE_OWNER || management.ownership == OwnershipMode.PROFILE_OWNER
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+            setPaddingDp(24, 24, 24, 24)
         }
         root.addView(TextView(this).apply {
             text = "Capability Matrix"
