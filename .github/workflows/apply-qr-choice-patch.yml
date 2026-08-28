@@ -26,6 +26,15 @@ jobs:
           cat .dpc-import/qr-patch-00 .dpc-import/qr-patch-01 .dpc-import/qr-patch-02 \
               .dpc-import/qr-patch-03 .dpc-import/qr-patch-04 .dpc-import/qr-patch-05 \
               .dpc-import/qr-patch-06 > /tmp/qr-choice.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/qr-choice.patch')
+          text = path.read_text('utf-8')
+          bad = '-           cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/\n'
+          good = '-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/\n'
+          assert text.count(bad) == 1, text.count(bad)
+          path.write_text(text.replace(bad, good), 'utf-8')
+          PY
           git apply --check /tmp/qr-choice.patch
           git apply /tmp/qr-choice.patch
 
