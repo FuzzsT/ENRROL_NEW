@@ -14,12 +14,21 @@ VERIFY = ROOT / "tools" / "provisioning" / "verify_provisioning_qr.py"
 CANONICAL_URL = "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/DPC-AIO-enterprise-release.apk"
 
 
-def classic_decode(path: Path) -> str:
-    image = cv2.imread(str(path))
-    assert image is not None
-    decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(image)
-    assert points is not None and decoded, f"classic OpenCV must decode dense provisioning QR: {path}"
-    return decoded
+def verify(json_path: Path, qr_path: Path, apk: Path) -> dict:
+    checked = subprocess.run([
+        sys.executable, str(VERIFY),
+        "--json", str(json_path),
+        "--qr", str(qr_path),
+        "--apk", str(apk),
+        "--expected-mode", "fully-managed",
+        "--expected-apk-url", CANONICAL_URL,
+    ], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert checked.returncode == 0, checked.stderr or checked.stdout
+    report = json.loads(checked.stdout)
+    assert report["ok"] is True
+    assert report["qrMatchesPayload"] is True
+    assert report["apkChecksumMatches"] is True
+    return report
 
 
 def main() -> None:
@@ -40,7 +49,6 @@ def main() -> None:
 
         payload_text = (out / "provisioning-payload.txt").read_text("utf-8").strip()
         assert len(payload_text) > 500, "fixture must remain dense enough to exercise the regression"
-        assert json.loads(classic_decode(out / "device-owner-qr.png")) == json.loads(payload_text)
 
         # Reproduce the legacy border=4 artifact from run 32939065414. The
         # validator must remain able to verify already-published QR assets.
@@ -55,19 +63,17 @@ def main() -> None:
         qr.make(fit=True)
         qr.make_image(fill_color="black", back_color="white").save(legacy)
 
-        checked = subprocess.run([
-            sys.executable, str(VERIFY),
-            "--json", str(out / "provisioning.json"),
-            "--qr", str(legacy),
-            "--apk", str(apk),
-            "--expected-mode", "fully-managed",
-            "--expected-apk-url", CANONICAL_URL,
-        ], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        assert checked.returncode == 0, checked.stderr or checked.stdout
-        report = json.loads(checked.stdout)
-        assert report["ok"] is True
-        assert report["qrMatchesPayload"] is True
-        assert report["apkChecksumMatches"] is True
+        generated_qr = out / "device-owner-qr.png"
+        generated_image = cv2.imread(str(generated_qr))
+        legacy_image = cv2.imread(str(legacy))
+        assert generated_image is not None and legacy_image is not None
+        # border=6 adds one 8px module per side beyond the old border=4 on
+        # both axes: four additional modules total -> +32px width/height.
+        assert generated_image.shape[1] == legacy_image.shape[1] + 32
+        assert generated_image.shape[0] == legacy_image.shape[0] + 32
+
+        verify(out / "provisioning.json", generated_qr, apk)
+        verify(out / "provisioning.json", legacy, apk)
 
     print("PASS: dense provisioning QR contract")
 
