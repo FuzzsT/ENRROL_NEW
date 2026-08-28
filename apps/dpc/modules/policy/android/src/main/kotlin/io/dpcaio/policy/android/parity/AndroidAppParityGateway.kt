@@ -72,14 +72,8 @@ class AndroidAppParityGateway(
     }
 
     fun setApplicationRestrictionsManagingPackage(packageName: String?): PolicyResult<Unit> = policyCall {
-        if (!dpm.setApplicationRestrictionsManagingPackage(admin, packageName)) {
-            PolicyResult.failure(
-                PolicyStatus.PLATFORM_REJECTED,
-                "DevicePolicyManager rejected application restrictions manager",
-            )
-        } else {
-            PolicyResult.success(message = "Application restrictions manager updated")
-        }
+        dpm.setApplicationRestrictionsManagingPackage(admin, packageName)
+        PolicyResult.success(message = "Application restrictions manager updated")
     }
 
     private inline fun <T> policyCall(block: () -> PolicyResult<T>): PolicyResult<T> = try {
