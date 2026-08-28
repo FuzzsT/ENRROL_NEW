@@ -1,0 +1,373 @@
+name: Implement TestDPC parity backend bindings
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-parity-backend-bindings
+    paths:
+      - .github/workflows/implement-parity-backends.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Add Task 6 catalog inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt')
+          lines = path.read_text('utf-8').splitlines()
+
+          helper_i = next(i for i, line in enumerate(lines) if line.strip().startswith('private fun entry('))
+          lines[helper_i] = (
+              ' private fun entry(testDpcKey:String,googleTitle:String,category:String,state:TestDpcImplementationState,'
+              'handlerId:String?=null,destination:ParityDestination?=null,minSdk:Int=21,'
+              'owner:OwnerRequirement=OwnerRequirement.NONE,unavailableReason:String?=null,'
+              'destructive:Boolean=false,replacementGuidance:String?=null,inputs:List<ParityInputField> = emptyList())='
+              'TestDpcParityEntry(id="testdpc.$testDpcKey",testDpcKey=testDpcKey,googleTitle=googleTitle,'
+              'category=category,description=googleTitle,implementationState=state,handlerId=handlerId,'
+              'destination=destination,minSdk=minSdk,ownerRequirement=owner,unavailableReason=unavailableReason,'
+              'destructive=destructive,replacementGuidance=replacementGuidance,inputs=inputs)'
+          )
+
+          def add_args(key: str, addition: str, guard: str) -> None:
+              needle = f'testDpcKey = "{key}"'
+              matches = [i for i, line in enumerate(lines) if needle in line]
+              assert len(matches) == 1, (key, matches)
+              i = matches[0]
+              line = lines[i].rstrip()
+              if guard in line:
+                  return
+              assert line.endswith('),'), line
+              lines[i] = line[:-2] + addition + '),'
+
+          add_args(
+              'set_profile_name',
+              ', inputs = listOf(ParityInputField(key = "name", label = "Profile name", type = ParityInputType.TEXT))',
+              'key = "name"',
+          )
+          add_args(
+              'add_cross_profile_intent_filter',
+              ', inputs = listOf('
+              'ParityInputField(key = "action", label = "Intent action", type = ParityInputType.TEXT), '
+              'ParityInputField(key = "categories", label = "Categories (CSV, optional)", type = ParityInputType.CSV, required = false), '
+              'ParityInputField(key = "direction", label = "Direction: MANAGED_TO_PARENT / PARENT_TO_MANAGED / BIDIRECTIONAL", type = ParityInputType.TEXT)'
+              ')',
+              'key = "direction"',
+          )
+          add_args(
+              'set_always_on_vpn',
+              ', inputs = listOf('
+              'ParityInputField(key = "package_name", label = "VPN package", type = ParityInputType.PACKAGE_NAME), '
+              'ParityInputField(key = "lockdown", label = "Lockdown", type = ParityInputType.BOOLEAN)'
+              ')',
+              'key = "lockdown"',
+          )
+          add_args(
+              'set_location_enabled',
+              ', inputs = listOf(ParityInputField(key = "enabled", label = "Location enabled", type = ParityInputType.BOOLEAN))',
+              'key = "enabled"',
+          )
+          add_args(
+              'set_disable_account_management',
+              ', inputs = listOf(ParityInputField(key = "disabled", label = "Disable Google account management", type = ParityInputType.BOOLEAN))',
+              'key = "disabled"',
+          )
+          add_args(
+              'reset_password',
+              ', destructive = true, inputs = listOf('
+              'ParityInputField(key = "token", label = "Managed reset token reference (enter STORED)", type = ParityInputType.TEXT), '
+              'ParityInputField(key = "new_credential", label = "New credential", type = ParityInputType.TEXT)'
+              ')',
+              'key = "new_credential"',
+          )
+          add_args(
+              'remove_key_certificate',
+              ', destructive = true, inputs = listOf(ParityInputField(key = "alias", label = "Key-pair alias", type = ParityInputType.TEXT))',
+              'key = "alias"',
+          )
+          add_args(
+              'set_location_mode',
+              ', replacementGuidance = "Use Set location enabled to control the current supported global location policy."',
+              'replacementGuidance',
+          )
+
+          path.write_text('\n'.join(lines) + '\n', 'utf-8')
+          PY
+
+      - name: Bind router to existing gateways
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt <<'KOTLIN'
+          package io.dpcaio.app
+
+          import android.content.ComponentName
+          import android.content.Context
+          import io.dpcaio.account.android.AndroidAccountReorderGateway
+          import io.dpcaio.network.android.AlwaysOnVpnController
+          import io.dpcaio.policy.CrossProfileDirection
+          import io.dpcaio.policy.CrossProfileIntentRule
+          import io.dpcaio.policy.PolicyResult
+          import io.dpcaio.policy.PolicyStatus
+          import io.dpcaio.policy.android.AndroidCredentialRecoveryGateway
+          import io.dpcaio.policy.android.AndroidDevicePolicyGateway
+          import io.dpcaio.policy.android.AndroidGlobalLocationPolicyGateway
+          import io.dpcaio.policy.android.AndroidWorkProfileLifecycleGateway
+          import io.dpcaio.policy.parity.ParityActionHandler
+          import io.dpcaio.policy.parity.ParityActionRequest
+          import io.dpcaio.policy.parity.ParityActionResult
+          import io.dpcaio.policy.parity.TestDpcImplementationState
+          import io.dpcaio.policy.parity.TestDpcParityEntry
+
+          class TestDpcParityActionRouter(context: Context) {
+              private val appContext = context.applicationContext
+              private val admin = ComponentName(appContext, AioDeviceAdminReceiver::class.java)
+              private val workProfileGateway = AndroidWorkProfileLifecycleGateway(appContext, admin)
+              private val alwaysOnVpnController = AlwaysOnVpnController(appContext, admin)
+              private val locationGateway = AndroidGlobalLocationPolicyGateway(appContext, admin)
+              private val accountGateway = AndroidAccountReorderGateway(appContext, admin)
+              private val credentialRecoveryGateway = AndroidCredentialRecoveryGateway(appContext, admin)
+              private val devicePolicyGateway = AndroidDevicePolicyGateway(appContext, admin)
+
+              private val handlers: Map<String, ParityActionHandler> = mapOf(
+                  "profile.set_name" to ParityActionHandler(::setProfileName),
+                  "cross_profile.add_intent_filter" to ParityActionHandler(::addCrossProfileIntentFilter),
+                  "cross_profile.clear_intent_filters" to ParityActionHandler(::clearCrossProfileIntentFilters),
+                  "network.always_on_vpn" to ParityActionHandler(::setAlwaysOnVpn),
+                  "location.set_enabled" to ParityActionHandler(::setLocationEnabled),
+                  "account.set_management_disabled" to ParityActionHandler(::setAccountManagementDisabled),
+                  "account.get_management_disabled" to ParityActionHandler(::getAccountManagementDisabled),
+                  "credential.reset_with_token" to ParityActionHandler(::resetPasswordWithToken),
+                  "credential.remove_key_pair" to ParityActionHandler(::removeManagedKeyPair),
+              )
+
+              fun isRegistered(handlerId: String): Boolean = handlers.containsKey(handlerId)
+
+              fun execute(entry: TestDpcParityEntry, request: ParityActionRequest): ParityActionResult {
+                  if (request.parityId != entry.id) {
+                      return ParityActionResult(false, "PARITY_ID_MISMATCH: expected ${entry.id}, got ${request.parityId}")
+                  }
+                  if (entry.deprecated || entry.implementationState == TestDpcImplementationState.DEPRECATED_UNAVAILABLE) {
+                      return ParityActionResult(false, "DEPRECATED_UNAVAILABLE: ${entry.unavailableReason ?: entry.testDpcKey}")
+                  }
+                  val handlerId = entry.handlerId
+                      ?: return ParityActionResult(false, "NO_HANDLER: ${entry.testDpcKey}")
+                  val handler = handlers[handlerId]
+                      ?: return ParityActionResult(false, "UNKNOWN_HANDLER: $handlerId")
+
+                  val result = try {
+                      handler.execute(request)
+                  } catch (error: SecurityException) {
+                      PolicyResult.failure(
+                          status = PolicyStatus.SECURITY_EXCEPTION,
+                          message = error.message ?: "Platform rejected parity action",
+                          errorType = error::class.java.simpleName,
+                      )
+                  } catch (error: UnsupportedOperationException) {
+                      PolicyResult.failure(
+                          status = PolicyStatus.UNSUPPORTED,
+                          message = error.message ?: "Parity action is unsupported on this platform",
+                          errorType = error::class.java.simpleName,
+                      )
+                  } catch (error: Exception) {
+                      PolicyResult.failure(
+                          status = PolicyStatus.FAILED,
+                          message = error.message ?: "Parity action failed",
+                          errorType = error::class.java.simpleName,
+                      )
+                  }
+
+                  val message = buildString {
+                      append(result.status.name)
+                      result.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
+                      result.errorType?.takeIf { it.isNotBlank() }?.let { append(" [").append(it).append(']') }
+                      result.value?.takeIf { it.isNotBlank() }?.let { append(" => ").append(it) }
+                  }
+                  return ParityActionResult(success = result.isSuccess, message = message)
+              }
+
+              private fun setProfileName(request: ParityActionRequest): PolicyResult<String> {
+                  val name = request.values["name"]?.trim().orEmpty()
+                  if (name.isBlank()) return invalidInput("name", "profile name is required")
+                  return workProfileGateway.setProfileName(name).asText { it.orEmpty() }
+              }
+
+              private fun addCrossProfileIntentFilter(request: ParityActionRequest): PolicyResult<String> {
+                  val action = request.values["action"]?.trim().orEmpty()
+                  if (action.isBlank()) return invalidInput("action", "intent action is required")
+                  val direction = parseDirection(request.values["direction"])
+                      ?: return invalidInput("direction", "expected MANAGED_TO_PARENT, PARENT_TO_MANAGED, or BIDIRECTIONAL")
+                  val categories = request.values["categories"].orEmpty()
+                      .split(',')
+                      .map(String::trim)
+                      .filter(String::isNotEmpty)
+                      .toSet()
+                  val rule = CrossProfileIntentRule(
+                      id = "parity:${direction.name}:${Integer.toHexString(action.hashCode())}",
+                      action = action,
+                      categories = categories,
+                      direction = direction,
+                  )
+                  return workProfileGateway.upsertCrossProfileRule(rule).asText { inventory ->
+                      "desiredRules=${inventory?.rules?.size ?: 0}"
+                  }
+              }
+
+              private fun clearCrossProfileIntentFilters(request: ParityActionRequest): PolicyResult<String> =
+                  workProfileGateway.clearDpcRules().asText { inventory ->
+                      "desiredRules=${inventory?.rules?.size ?: 0}"
+                  }
+
+              private fun setAlwaysOnVpn(request: ParityActionRequest): PolicyResult<String> {
+                  val packageName = request.values["package_name"]?.trim().orEmpty()
+                  if (packageName.isBlank()) return invalidInput("package_name", "VPN package is required")
+                  val lockdown = parseBoolean(request.values["lockdown"])
+                      ?: return invalidInput("lockdown", "expected true/false")
+                  if (!alwaysOnVpnController.set(packageName, lockdown)) {
+                      return PolicyResult.failure(
+                          PolicyStatus.PLATFORM_REJECTED,
+                          "Always-on VPN set/readback failed for $packageName",
+                      )
+                  }
+                  val observed = alwaysOnVpnController.currentPackage()
+                  return if (observed == packageName) {
+                      PolicyResult.success("package=$observed,lockdown=$lockdown", "READBACK_VERIFIED")
+                  } else {
+                      PolicyResult.failure(PolicyStatus.PLATFORM_REJECTED, "Always-on VPN readback mismatch")
+                  }
+              }
+
+              private fun setLocationEnabled(request: ParityActionRequest): PolicyResult<String> {
+                  val enabled = parseBoolean(request.values["enabled"])
+                      ?: return invalidInput("enabled", "expected true/false")
+                  return locationGateway.set(enabled).asText { observed -> "enabled=${observed ?: false}" }
+              }
+
+              private fun setAccountManagementDisabled(request: ParityActionRequest): PolicyResult<String> {
+                  val disabled = parseBoolean(request.values["disabled"])
+                      ?: return invalidInput("disabled", "expected true/false")
+                  accountGateway.setGoogleAccountManagementDisabled(disabled)
+                  val observed = accountGateway.isAccountManagementDisabled()
+                  return if (observed == disabled) {
+                      PolicyResult.success("disabled=$observed", "READBACK_VERIFIED")
+                  } else {
+                      PolicyResult.failure(PolicyStatus.PLATFORM_REJECTED, "Account-management readback mismatch")
+                  }
+              }
+
+              private fun getAccountManagementDisabled(request: ParityActionRequest): PolicyResult<String> =
+                  PolicyResult.success("disabled=${accountGateway.isAccountManagementDisabled()}")
+
+              private fun resetPasswordWithToken(request: ParityActionRequest): PolicyResult<String> {
+                  val tokenReference = request.values["token"]?.trim().orEmpty()
+                  if (!tokenReference.equals("STORED", ignoreCase = true)) {
+                      return invalidInput(
+                          "token",
+                          "enter STORED to use the encrypted reset token managed by Credential Recovery; raw tokens are not accepted",
+                      )
+                  }
+                  val credential = request.values["new_credential"]
+                      ?: return invalidInput("new_credential", "new credential is required")
+                  if (credential.isEmpty()) return invalidInput("new_credential", "new credential cannot be empty")
+                  return credentialRecoveryGateway.resetCredential(credential.toCharArray()).asText { ok ->
+                      "reset=${ok == true}"
+                  }
+              }
+
+              private fun removeManagedKeyPair(request: ParityActionRequest): PolicyResult<String> {
+                  val alias = request.values["alias"]?.trim().orEmpty()
+                  if (alias.isBlank()) return invalidInput("alias", "key-pair alias is required")
+                  return devicePolicyGateway.removeManagedKeyPair(alias).asText { "removed=$alias" }
+              }
+
+              private fun parseBoolean(raw: String?): Boolean? = when (raw?.trim()?.lowercase()) {
+                  "true", "1", "yes", "on" -> true
+                  "false", "0", "no", "off" -> false
+                  else -> null
+              }
+
+              private fun parseDirection(raw: String?): CrossProfileDirection? {
+                  val normalized = raw?.trim()?.uppercase()?.replace('-', '_')?.replace(' ', '_') ?: return null
+                  return runCatching { CrossProfileDirection.valueOf(normalized) }.getOrNull()
+              }
+
+              private fun invalidInput(key: String, detail: String): PolicyResult<String> =
+                  PolicyResult.failure(
+                      status = PolicyStatus.FAILED,
+                      message = "INVALID_INPUT:$key:$detail",
+                      errorType = "INVALID_INPUT",
+                  )
+
+              private fun <T> PolicyResult<T>.asText(render: (T?) -> String): PolicyResult<String> =
+                  if (isSuccess) {
+                      PolicyResult.success(render(value), message)
+                  } else {
+                      PolicyResult.failure(status, message ?: status.name, errorType)
+                  }
+          }
+          KOTLIN
+
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityDetailActivity.kt')
+          text = path.read_text('utf-8')
+          old = 'val router = TestDpcParityActionRouter()'
+          new = 'val router = TestDpcParityActionRouter(this)'
+          assert old in text, 'expected Task 5 router construction not found'
+          path.write_text(text.replace(old, new, 1), 'utf-8')
+          PY
+
+      - name: Verify Task 6 host contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_123_testdpc_parity_catalog_169.py
+          python3 tools/tests/test_124_parity_handler_coverage.py
+          python3 tools/tests/test_125_parity_ui_contract.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          python3 tools/tests/test_release_secret_scan.py
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('tools/run_host_tests.sh').read_text('utf-8').splitlines()
+          cutoff = next(i for i, line in enumerate(src) if line.startswith('python3 "$ROOT/tools/tests/test_project_layout.py"'))
+          Path('tools/.parity-core-host.sh').write_text('\n'.join(src[:cutoff]) + '\n', 'utf-8')
+          PY
+          bash tools/.parity-core-host.sh
+          rm tools/.parity-core-host.sh
+          git diff --check
+
+      - name: Remove Task 6 implementation-only workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/verify-parity-backends-red.yml .github/workflows/implement-parity-backends.yml
+          git diff --check
+
+      - name: Commit Task 6 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: expose existing TestDPC parity backends'
+          git push origin HEAD:feat/dpc-aio-130-parity-backend-bindings
