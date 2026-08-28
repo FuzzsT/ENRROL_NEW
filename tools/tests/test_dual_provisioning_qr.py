@@ -12,6 +12,7 @@ ADMIN_EXTRAS = 'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'
 MODE_KEY = 'io.dpcaio.extra.PROVISIONING_MODE'
 OFFLINE_MODE_KEY = 'io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE'
 ALLOW_OFFLINE = 'android.app.extra.PROVISIONING_ALLOW_OFFLINE'
+CANONICAL_URL = 'https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/DPC-AIO-enterprise-release.apk'
 
 
 def run_gen(*args):
@@ -77,6 +78,53 @@ def test_fully_managed_uses_device_owner_filename_and_validator():
         assert rejected.returncode != 0, 'validator must reject a mode mismatch'
 
 
+def test_dense_canonical_qr_has_extra_quiet_zone_and_legacy_decode_fallback():
+    import cv2
+    import qrcode
+
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        apk = td / 'DPC-AIO-enterprise-release.apk'
+        apk.write_bytes(b'dense-provisioning-regression-apk')
+        out = td / 'out'
+        proc = run_gen('--apk', apk, '--apk-url', CANONICAL_URL,
+                       '--out-dir', out, '--checksum-mode', 'package',
+                       '--provisioning-mode', 'fully-managed')
+        assert proc.returncode == 0, proc.stderr
+
+        payload_text = (out / 'provisioning-payload.txt').read_text('utf-8').strip()
+        assert len(payload_text) > 500, 'fixture must remain dense enough to exercise the regression'
+
+        legacy = td / 'legacy-border4.png'
+        legacy_qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=4,
+        )
+        legacy_qr.add_data(payload_text)
+        legacy_qr.make(fit=True)
+        legacy_qr.make_image(fill_color='black', back_color='white').save(legacy)
+
+        generated_qr = out / 'device-owner-qr.png'
+        generated_image = cv2.imread(str(generated_qr))
+        legacy_image = cv2.imread(str(legacy))
+        assert generated_image is not None and legacy_image is not None
+        assert generated_image.shape[1] == legacy_image.shape[1] + 32
+        assert generated_image.shape[0] == legacy_image.shape[0] + 32
+
+        for qr_path in (generated_qr, legacy):
+            checked = subprocess.run([
+                sys.executable, str(VERIFY), '--json', str(out / 'provisioning.json'),
+                '--qr', str(qr_path), '--apk', str(apk),
+                '--expected-mode', 'fully-managed', '--expected-apk-url', CANONICAL_URL,
+            ], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert checked.returncode == 0, checked.stderr or checked.stdout
+            report = json.loads(checked.stdout)
+            assert report['ok'] is True
+            assert report['qrMatchesPayload'] is True
+            assert report['apkChecksumMatches'] is True
+
 
 def test_validator_rejects_unexpected_apk_url():
     with tempfile.TemporaryDirectory() as td:
@@ -108,6 +156,7 @@ def test_validator_rejects_unexpected_apk_url():
         report = json.loads(checked.stdout)
         assert any('APK download URL mismatch' in error for error in report['errors'])
 
+
 def test_allow_offline_remains_a_top_level_provisioning_extra():
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -126,6 +175,7 @@ def test_allow_offline_remains_a_top_level_provisioning_extra():
 if __name__ == '__main__':
     test_default_generator_mode_is_explicit_work_profile()
     test_fully_managed_uses_device_owner_filename_and_validator()
+    test_dense_canonical_qr_has_extra_quiet_zone_and_legacy_decode_fallback()
     test_validator_rejects_unexpected_apk_url()
     test_allow_offline_remains_a_top_level_provisioning_extra()
     print('test_dual_provisioning_qr: PASS')
