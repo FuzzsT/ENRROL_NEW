@@ -13,6 +13,18 @@ on:
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsActivity.kt
       - tools/tests/test_enrollment_ui_contract.py
       - tools/tests/test_130_management_enrollment_diagnostics_contract.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-management-enrollment-diagnostics.yml
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentSessionStore.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentDiagnosticsSnapshot.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentStatusActivity.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsSnapshot.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsActivity.kt
+      - tools/tests/test_enrollment_ui_contract.py
+      - tools/tests/test_130_management_enrollment_diagnostics_contract.py
 
 permissions:
   contents: read
