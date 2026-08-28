@@ -6,6 +6,8 @@ on:
       - feat/dpc-aio-130-parity-router
     paths:
       - .github/workflows/finalize-parity-router.yml
+      - apps/dpc/modules/policy/core/src/test/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalogTest.kt
+      - apps/dpc/modules/policy/core/src/test/kotlin/io/dpcaio/policy/parity/TestDpcCapabilityResolverTest.kt
 
 permissions:
   contents: write
