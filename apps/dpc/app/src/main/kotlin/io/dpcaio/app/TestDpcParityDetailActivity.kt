@@ -1,6 +1,7 @@
 package io.dpcaio.app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.policy.android.parity.AndroidParityRuntimeFactsProvider
+import io.dpcaio.policy.parity.ParityActionRequest
 import io.dpcaio.policy.parity.ParityAvailability
 import io.dpcaio.policy.parity.ParityDestination
 import io.dpcaio.policy.parity.ParityInputType
@@ -41,6 +43,8 @@ class TestDpcParityDetailActivity : Activity() {
             ComponentName(this, AioDeviceAdminReceiver::class.java),
         ).read()
         val availability = TestDpcCapabilityResolver.resolve(entry, facts)
+        val router = TestDpcParityActionRouter()
+        val inputViews = linkedMapOf<String, EditText>()
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPaddingDp(24, 24, 24, 24)
@@ -75,7 +79,7 @@ class TestDpcParityDetailActivity : Activity() {
                 setPaddingDp(0, 16, 0, 4)
             })
             entry.inputs.forEach { field ->
-                body.addView(EditText(this).apply {
+                val input = EditText(this).apply {
                     hint = "${field.label}${if (field.required) " *" else ""}"
                     tag = field.key
                     inputType = when (field.type) {
@@ -84,7 +88,9 @@ class TestDpcParityDetailActivity : Activity() {
                         else -> InputType.TYPE_CLASS_TEXT
                     }
                     setSingleLine(field.type != ParityInputType.CSV)
-                })
+                }
+                inputViews[field.key] = input
+                body.addView(input)
             }
         }
 
@@ -98,18 +104,67 @@ class TestDpcParityDetailActivity : Activity() {
             }
         }
 
+        val resultView = TextView(this).apply { setPaddingDp(0, 12, 0, 4) }
         if (entry.handlerId != null) {
-            body.addView(TextView(this).apply {
-                text = if (availability is ParityAvailability.Available) {
-                    "Execute unavailable: backend is classified but the Parity Action Router handler is not registered yet."
-                } else {
-                    "Execute unavailable: ${availabilityText(availability)}"
-                }
-                setPaddingDp(0, 12, 0, 4)
-            })
+            if (availability is ParityAvailability.Available && router.isRegistered(entry.handlerId)) {
+                body.addView(Button(this).apply {
+                    text = "Execute"
+                    isAllCaps = false
+                    setOnClickListener {
+                        val values = inputViews.mapValues { it.value.text?.toString().orEmpty() }
+                        val missing = entry.inputs.filter { it.required && values[it.key].isNullOrBlank() }
+                        if (missing.isNotEmpty()) {
+                            resultView.text = "Missing required input(s): ${missing.joinToString { it.label }}"
+                            return@setOnClickListener
+                        }
+                        val request = ParityActionRequest(parityId = entry.id, values = values)
+                        val execute = {
+                            val result = router.execute(entry, request)
+                            resultView.text = if (result.success) {
+                                "Result: ${result.message}"
+                            } else {
+                                "Action unavailable/failed: ${result.message}"
+                            }
+                        }
+                        if (entry.destructive) {
+                            AlertDialog.Builder(this@TestDpcParityDetailActivity)
+                                .setTitle("Confirm destructive action")
+                                .setMessage(confirmationMessage(entry, values))
+                                .setNegativeButton("Cancel", null)
+                                .setPositiveButton("Execute") { _, _ -> execute() }
+                                .show()
+                        } else {
+                            execute()
+                        }
+                    }
+                })
+                resultView.text = "Handler registered. Runtime result remains authoritative."
+            } else {
+                resultView.text = "Execute unavailable: ${availabilityText(availability)}"
+            }
+            body.addView(resultView)
         }
 
         setContentView(DpcUiShell.scroll(this, body))
+    }
+
+    private fun confirmationMessage(entry: TestDpcParityEntry, values: Map<String, String>): String = buildString {
+        appendLine("Google action: ${entry.googleTitle}")
+        appendLine("TestDPC key: ${entry.testDpcKey}")
+        if (values.isEmpty()) {
+            append("Target values: none")
+        } else {
+            appendLine("Target values:")
+            values.toSortedMap().forEach { (key, value) ->
+                appendLine("- $key = ${confirmationValue(key, value)}")
+            }
+        }
+    }
+
+    private fun confirmationValue(key: String, value: String): String {
+        val normalized = key.lowercase()
+        val sensitive = listOf("password", "token", "secret", "credential").any(normalized::contains)
+        return if (sensitive && value.isNotEmpty()) "<redacted>" else value.ifBlank { "<empty>" }
     }
 
     private fun destinationActivity(destination: ParityDestination): Class<out Activity>? = when (destination) {
