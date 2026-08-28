@@ -90,6 +90,19 @@ class AndroidNetworkParityGateway(
         }
     }
 
+    fun parseWifiSecurityLevel(raw: String): Int? = when (raw.trim().uppercase()) {
+        "OPEN", DevicePolicyManager.WIFI_SECURITY_OPEN.toString() -> DevicePolicyManager.WIFI_SECURITY_OPEN
+        "PERSONAL", DevicePolicyManager.WIFI_SECURITY_PERSONAL.toString() -> DevicePolicyManager.WIFI_SECURITY_PERSONAL
+        "ENTERPRISE_EAP", DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_EAP.toString() -> DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_EAP
+        "ENTERPRISE_192", DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_192.toString() -> DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_192
+        else -> null
+    }
+
+    fun parseWifiSsidPolicyType(raw: String): Int? = when (raw.trim().uppercase()) {
+        "ALLOWLIST", WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_ALLOWLIST.toString() -> WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_ALLOWLIST
+        "DENYLIST", WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_DENYLIST.toString() -> WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_DENYLIST
+        else -> null
+    }
     fun setMinimumRequiredWifiSecurityLevel(level: Int): PolicyResult<Int> {
         if (Build.VERSION.SDK_INT < 33) return unsupported("Wi-Fi minimum security policy requires API 33+")
         return policyCall {
