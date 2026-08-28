@@ -2,6 +2,7 @@ package io.dpcaio.app
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import io.dpcaio.account.android.AndroidAccountReorderGateway
 import io.dpcaio.network.android.AlwaysOnVpnController
 import io.dpcaio.policy.CrossProfileDirection
@@ -12,6 +13,7 @@ import io.dpcaio.policy.android.AndroidCredentialRecoveryGateway
 import io.dpcaio.policy.android.AndroidDevicePolicyGateway
 import io.dpcaio.policy.android.AndroidGlobalLocationPolicyGateway
 import io.dpcaio.policy.android.AndroidWorkProfileLifecycleGateway
+import io.dpcaio.policy.android.parity.AndroidAppParityGateway
 import io.dpcaio.policy.parity.ParityActionHandler
 import io.dpcaio.policy.parity.ParityActionRequest
 import io.dpcaio.policy.parity.ParityActionResult
@@ -27,6 +29,7 @@ class TestDpcParityActionRouter(context: Context) {
     private val accountGateway = AndroidAccountReorderGateway(appContext, admin)
     private val credentialRecoveryGateway = AndroidCredentialRecoveryGateway(appContext, admin)
     private val devicePolicyGateway = AndroidDevicePolicyGateway(appContext, admin)
+    private val appParityGateway = AndroidAppParityGateway(appContext, admin)
 
     private val handlers: Map<String, ParityActionHandler> = mapOf(
         "profile.set_name" to ParityActionHandler(::setProfileName),
@@ -38,6 +41,22 @@ class TestDpcParityActionRouter(context: Context) {
         "account.get_management_disabled" to ParityActionHandler(::getAccountManagementDisabled),
         "credential.reset_with_token" to ParityActionHandler(::resetPasswordWithToken),
         "credential.remove_key_pair" to ParityActionHandler(::removeManagedKeyPair),
+        "app.enable_system_package" to ParityActionHandler(::enableSystemPackage),
+        "app.enable_system_intent" to ParityActionHandler(::enableSystemAppsByIntent),
+        "app.install_existing" to ParityActionHandler(::installExistingPackage),
+        "app.uninstall" to ParityActionHandler(::uninstallPackage),
+        "app.hide" to ParityActionHandler { request -> setApplicationHidden(request, true) },
+        "app.unhide" to ParityActionHandler { request -> setApplicationHidden(request, false) },
+        "app.suspend" to ParityActionHandler { request -> setPackagesSuspended(request, true) },
+        "app.unsuspend" to ParityActionHandler { request -> setPackagesSuspended(request, false) },
+        "app.clear_data" to ParityActionHandler(::clearApplicationData),
+        "app.keep_uninstalled" to ParityActionHandler(::setKeepUninstalledPackages),
+        "app.managed_configurations" to ParityActionHandler(::setManagedConfigurations),
+        "app.disable_metered_data" to ParityActionHandler(::setMeteredDataDisabledPackages),
+        "app.restrictions_manager" to ParityActionHandler(::setRestrictionsManagingPackage),
+        "delegation.set_scopes" to ParityActionHandler(::setDelegatedScopes),
+        "app.block_uninstall" to ParityActionHandler(::setUninstallBlocked),
+        "app.block_uninstall_list" to ParityActionHandler(::setUninstallBlockedList),
     )
 
     fun isRegistered(handlerId: String): Boolean = handlers.containsKey(handlerId)
@@ -96,11 +115,7 @@ class TestDpcParityActionRouter(context: Context) {
         if (action.isBlank()) return invalidInput("action", "intent action is required")
         val direction = parseDirection(request.values["direction"])
             ?: return invalidInput("direction", "expected MANAGED_TO_PARENT, PARENT_TO_MANAGED, or BIDIRECTIONAL")
-        val categories = request.values["categories"].orEmpty()
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
+        val categories = parseCsv(request.values["categories"]).toSet()
         val rule = CrossProfileIntentRule(
             id = "parity:${direction.name}:${Integer.toHexString(action.hashCode())}",
             action = action,
@@ -118,8 +133,8 @@ class TestDpcParityActionRouter(context: Context) {
         }
 
     private fun setAlwaysOnVpn(request: ParityActionRequest): PolicyResult<String> {
-        val packageName = request.values["package_name"]?.trim().orEmpty()
-        if (packageName.isBlank()) return invalidInput("package_name", "VPN package is required")
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "VPN package is required")
         val lockdown = parseBoolean(request.values["lockdown"])
             ?: return invalidInput("lockdown", "expected true/false")
         if (!alwaysOnVpnController.set(packageName, lockdown)) {
@@ -174,9 +189,123 @@ class TestDpcParityActionRouter(context: Context) {
     }
 
     private fun removeManagedKeyPair(request: ParityActionRequest): PolicyResult<String> {
-        val alias = request.values["alias"]?.trim().orEmpty()
-        if (alias.isBlank()) return invalidInput("alias", "key-pair alias is required")
+        val alias = requiredValue(request, "alias")
+            ?: return invalidInput("alias", "key-pair alias is required")
         return devicePolicyGateway.removeManagedKeyPair(alias).asText { "removed=$alias" }
+    }
+
+    private fun enableSystemPackage(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        return appParityGateway.enableSystemApp(packageName).asText { "enabled=$packageName" }
+    }
+
+    private fun enableSystemAppsByIntent(request: ParityActionRequest): PolicyResult<String> {
+        val intentUri = requiredValue(request, "intent_uri")
+            ?: return invalidInput("intent_uri", "intent URI is required")
+        val intent = runCatching { Intent.parseUri(intentUri, Intent.URI_INTENT_SCHEME) }
+            .getOrElse { return invalidInput("intent_uri", "intent URI parse failed: ${it.javaClass.simpleName}") }
+        return appParityGateway.enableSystemAppsByIntent(intent).asText { count -> "enabled=${count ?: 0}" }
+    }
+
+    private fun installExistingPackage(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        return appParityGateway.installExistingPackage(packageName).asText { it ?: packageName }
+    }
+
+    private fun uninstallPackage(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        return appParityGateway.uninstallPackage(packageName).asText { "submitted=$packageName" }
+    }
+
+    private fun setApplicationHidden(request: ParityActionRequest, hidden: Boolean): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        return devicePolicyGateway.setApplicationHidden(packageName, hidden).asText {
+            "package=$packageName,hidden=$hidden"
+        }
+    }
+
+    private fun setPackagesSuspended(request: ParityActionRequest, suspended: Boolean): PolicyResult<String> {
+        val packages = requiredPackages(request, "packages")
+            ?: return invalidInput("packages", "at least one package is required")
+        return devicePolicyGateway.setPackagesSuspended(packages.toSet(), suspended).asText { failures ->
+            val failed = failures.orEmpty().sorted().joinToString()
+            "requested=${packages.size},suspended=$suspended,failures=${if (failed.isBlank()) "none" else failed}"
+        }
+    }
+
+    private fun clearApplicationData(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        return devicePolicyGateway.clearManagedApplicationData(packageName).asText { "submitted=$packageName" }
+    }
+
+    private fun setKeepUninstalledPackages(request: ParityActionRequest): PolicyResult<String> {
+        val packages = requiredPackages(request, "packages")
+            ?: return invalidInput("packages", "at least one package is required")
+        return appParityGateway.setKeepUninstalledPackages(packages).asText { "packages=${packages.size}" }
+    }
+
+    private fun setManagedConfigurations(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        val restrictions = parseRestrictions(request.values["restrictions"])
+            ?: return invalidInput("restrictions", "expected CSV key=value pairs")
+        return devicePolicyGateway.setManagedApplicationRestrictions(packageName, restrictions).asText {
+            "package=$packageName,restrictions=${restrictions.size}"
+        }
+    }
+
+    private fun setMeteredDataDisabledPackages(request: ParityActionRequest): PolicyResult<String> {
+        val packages = requiredPackages(request, "packages")
+            ?: return invalidInput("packages", "at least one package is required")
+        return appParityGateway.setMeteredDataDisabledPackages(packages).asText { failures ->
+            val failed = failures.orEmpty().sorted().joinToString()
+            "requested=${packages.size},failures=${if (failed.isBlank()) "none" else failed}"
+        }
+    }
+
+    private fun setRestrictionsManagingPackage(request: ParityActionRequest): PolicyResult<String> {
+        val raw = request.values["package_name"]?.trim().orEmpty()
+        val packageName = raw.takeIf(String::isNotEmpty)
+        return appParityGateway.setApplicationRestrictionsManagingPackage(packageName).asText {
+            "package=${packageName ?: "<cleared>"}"
+        }
+    }
+
+    private fun setDelegatedScopes(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        val scopes = requiredPackages(request, "scopes")
+            ?: return invalidInput("scopes", "at least one delegated scope is required")
+        return devicePolicyGateway.setDelegatedScopes(packageName, scopes.toSet()).asText {
+            "package=$packageName,scopes=${scopes.size}"
+        }
+    }
+
+    private fun setUninstallBlocked(request: ParityActionRequest): PolicyResult<String> {
+        val packageName = requiredValue(request, "package_name")
+            ?: return invalidInput("package_name", "package name is required")
+        val blocked = parseBoolean(request.values["blocked"])
+            ?: return invalidInput("blocked", "expected true/false")
+        return devicePolicyGateway.setUninstallBlockedPolicy(packageName, blocked).asText {
+            "package=$packageName,blocked=$blocked"
+        }
+    }
+
+    private fun setUninstallBlockedList(request: ParityActionRequest): PolicyResult<String> {
+        val packages = requiredPackages(request, "packages")
+            ?: return invalidInput("packages", "at least one package is required")
+        val blocked = parseBoolean(request.values["blocked"])
+            ?: return invalidInput("blocked", "expected true/false")
+        packages.forEach { packageName ->
+            val result = devicePolicyGateway.setUninstallBlockedPolicy(packageName, blocked)
+            if (!result.isSuccess) return result.asText { "package=$packageName" }
+        }
+        return PolicyResult.success("packages=${packages.size},blocked=$blocked", "READBACK_NOT_AVAILABLE")
     }
 
     private fun parseBoolean(raw: String?): Boolean? = when (raw?.trim()?.lowercase()) {
@@ -188,6 +317,32 @@ class TestDpcParityActionRouter(context: Context) {
     private fun parseDirection(raw: String?): CrossProfileDirection? {
         val normalized = raw?.trim()?.uppercase()?.replace('-', '_')?.replace(' ', '_') ?: return null
         return runCatching { CrossProfileDirection.valueOf(normalized) }.getOrNull()
+    }
+
+    private fun parseCsv(raw: String?): List<String> = raw.orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinct()
+
+    private fun requiredPackages(request: ParityActionRequest, key: String): List<String>? =
+        parseCsv(request.values[key]).takeIf(List<String>::isNotEmpty)
+
+    private fun requiredValue(request: ParityActionRequest, key: String): String? =
+        request.values[key]?.trim()?.takeIf(String::isNotEmpty)
+
+    private fun parseRestrictions(raw: String?): Map<String, String>? {
+        if (raw.isNullOrBlank()) return emptyMap()
+        val result = linkedMapOf<String, String>()
+        raw.split(',').forEach { item ->
+            val normalized = item.trim()
+            val separator = normalized.indexOf('=')
+            if (separator <= 0) return null
+            val key = normalized.substring(0, separator).trim()
+            if (key.isBlank()) return null
+            result[key] = normalized.substring(separator + 1).trim()
+        }
+        return result
     }
 
     private fun invalidInput(key: String, detail: String): PolicyResult<String> =
