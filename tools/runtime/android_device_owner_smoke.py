@@ -60,11 +60,22 @@ def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
     raw = (m.group(2) or "").strip()
     if not raw:
         raise ValueError("diagnostics broadcast returned no result data")
-    payload: str
+
+    # ActivityManagerShellCommand wraps result-data in quote characters for display,
+    # but does not JSON-escape quotes already present inside the result string. Since
+    # VerificationCommandReceiver returns raw JSONObject text, decoding the whole
+    # displayed wrapper with json.loads() produces `Extra data` at column 4. Remove
+    # only the shell display wrapper, then decode the actual JSON payload.
     if raw.startswith('"'):
-        payload = json.loads(raw)
+        extras_marker = '", extras: '
+        if extras_marker in raw:
+            raw = raw.rsplit(extras_marker, 1)[0] + '"'
+        if not raw.endswith('"'):
+            raise ValueError(f"unterminated quoted broadcast result data: {raw!r}")
+        payload = raw[1:-1]
     else:
-        payload = raw
+        payload = raw.split(", extras: ", 1)[0].strip()
+
     data = json.loads(payload)
     if not isinstance(data, dict):
         raise ValueError("diagnostics payload is not a JSON object")
