@@ -1,0 +1,22 @@
+name: Verify QR stale alias regression
+
+on:
+  push:
+    branches:
+      - fix/dpc-aio-130-hygiene-gates
+    paths:
+      - .github/workflows/verify-qr-stale-alias.yml
+      - tools/tests/test_129_qr_stale_alias_cleanup.py
+      - apps/dpc/app/build.gradle.kts
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Reproduce stale fully-managed alias
+        run: python3 tools/tests/test_129_qr_stale_alias_cleanup.py
