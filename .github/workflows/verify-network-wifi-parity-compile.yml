@@ -8,6 +8,7 @@ on:
       - .github/workflows/verify-network-wifi-parity-compile.yml
       - apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidNetworkParityGateway.kt
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt
+      - apps/dpc/app/src/main/AndroidManifest.xml
       - apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt
       - tools/tests/test_131_network_wifi_parity_contract.py
       - tools/run_host_tests.sh
