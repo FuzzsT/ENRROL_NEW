@@ -1,0 +1,37 @@
+name: Verify QR choice host suite
+
+on:
+  push:
+    branches:
+      - verify/dpc-aio-130-qr-choice
+    paths:
+      - .github/workflows/verify-qr-choice-host-suite.yml
+
+permissions:
+  contents: read
+
+jobs:
+  host-suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout verified commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Remove validation-only workflow from working tree
+        shell: bash
+        run: rm -f .github/workflows/verify-qr-choice-host-suite.yml
+
+      - name: Install host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pyyaml
+          python3 -m pip install --quiet -r tools/provisioning/requirements.txt
+
+      - name: Run complete non-Kotlin host suite from canonical runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ROOT="$PWD"
+          sed -n '109,$p' tools/run_host_tests.sh | bash -euo pipefail
