@@ -1,0 +1,114 @@
+ning.json',
+-                'payload': 'provisioning-payload.txt',
+-                'metadata': 'provisioning-metadata.json',
+-                'validation': 'provisioning-validation.json',
+-            },
+-        ],
++        "qrType": qr_type,
++        'qr': qr,
+         'runtimeEvidence': 'android-runtime-smoke.json',
+         'buildEnvironment': 'build-environment.json',
+         'checksums': SUMS_NAME,
+@@ -148,6 +180,11 @@
+     ap.add_argument('--version', required=True)
+     ap.add_argument('--apk-url', required=True)
+     ap.add_argument('--apk-name', default='DPC-AIO-enterprise-release.apk')
++    ap.add_argument(
++        '--qr-type',
++        required=True,
++        choices=('both', 'work-profile', 'fully-managed'),
++    )
+     args = ap.parse_args()
+ 
+     dist = args.dist.resolve()
+@@ -159,20 +196,25 @@
+     if not apk_name or Path(apk_name).name != apk_name or apk_name in {'.', '..'}:
+         raise SystemExit('--apk-name must be a safe file name without path separators')
+ 
+-    primary_assets = [apk_name, *REQUIRED_PRIMARY_ASSETS]
++    requested_mode_assets: list[str] = []
++    for mode in selected_modes(args.qr_type):
++        requested_mode_assets.extend(MODE_ASSETS[mode])
++    primary_assets = [apk_name, *COMPATIBILITY_ASSETS, *requested_mode_assets, *EVIDENCE_ASSETS]
+     missing = [name for name in primary_assets if not (dist / name).is_file()]
+     if missing:
+         raise SystemExit('missing release assets: ' + ', '.join(missing))
+-    for name in ['provisioning-validation.json', 'work-profile-validation.json', 'device-owner-validation.json']:
+-        require_valid_validation(dist / name)
++
++    require_valid_validation(dist / 'provisioning-validation.json')
++    for mode in selected_modes(args.qr_type):
++        require_valid_validation(dist / MODE_ASSETS[mode][-1])
+ 
+     bundle_name = f'DPC-AIO-{args.version}-QR-RELEASE-BUNDLE.zip'
+     sidecar_name = bundle_name + '.sha256'
+     bundle = dist / bundle_name
+     sidecar = dist / sidecar_name
+ 
+-    write_readme(dist, args.version, args.apk_url, apk_name)
+-    write_index(dist, args.version, args.apk_url, apk_name, bundle_name, sidecar_name)
++    write_readme(dist, args.version, args.apk_url, apk_name, args.qr_type)
++    write_index(dist, args.version, args.apk_url, apk_name, args.qr_type, bundle_name, sidecar_name)
+     checksum_names = primary_assets + [README_NAME, INDEX_NAME]
+     write_sums(dist, checksum_names)
+     zip_names = checksum_names + [SUMS_NAME]
+@@ -183,6 +225,7 @@
+     print(json.dumps({
+         'ok': True,
+         'version': args.version,
++        "qrType": args.qr_type,
+         'bundle': bundle_name,
+         'bundleSha256': bundleSha256,
+         'sha256Sidecar': sidecar_name,
+--- a/tools/tests/test_114_qr_release_bundle_contract.py
++++ b/tools/tests/test_114_qr_release_bundle_contract.py
+@@ -36,11 +36,12 @@
+     'provisioning-validation.json',
+     'work-profile-validation.json',
+     'device-owner-validation.json',
++    '--qr-type "$DPC_AIO_QR_TYPE"',
+ ]:
+     if token not in workflow: errors.append(f'workflow missing {token}')
+ 
+ script=read('tools/release/build_qr_release_bundle.py')
+-for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
++for token in ['MODE_ASSETS','--qr-type','qrType','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
+     if token not in script: errors.append(f'bundle builder missing {token}')
+ 
+ readme=read('README.md')
+--- a/tools/tests/test_115_app_pin_and_provisioning_modes_contract.py
++++ b/tools/tests/test_115_app_pin_and_provisioning_modes_contract.py
+@@ -9,8 +9,10 @@
+ pin_manager = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcPinManager.kt').read_text(encoding='utf-8')
+ pin_settings = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcPinSettingsActivity.kt').read_text(encoding='utf-8')
+ 
+-# Explicit Android Enterprise modes are always generated and independently validated.
++# Explicit Android Enterprise modes are selected by DPC_AIO_QR_TYPE; both remains the default compatibility behavior.
+ for token in [
++    'providers.environmentVariable("DPC_AIO_QR_TYPE")',
++    '"both" -> linkedSetOf("work-profile", "fully-managed")',
+     'publishExplicitMode("work-profile"',
+     'publishExplicitMode("fully-managed"',
+     'work-profile-qr.png',
+@@ -38,4 +40,4 @@
+ assert 'DpcPinManager' not in (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PolicyComplianceActivity.kt').read_text(encoding='utf-8')
+ assert 'Set PIN' in pin_settings and 'Disable PIN' in pin_settings and 'Remove PIN' in pin_settings
+ 
+-print('PASS: explicit work-profile + fully-managed QR generation and app PIN UI contract')
++print('PASS: selectable work-profile + fully-managed QR generation and app PIN UI contract')
+--- a/tools/run_host_tests.sh
++++ b/tools/run_host_tests.sh
+@@ -249,3 +249,7 @@
+ python3 "$ROOT/tools/tests/test_120_device_lifecycle_expanded_controls.py"
+ 
+ python3 tools/tests/test_121_responsive_ui_contract.py
++
++python3 tools/tests/test_122_workflow_qr_choice_contract.py
++
++python3 tools/tests/test_122_qr_mode_matrix.py
+--- a/README.md
++++ b/README.md
+@@ -26,10 +26,12 @@
+ Two CI enrollment paths are intentionally separate:
+ 
+ - **Build AIO + enrollment QR** (`.github/workflows/build-aio-enrollment.yml`) — production path. Requires a stable signing keystore/fingerprint in GitHub Secrets/Variables, runs the Android Device Owner smoke test, publishes the exact APK + QR 
