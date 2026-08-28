@@ -1,0 +1,84 @@
+name: Verify management and enrollment diagnostics
+
+on:
+  push:
+    branches:
+      - fix/dpc-aio-130-hygiene-gates
+    paths:
+      - .github/workflows/verify-management-enrollment-diagnostics.yml
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentSessionStore.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentDiagnosticsSnapshot.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentStatusActivity.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsSnapshot.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsActivity.kt
+      - tools/tests/test_enrollment_ui_contract.py
+      - tools/tests/test_130_management_enrollment_diagnostics_contract.py
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: platform-tools
+
+      - name: Install Android build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager_bin="$(command -v sdkmanager)"
+          list="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$sdkmanager_bin" --list --channel=3 > "$list"
+          platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1=="platforms;android-37"{print $1}' "$list" | head -n1)"
+          if [[ -z "$platform_pkg" ]]; then
+            platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^platforms;android-37\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
+          fi
+          if [[ -z "$platform_pkg" ]] && grep -q 'platforms;android-CinnamonBun' "$list"; then
+            platform_pkg='platforms;android-CinnamonBun'
+          fi
+          [[ -n "$platform_pkg" ]] || { echo 'Android 17 platform not found' >&2; exit 1; }
+          build_tools_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^build-tools;37\.[0-9]+\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg='build-tools;36.0.0'
+          "$sdkmanager_bin" "$platform_pkg" "$build_tools_pkg" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar" ]]; then
+            installed="$ANDROID_SDK_ROOT/platforms/${platform_pkg#platforms;}"
+            [[ -d "$installed" ]] && ln -sfn "$installed" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+
+      - name: Run diagnostics contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_130_management_enrollment_diagnostics_contract.py
+          python3 tools/tests/test_enrollment_session_store_contract.py
+          python3 tools/tests/test_enrollment_ui_contract.py
+          python3 tools/tests/test_diagnostics_contract.py
+          python3 tools/tests/test_aio_dashboard_contract.py
+          python3 tools/tests/test_enrollment_coordinator_contract.py
+          python3 tools/tests/test_enterprise_operations_diagnostics_contract.py
+          python3 tools/tests/test_offline_diagnostics_contract.py
+          git diff --check
+
+      - name: Compile enterprise release Kotlin
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app-dpc:compileEnterpriseReleaseKotlin --console=plain --stacktrace
