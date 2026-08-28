@@ -6,11 +6,17 @@ ROOT = Path(__file__).resolve().parents[2]
 GATEWAY = ROOT / "apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidNetworkParityGateway.kt"
 ROUTER = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt"
 CATALOG = ROOT / "apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt"
+MANIFEST = ROOT / "apps/dpc/app/src/main/AndroidManifest.xml"
 
 assert GATEWAY.exists(), "AndroidNetworkParityGateway.kt missing"
 gateway = GATEWAY.read_text("utf-8")
 router = ROUTER.read_text("utf-8")
 catalog = CATALOG.read_text("utf-8")
+manifest = MANIFEST.read_text("utf-8")
+
+assert "requiredFeatures:Set<PlatformFeature>" in catalog, "catalog helper must forward requiredFeatures"
+assert "requiredFeatures=requiredFeatures" in catalog, "catalog helper must populate TestDpcParityEntry.requiredFeatures"
+assert "android.permission.CHANGE_WIFI_STATE" in manifest, "removeNonCallerConfiguredNetworks requires CHANGE_WIFI_STATE"
 
 # Public Android networking/Wi-Fi APIs only; no Settings.Global or reflection fallbacks.
 for token in [
