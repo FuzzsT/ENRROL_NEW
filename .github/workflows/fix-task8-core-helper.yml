@@ -53,14 +53,6 @@ jobs:
               anchor = 'catalog = CATALOG.read_text("utf-8")\n'
               t = t.replace(anchor, anchor + 'manifest = MANIFEST.read_text("utf-8")\n\nassert "requiredFeatures:Set<PlatformFeature>" in catalog, "catalog helper must forward requiredFeatures"\nassert "requiredFeatures=requiredFeatures" in catalog, "catalog helper must populate TestDpcParityEntry.requiredFeatures"\nassert "android.permission.CHANGE_WIFI_STATE" in manifest, "removeNonCallerConfiguredNetworks requires CHANGE_WIFI_STATE"\n', 1)
           test.write_text(t)
-
-          verifier = Path('.github/workflows/verify-network-wifi-parity-compile.yml')
-          v = verifier.read_text()
-          manifest_path = '      - apps/dpc/app/src/main/AndroidManifest.xml\n'
-          if manifest_path not in v:
-              anchor = '      - apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt\n'
-              v = v.replace(anchor, anchor + manifest_path, 1)
-          verifier.write_text(v)
           PY
 
       - name: Verify strengthened Task 8 contract
