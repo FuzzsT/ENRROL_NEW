@@ -1,14 +1,83 @@
-name: TDD Android parity runtime facts
+name: Verify Android parity runtime facts
 on:
   push:
     branches:
       - feat/dpc-aio-130-runtime-facts
+    paths:
+      - .github/workflows/tdd-android-parity-runtime-facts.yml
+      - apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidParityRuntimeFactsProvider.kt
+      - tools/tests/test_126_android_parity_runtime_facts_contract.py
 permissions:
-  contents: read
+  contents: write
 jobs:
-  red-green:
+  verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - name: Run runtime facts contract
-        run: python3 tools/tests/test_126_android_parity_runtime_facts_contract.py
+        with:
+          fetch-depth: 0
+      - name: Model final topology and wire regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/tdd-android-parity-runtime-facts.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tools/run_host_tests.sh')
+          text = p.read_text('utf-8')
+          line = 'python3 "$ROOT/tools/tests/test_126_android_parity_runtime_facts_contract.py"\n'
+          if line not in text:
+              marker = 'python3 "$ROOT/tools/tests/test_123_testdpc_parity_catalog_169.py"\n'
+              if text.count(marker) != 1:
+                  raise SystemExit(f'expected one test_123 marker, got {text.count(marker)}')
+              text = text.replace(marker, marker + line, 1)
+              p.write_text(text, 'utf-8')
+          print('WIRE_TEST_126: PASS')
+          PY
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+      - name: Resolve Android 17 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager_bin="$(command -v sdkmanager)"
+          list="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$sdkmanager_bin" --list --channel=3 > "$list"
+          platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1=="platforms;android-37"{print $1}' "$list" | head -n1)"
+          if [[ -z "$platform_pkg" ]]; then platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^platforms;android-37\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"; fi
+          if [[ -z "$platform_pkg" ]] && grep -q 'platforms;android-CinnamonBun' "$list"; then platform_pkg='platforms;android-CinnamonBun'; fi
+          [[ -n "$platform_pkg" ]] || { echo 'Android 17 platform not found' >&2; exit 1; }
+          build_tools_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^build-tools;37\.[0-9]+\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg='build-tools;36.0.0'
+          "$sdkmanager_bin" "$platform_pkg" "$build_tools_pkg" "build-tools;36.0.0" --channel=3
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar" ]]; then
+            installed="$ANDROID_SDK_ROOT/platforms/${platform_pkg#platforms;}"
+            [[ -d "$installed" ]] && ln -sfn "$installed" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+      - name: Run Task 3 verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_126_android_parity_runtime_facts_contract.py
+          python3 tools/tests/test_123_testdpc_parity_catalog_169.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          bash -n tools/run_host_tests.sh
+          bash tools/run_host_tests.sh
+          chmod +x gradlew
+          ./gradlew :policy-android:compileReleaseKotlin :app-dpc:compileEnterpriseReleaseKotlin --console=plain --stacktrace
+      - name: Commit canonical runner wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/run_host_tests.sh
+          if ! git diff --cached --quiet; then
+            git commit -m 'test: wire Android parity runtime facts contract'
+            git push origin HEAD:feat/dpc-aio-130-runtime-facts
+          fi
