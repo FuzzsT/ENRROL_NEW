@@ -192,7 +192,7 @@ class ActivityExplorerActivity : Activity() {
             var loaded = 0
             currentApps.forEach { app ->
                 if (generation != scanGeneration) return@Thread
-                if (app.packageName !in loadedActivities) {
+                if (!loadedActivities.containsKey(app.packageName)) {
                     loadedActivities[app.packageName] = safeLoadActivities(app.packageName)
                 }
                 loaded++
@@ -215,7 +215,7 @@ class ActivityExplorerActivity : Activity() {
             renderApps()
             return
         }
-        if (app.packageName in loadedActivities) {
+        if (loadedActivities.containsKey(app.packageName)) {
             renderApps()
             return
         }

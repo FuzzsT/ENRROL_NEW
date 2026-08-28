@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as td:
             p.write_text(json.dumps(payload), 'utf-8')
         else:
             p.write_bytes((name+'\n').encode())
-    proc=subprocess.run(['python3',str(SCRIPT),'--dist',str(dist),'--version','1.2.0','--apk-url','https://github.com/o/r/releases/download/v1.2.0/'+APK_NAME,'--apk-name',APK_NAME],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    proc=subprocess.run(['python3',str(SCRIPT),'--dist',str(dist),'--version','1.2.0','--apk-url','https://github.com/o/r/releases/download/v1.2.0/'+APK_NAME,'--apk-name',APK_NAME,'--qr-type','both'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     assert proc.returncode==0, proc.stdout
     bundle=dist/'DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip'
     sidecar=dist/'DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip.sha256'
@@ -38,6 +38,7 @@ with tempfile.TemporaryDirectory() as td:
     assert index['version']=='1.2.0'
     assert index['apkUrl'].endswith('/'+APK_NAME)
     assert index['apk']==APK_NAME
+    assert index['qrType']=='both'
     assert index['bundle']['file']==bundle.name
     assert index['bundle']['sha256Sidecar']==sidecar.name
     with zipfile.ZipFile(bundle) as z:

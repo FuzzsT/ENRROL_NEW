@@ -11,14 +11,19 @@ object ProvisioningModeSelector {
         allowedModes: List<Int>,
         fullyManagedMode: Int,
         managedProfileMode: Int,
-    ): Int? = when (requestedMode?.lowercase() ?: MODE_AUTO) {
-        MODE_WORK_PROFILE -> managedProfileMode.takeIf { it in allowedModes }
-        MODE_FULLY_MANAGED -> fullyManagedMode.takeIf { it in allowedModes }
-        MODE_AUTO -> when {
-            fullyManagedMode in allowedModes -> fullyManagedMode
-            managedProfileMode in allowedModes -> managedProfileMode
+    ): Int? {
+        val effectiveAllowedModes = allowedModes.ifEmpty {
+            listOf(managedProfileMode, fullyManagedMode)
+        }
+        return when (requestedMode?.lowercase() ?: MODE_AUTO) {
+            MODE_WORK_PROFILE -> managedProfileMode.takeIf { it in effectiveAllowedModes }
+            MODE_FULLY_MANAGED -> fullyManagedMode.takeIf { it in effectiveAllowedModes }
+            MODE_AUTO -> when {
+                fullyManagedMode in effectiveAllowedModes -> fullyManagedMode
+                managedProfileMode in effectiveAllowedModes -> managedProfileMode
+                else -> null
+            }
             else -> null
         }
-        else -> null
     }
 }

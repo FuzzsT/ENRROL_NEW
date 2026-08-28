@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       qr_type:
-        description: "Typ QR provisioning"
+        description: "QR code: both = QR1 Work Profile + QR2 Fully Managed; work-profile = QR1 only; fully-managed = QR2 only"
         required: true
         default: "both"
         type: choice
@@ -32,6 +32,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      qr_type: ${{ steps.qr.outputs.qr_type }}
       app_version: ${{ steps.metadata.outputs.app_version }}
       qr_bundle_name: ${{ steps.metadata.outputs.qr_bundle_name }}
       release_apk_name: ${{ steps.config.outputs.release_apk_name }}
@@ -50,6 +51,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Resolve QR selection
+        id: qr
         shell: bash
         env:
           DISPATCH_QR_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.qr_type || '' }}
@@ -64,6 +66,7 @@ jobs:
             *) echo "Unsupported qr_type: $qr_type" >&2; exit 2 ;;
           esac
           echo "DPC_AIO_QR_TYPE=$qr_type" >> "$GITHUB_ENV"
+          echo "qr_type=$qr_type" >> "$GITHUB_OUTPUT"
           echo "QR selection: $qr_type"
 
       - name: Resolve project release metadata
@@ -464,6 +467,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      DPC_AIO_QR_TYPE: ${{ needs.build.outputs.qr_type }}
       DPC_AIO_APP_VERSION: ${{ needs.build.outputs.app_version }}
       DPC_AIO_QR_BUNDLE_NAME: ${{ needs.build.outputs.qr_bundle_name }}
       DPC_AIO_RELEASE_APK_NAME: ${{ needs.build.outputs.release_apk_name }}

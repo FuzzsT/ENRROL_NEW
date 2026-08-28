@@ -8,7 +8,7 @@ assert f.is_file(),f
 t=u.read_text(); st=s.read_text(); ft=f.read_text()
 for n in [
     'Activity Manager 3.0','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default',
-    'Enable & Launch','Preview Batch Enable','Preview Batch Disable','Preview Restore Default','Batch Preview','Apply batch',
+    'Enable & Launch','Preview Enable','Preview Disable','Preview Restore','Batch Preview','Apply batch',
     'Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway',
     'ShizukuComponentStateExecutor','listApps(','expandedPackages','loadedActivities','favoritesOnly','favoriteGroup'
 ]:
