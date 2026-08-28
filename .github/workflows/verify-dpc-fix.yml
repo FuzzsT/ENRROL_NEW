@@ -6,6 +6,7 @@ on:
       - fix/dpc-aio-qr-kotlin-provisioning
     paths:
       - .github/workflows/verify-dpc-fix.yml
+      - .dpc-fix/normalize_aio.py
 
 permissions:
   contents: write
@@ -24,8 +25,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 .dpc-fix/normalize_aio.py
           python3 .dpc-fix/apply_dpc_fix.py
-          rm -f .github/workflows/verify-dpc-fix.yml .dpc-fix/apply_dpc_fix.py
+          rm -f .github/workflows/verify-dpc-fix.yml .dpc-fix/apply_dpc_fix.py .dpc-fix/normalize_aio.py
           test "$(find .github/workflows -maxdepth 1 -type f -name '*.yml' | wc -l)" -eq 2
 
       - name: Set up Java 21
