@@ -104,6 +104,9 @@ class AioDashboardActivity : Activity() {
         add(body, "Enterprise Operations Center") { EnterpriseOperationsActivity::class.java }
         add(body, "Device Lifecycle Center") { DeviceLifecycleActivity::class.java }
 
+        section(body, "Google TestDPC parity")
+        add(body, "TestDPC Parity Center") { TestDpcParityCenterActivity::class.java }
+
         section(body, "Security & Credentials")
         add(body, "App PIN / Security") { DpcPinSettingsActivity::class.java }
         add(body, "Certificate & Credential Center") { CredentialCenterActivity::class.java }
