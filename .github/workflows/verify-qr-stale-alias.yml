@@ -41,7 +41,6 @@ jobs:
           sdkmanager_bin="$(command -v sdkmanager)"
           list="$RUNNER_TEMP/android-sdk-packages.txt"
           "$sdkmanager_bin" --list --channel=3 > "$list"
-
           platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1=="platforms;android-37"{print $1}' "$list" | head -n1)"
           if [[ -z "$platform_pkg" ]]; then
             platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^platforms;android-37\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
@@ -50,10 +49,8 @@ jobs:
             platform_pkg='platforms;android-CinnamonBun'
           fi
           [[ -n "$platform_pkg" ]] || { echo 'Android 17 platform not found' >&2; exit 1; }
-
           build_tools_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^build-tools;37\.[0-9]+\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
           [[ -n "$build_tools_pkg" ]] || build_tools_pkg='build-tools;36.0.0'
-
           "$sdkmanager_bin" "$platform_pkg" "$build_tools_pkg" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
           if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar" ]]; then
             installed="$ANDROID_SDK_ROOT/platforms/${platform_pkg#platforms;}"
@@ -82,13 +79,11 @@ jobs:
           end = gradle.index('val compatibilityMode', start)
           cleanup = gradle[start:end]
           if '"fully-managed-qr.png"' not in cleanup:
-              old = '''                        "device-owner-provisioning-metadata.json",
-                        "device-owner-qr.png",
-'''
-              new = '''                        "device-owner-provisioning-metadata.json",
-                        "device-owner-qr.png",
-                        "fully-managed-qr.png",
-'''
+              old = (
+                  '                        "device-owner-provisioning-metadata.json",\n'
+                  '                        "device-owner-qr.png",\n'
+              )
+              new = old + '                        "fully-managed-qr.png",\n'
               assert gradle.count(old) == 1, 'unexpected fully-managed cleanup shape'
               gradle = gradle.replace(old, new, 1)
               gradle_path.write_text(gradle, encoding='utf-8')
@@ -151,11 +146,9 @@ jobs:
           set -euo pipefail
           out_dir='apps/dpc/app/build/outputs/provisioning/enterprise/debug'
           rm -rf "$out_dir"
-
           DPC_AIO_QR_TYPE=fully-managed ./gradlew --no-daemon :app-dpc:generateEnterpriseDebugProvisioningQr --rerun-tasks --console=plain
           test -f "$out_dir/fully-managed-qr.png"
           test -f "$out_dir/device-owner-qr.png"
-
           DPC_AIO_QR_TYPE=work-profile ./gradlew --no-daemon :app-dpc:generateEnterpriseDebugProvisioningQr --rerun-tasks --console=plain
           test -f "$out_dir/work-profile-qr.png"
           test ! -e "$out_dir/fully-managed-qr.png"
@@ -168,6 +161,10 @@ jobs:
           set -euo pipefail
           git diff --check
           mapfile -t changed < <(git diff --name-only | sort)
+          if [[ ${#changed[@]} -eq 0 ]]; then
+            echo 'No source fix to commit; committed head already contains the verified change.'
+            exit 0
+          fi
           expected=(
             'apps/dpc/app/build.gradle.kts'
             'tools/run_host_tests.sh'
@@ -175,10 +172,6 @@ jobs:
           if [[ "${changed[*]}" != "${expected[*]}" ]]; then
             printf 'Unexpected working-tree changes: %s\n' "${changed[*]}" >&2
             exit 1
-          fi
-          if [[ ${#changed[@]} -eq 0 ]]; then
-            echo 'No source fix to commit; committed head already contains the verified change.'
-            exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
