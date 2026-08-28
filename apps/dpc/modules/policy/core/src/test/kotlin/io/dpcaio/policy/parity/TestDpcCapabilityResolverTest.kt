@@ -2,7 +2,7 @@ package io.dpcaio.policy.parity
 
 object TestDpcCapabilityResolverTest {
     @JvmStatic
-    fun main(args: Array<String>) {
+    fun main() {
         deprecatedWins()
         sdkGatePrecedesOwnerGate()
         ownerGateWorks()
