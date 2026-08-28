@@ -61,27 +61,45 @@ def decode_qr(path: Path) -> dict:
     if image is None:
         raise ValueError('QR image is unreadable')
 
-    # OpenCV's classic QRCodeDetector can fail to detect otherwise valid,
-    # dense Android Enterprise provisioning QR codes (for example version 20
-    # produced by a long GitHub Releases URL with error correction M).
-    # QRCodeDetectorAruco in OpenCV 4.14+ decodes those payloads reliably.
-    decoded = ''
-    points = None
+    # Dense Android Enterprise payloads can be standards-valid yet fail in
+    # OpenCV when the image contains only the minimum four-module quiet zone.
+    # First try the artifact unchanged. Then retry with an extra white margin
+    # so already-published QR images remain verifiable without changing their
+    # payload bytes. QRCodeDetectorAruco remains an additional decoder when the
+    # installed OpenCV build exposes it.
+    height, width = image.shape[:2]
+    padding = max(16, min(height, width) // 35)
+    variants = [
+        ('native', image),
+        ('padded', cv2.copyMakeBorder(
+            image, padding, padding, padding, padding,
+            cv2.BORDER_CONSTANT, value=(255, 255, 255),
+        )),
+    ]
+    aruco_cls = getattr(cv2, 'QRCodeDetectorAruco', None)
+    tried: list[str] = []
 
-    decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(image)
-    if points is None or not decoded:
-        aruco_cls = getattr(cv2, 'QRCodeDetectorAruco', None)
+    for variant_name, candidate in variants:
+        decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(candidate)
+        tried.append(f'QRCodeDetector/{variant_name}')
+        if points is not None and decoded:
+            break
+
+        decoded = ''
+        points = None
         if aruco_cls is not None:
-            decoded, points, _ = aruco_cls().detectAndDecode(image)
+            decoded, points, _ = aruco_cls().detectAndDecode(candidate)
+            tried.append(f'QRCodeDetectorAruco/{variant_name}')
+            if points is not None and decoded:
+                break
+    else:
+        decoded = ''
+        points = None
 
     if points is None or not decoded:
-        height, width = image.shape[:2]
-        tried = 'QRCodeDetector'
-        if getattr(cv2, 'QRCodeDetectorAruco', None) is not None:
-            tried += ' + QRCodeDetectorAruco'
         raise ValueError(
             f'QR image could not be decoded by OpenCV detectors '
-            f'(image={width}x{height}; tried {tried})'
+            f'(image={width}x{height}; tried {" + ".join(tried)})'
         )
 
     value = json.loads(decoded)
