@@ -148,6 +148,9 @@ val provisioningPolicyProfile = providers.gradleProperty("dpcAioPolicyProfile")
 val provisioningMode = providers.gradleProperty("dpcAioProvisioningMode")
     .orElse(providers.environmentVariable("DPC_AIO_PROVISIONING_MODE"))
     .orElse("work-profile")
+val provisioningQrType = providers.gradleProperty("dpcAioQrType")
+    .orElse(providers.environmentVariable("DPC_AIO_QR_TYPE"))
+    .orElse("both")
 val provisioningOfflineMode = providers.gradleProperty("dpcAioOfflineMode")
     .orElse(providers.environmentVariable("DPC_AIO_ENROLLMENT_OFFLINE_MODE"))
     .orElse("ONLINE")
@@ -270,7 +273,19 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     }
                 }
 
-                generate(configuredMode, outDir)
+                val qrType = provisioningQrType.get().trim()
+                val selectedQrModes: Set<String> = when (qrType) {
+                    "both" -> linkedSetOf("work-profile", "fully-managed")
+                    "work-profile" -> linkedSetOf("work-profile")
+                    "fully-managed" -> linkedSetOf("fully-managed")
+                    else -> throw GradleException("Unsupported DPC_AIO_QR_TYPE: $qrType")
+                }
+                val compatibilityMode = when (qrType) {
+                    "work-profile" -> "work-profile"
+                    "fully-managed" -> "fully-managed"
+                    else -> configuredMode
+                }
+                generate(compatibilityMode, outDir)
 
                 fun publishExplicitMode(
                     mode: String,
@@ -294,18 +309,26 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     if (sourceDir != outDir) sourceDir.deleteRecursively()
                 }
 
-                publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
-                publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
+                if ("work-profile" in selectedQrModes) {
+                    publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
+                }
+                if ("fully-managed" in selectedQrModes) {
+                    publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
+                }
 
                 val qr = outDir.resolve("provisioning-qr.png")
                 val workProfileQr = outDir.resolve("work-profile-qr.png")
                 val deviceOwnerQr = outDir.resolve("device-owner-qr.png")
                 if (!qr.isFile) throw GradleException("Provisioning generator did not create $qr")
-                if (!workProfileQr.isFile) throw GradleException("Provisioning generator did not create $workProfileQr")
-                if (!deviceOwnerQr.isFile) throw GradleException("Provisioning generator did not create $deviceOwnerQr")
+                if ("work-profile" in selectedQrModes && !workProfileQr.isFile) {
+                    throw GradleException("Provisioning generator did not create $workProfileQr")
+                }
+                if ("fully-managed" in selectedQrModes && !deviceOwnerQr.isFile) {
+                    throw GradleException("Provisioning generator did not create $deviceOwnerQr")
+                }
                 logger.lifecycle("Provisioning QR: ${qr.absolutePath}")
-                logger.lifecycle("Work-profile QR: ${workProfileQr.absolutePath}")
-                logger.lifecycle("Device-owner QR: ${deviceOwnerQr.absolutePath}")
+                if ("work-profile" in selectedQrModes) logger.lifecycle("Work-profile QR: ${workProfileQr.absolutePath}")
+                if ("fully-managed" in selectedQrModes) logger.lifecycle("Device-owner QR: ${deviceOwnerQr.absolutePath}")
             }
         }
         tasks.matching { it.name == "assemble$variant" }.configureEach {
