@@ -3,7 +3,7 @@ name: Apply QR choice completion patch
 on:
   push:
     branches:
-      - fix/dpc-aio-130-qr-choice-complete
+      - fix/dpc-aio-130-qr-choice-finalize
     paths:
       - .github/workflows/apply-qr-choice-patch.yml
 
@@ -37,6 +37,7 @@ jobs:
           PY
           git apply --check /tmp/qr-choice.patch
           git apply /tmp/qr-choice.patch
+          rm -f .github/workflows/apply-qr-choice-patch.yml .dpc-import/qr-patch-0{0,1,2,3,4,5,6}
 
       - name: Verify QR choice contracts
         shell: bash
@@ -107,12 +108,11 @@ jobs:
           PY
           done
 
-      - name: Commit verified result and remove bootstrap files
+      - name: Commit verified result
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/apply-qr-choice-patch.yml .dpc-import/qr-patch-0{0,1,2,3,4,5,6}
-          git add .
+          git add -A
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m 'feat: complete DPC-AIO QR workflow choice [skip ci]'
