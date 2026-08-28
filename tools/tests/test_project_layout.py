@@ -43,7 +43,7 @@ EXPECTED = {
 }
 
 ALLOWED_ROOT_DIRS = {
-    '.github', 'apps', 'docs', 'gradle', 'lab', 'plugins', 'services', 'tools'
+    '.github', '_upstream', 'apps', 'docs', 'gradle', 'lab', 'plugins', 'services', 'tools'
 }
 
 settings = (ROOT / 'settings.gradle.kts').read_text(encoding='utf-8')
