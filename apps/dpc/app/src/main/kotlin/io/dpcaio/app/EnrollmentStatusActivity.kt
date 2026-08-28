@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 class EnrollmentStatusActivity : Activity() {
@@ -18,30 +17,35 @@ class EnrollmentStatusActivity : Activity() {
     }
 
     private fun render() {
-        val session = EnrollmentSessionStore(this).read()
         val snapshot = EnrollmentDiagnosticsSnapshot.capture(this)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPaddingDp(28, 28, 28, 28)
         }
         body.addView(TextView(this).apply {
-            text = if (session == null) {
-                "No enrollment session"
-            } else buildString {
-                appendLine("Session: ${session.sessionId.take(8)}…")
-                appendLine("Source: ${session.source}")
-                appendLine("Stage: ${session.stage}")
-                appendLine("Mode: ${session.requestedMode}")
-                appendLine("Policy: ${session.policyProfile}")
-                appendLine("Server: ${session.serverUri ?: "local-only"}")
-                appendLine("Token fingerprint: ${session.tokenFingerprint ?: "none"}")
-                appendLine("Retries: ${session.retryCount} / 4")
-                appendLine("Last error: ${session.lastError ?: "none"}")
+            text = buildString {
+                appendLine("Session state: ${snapshot.sessionState}")
+                appendLine("Management state: ${snapshot.managementState}")
+                appendLine("DPC version: ${snapshot.dpcVersion}")
+                appendLine("Provisioning handlers: ${if (snapshot.platformProvisioningHandlersReady) "READY" else "BLOCKED"}")
+                appendLine("  GET_PROVISIONING_MODE: ${snapshot.getProvisioningModeHandlerReady}")
+                appendLine("  ADMIN_POLICY_COMPLIANCE: ${snapshot.policyComplianceHandlerReady}")
+                snapshot.sessionId?.let { appendLine("Session: ${it.take(8)}…") }
+                snapshot.source?.let { appendLine("Source: $it") }
+                snapshot.stage?.let { appendLine("Stage: $it") }
+                snapshot.requestedMode?.let { appendLine("Mode: $it") }
+                snapshot.policyProfile?.let { appendLine("Policy: $it") }
+                appendLine("Server: ${snapshot.serverUri ?: "local-only / not set"}")
+                appendLine("Token fingerprint: ${snapshot.tokenFingerprint ?: "none"}")
+                appendLine("Retries: ${snapshot.retryCount} / 4")
+                appendLine("Last error: ${snapshot.lastError ?: "none"}")
+                snapshot.sessionReadErrorClass?.let { appendLine("Session read error: $it") }
+                appendLine("Recommended action: ${snapshot.recommendedAction}")
             }
         })
         body.addView(Button(this).apply {
             text = "Retry"
-            isEnabled = session != null
+            isEnabled = snapshot.sessionState == EnrollmentSessionDiagnosticState.READABLE
             setOnClickListener {
                 EnrollmentCoordinator.scheduleResume(this@EnrollmentStatusActivity, "MANUAL_RETRY")
                 render()

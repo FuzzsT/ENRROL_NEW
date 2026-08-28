@@ -256,3 +256,7 @@ python3 tools/tests/test_121_responsive_ui_contract.py
 python3 tools/tests/test_122_workflow_qr_choice_contract.py
 
 python3 tools/tests/test_122_qr_mode_matrix.py
+python3 "$ROOT/tools/tests/test_126_android_parity_runtime_facts_contract.py"
+python3 "$ROOT/tools/tests/test_127_tooling_hygiene_contract.py"
+python3 "$ROOT/tools/tests/test_128_android_runtime_smoke_hardening.py"
+python3 "$ROOT/tools/tests/test_129_qr_stale_alias_cleanup.py"

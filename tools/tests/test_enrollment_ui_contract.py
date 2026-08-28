@@ -10,7 +10,7 @@ assert snapshot.is_file(), 'EnrollmentDiagnosticsSnapshot.kt missing'
 a = activity.read_text('utf-8')
 s = snapshot.read_text('utf-8')
 assert 'EnrollmentStatusActivity' in manifest
-for marker in ['Stage:', 'Source:', 'Retry', 'Export enrollment-diagnostics.json', 'EnrollmentSessionStore']:
+for marker in ['Stage:', 'Source:', 'Retry', 'Export enrollment-diagnostics.json', 'EnrollmentDiagnosticsSnapshot.capture']:
     assert marker in a, f'status UI missing {marker}'
 for marker in ['tokenFingerprint', 'serverUri', 'retryCount', 'lastError', 'toJson']:
     assert marker in s, f'diagnostics snapshot missing {marker}'

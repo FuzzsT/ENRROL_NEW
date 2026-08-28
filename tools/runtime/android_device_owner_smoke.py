@@ -60,12 +60,38 @@ def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
     raw = (m.group(2) or "").strip()
     if not raw:
         raise ValueError("diagnostics broadcast returned no result data")
-    payload: str
-    if raw.startswith('"'):
-        payload = json.loads(raw)
+
+    # ActivityManager output is not stable across platform/tool versions. Some
+    # variants print JSON result-data as a JSON-escaped quoted string, while AOSP
+    # ActivityManagerShellCommand can wrap the raw result string in display quotes
+    # without escaping quotes already present inside it. Normalize optional extras,
+    # then accept both representations before decoding the actual JSON object.
+    candidate = raw
+    if candidate.startswith('"'):
+        extras_marker = '", extras: '
+        if extras_marker in candidate:
+            candidate = candidate.rsplit(extras_marker, 1)[0] + '"'
+        if not candidate.endswith('"'):
+            raise ValueError(f"unterminated quoted broadcast result data: {candidate!r}")
     else:
-        payload = raw
-    data = json.loads(payload)
+        candidate = candidate.split(", extras: ", 1)[0].strip()
+
+    payload: Any
+    try:
+        decoded = json.loads(candidate)
+    except json.JSONDecodeError:
+        # Raw AOSP display form: data="{"status":"VERIFIED",...}"
+        payload = candidate[1:-1] if candidate.startswith('"') and candidate.endswith('"') else candidate
+    else:
+        # Escaped wrapper form: data="{\"status\":\"VERIFIED\",...}"
+        payload = decoded
+
+    if isinstance(payload, dict):
+        data = payload
+    elif isinstance(payload, str):
+        data = json.loads(payload)
+    else:
+        raise ValueError("diagnostics result data is neither JSON object nor JSON string")
     if not isinstance(data, dict):
         raise ValueError("diagnostics payload is not a JSON object")
     return code, data

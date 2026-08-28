@@ -4,7 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 P = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentSessionStore.kt'
 assert P.is_file(), 'EnrollmentSessionStore.kt missing'
 s = P.read_text('utf-8')
-for marker in ['createDeviceProtectedStorageContext', 'tokenFingerprint', 'MessageDigest', 'EnrollmentSession', 'PREFS']:
+for marker in ['createDeviceProtectedStorageContext', 'tokenFingerprint', 'MessageDigest', 'EnrollmentSession', 'PREFS', 'EnrollmentSessionReadResult', 'fun readResult()', 'data object Absent', 'data class Present', 'data class Corrupt']:
     assert marker in s, f'missing {marker}'
 for forbidden in ['putString("enrollmentToken"', 'putString(KEY_ENROLLMENT_TOKEN', 'KEY_PASSWORD', 'putString("password"']:
     assert forbidden not in s, f'plaintext secret persistence forbidden: {forbidden}'
