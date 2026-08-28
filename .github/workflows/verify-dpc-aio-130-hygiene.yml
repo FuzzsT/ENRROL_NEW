@@ -12,6 +12,7 @@ on:
       - tools/bundle-tool
       - tools/release/publish_to_github.sh
       - tools/tests/test_127_tooling_hygiene_contract.py
+      - tools/tests/test_128_android_runtime_smoke_hardening.py
 
 permissions:
   contents: read
@@ -88,6 +89,7 @@ jobs:
           set -euo pipefail
           python3 tools/tests/test_126_android_parity_runtime_facts_contract.py
           python3 tools/tests/test_127_tooling_hygiene_contract.py
+          python3 tools/tests/test_128_android_runtime_smoke_hardening.py
           python3 tools/tests/test_101_offline_bundle_cli.py
           python3 tools/tests/test_github_publish_kit_contract.py
           python3 tools/tests/test_122_workflow_qr_choice_contract.py
