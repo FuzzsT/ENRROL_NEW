@@ -27,8 +27,8 @@ android {
         applicationId = "io.dpcaio.app"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 26
-        versionName = "1.2.0"
+        versionCode = 27
+        versionName = "1.3.0"
         buildConfigField("String", "ENROLLMENT_SIGNING_PUBLIC_KEY", buildConfigString(enrollmentSigningPublicKey.get()))
         buildConfigField("String", "OFFLINE_SIGNING_PUBLIC_KEY", buildConfigString(offlineSigningPublicKey.get()))
     }
@@ -203,30 +203,6 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 if (configuredMode !in setOf("auto", "work-profile", "fully-managed")) {
                     throw GradleException("Unsupported DPC_AIO_PROVISIONING_MODE: $configuredMode")
                 }
-                val qrType = provisioningQrType.get().trim()
-                val selectedQrModes: Set<String> = when (qrType) {
-                    "both" -> linkedSetOf("work-profile", "fully-managed")
-                    "work-profile" -> linkedSetOf("work-profile")
-                    "fully-managed" -> linkedSetOf("fully-managed")
-                    else -> throw GradleException("Unsupported DPC_AIO_QR_TYPE: $qrType")
-                }
-
-                if ("work-profile" !in selectedQrModes) {
-                    listOf(
-                        "work-profile-provisioning.json",
-                        "work-profile-provisioning-payload.txt",
-                        "work-profile-provisioning-metadata.json",
-                        "work-profile-qr.png",
-                    ).forEach { outDir.resolve(it).delete() }
-                }
-                if ("fully-managed" !in selectedQrModes) {
-                    listOf(
-                        "device-owner-provisioning.json",
-                        "device-owner-provisioning-payload.txt",
-                        "device-owner-provisioning-metadata.json",
-                        "device-owner-qr.png",
-                    ).forEach { outDir.resolve(it).delete() }
-                }
 
                 fun generate(mode: String, targetDir: java.io.File) {
                     targetDir.mkdirs()
@@ -297,12 +273,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     }
                 }
 
-                val compatibilityMode = when (qrType) {
-                    "work-profile" -> "work-profile"
-                    "fully-managed" -> "fully-managed"
-                    else -> configuredMode
-                }
-                generate(compatibilityMode, outDir)
+                generate(configuredMode, outDir)
 
                 fun publishExplicitMode(
                     mode: String,
@@ -310,7 +281,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     modeQrName: String,
                     tempName: String,
                 ) {
-                    val sourceDir = if (compatibilityMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
+                    val sourceDir = if (configuredMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
                     mapOf(
                         "provisioning.json" to "$prefix-provisioning.json",
                         "provisioning-payload.txt" to "$prefix-provisioning-payload.txt",
@@ -326,30 +297,18 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     if (sourceDir != outDir) sourceDir.deleteRecursively()
                 }
 
-                if ("work-profile" in selectedQrModes) {
-                    publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
-                }
-                if ("fully-managed" in selectedQrModes) {
-                    publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
-                }
+                publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
+                publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
 
                 val qr = outDir.resolve("provisioning-qr.png")
-                if (!qr.isFile) {
-                    throw GradleException("Provisioning generator did not create compatibility provisioning-qr.png")
-                }
-                if ("work-profile" in selectedQrModes && !outDir.resolve("work-profile-qr.png").isFile) {
-                    throw GradleException("Requested work-profile QR was not generated")
-                }
-                if ("fully-managed" in selectedQrModes && !outDir.resolve("device-owner-qr.png").isFile) {
-                    throw GradleException("Requested fully-managed QR was not generated")
-                }
+                val workProfileQr = outDir.resolve("work-profile-qr.png")
+                val deviceOwnerQr = outDir.resolve("device-owner-qr.png")
+                if (!qr.isFile) throw GradleException("Provisioning generator did not create $qr")
+                if (!workProfileQr.isFile) throw GradleException("Provisioning generator did not create $workProfileQr")
+                if (!deviceOwnerQr.isFile) throw GradleException("Provisioning generator did not create $deviceOwnerQr")
                 logger.lifecycle("Provisioning QR: ${qr.absolutePath}")
-                if ("work-profile" in selectedQrModes) {
-                    logger.lifecycle("Work-profile QR: ${outDir.resolve("work-profile-qr.png").absolutePath}")
-                }
-                if ("fully-managed" in selectedQrModes) {
-                    logger.lifecycle("Device-owner QR: ${outDir.resolve("device-owner-qr.png").absolutePath}")
-                }
+                logger.lifecycle("Work-profile QR: ${workProfileQr.absolutePath}")
+                logger.lifecycle("Device-owner QR: ${deviceOwnerQr.absolutePath}")
             }
         }
         tasks.matching { it.name == "assemble$variant" }.configureEach {
