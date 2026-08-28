@@ -1,0 +1,94 @@
+/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
++          fi
++          if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "fully-managed" ]]; then
++            check dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
++          fi
+           [[ "$status" == 0 ]] || { echo QR_VALIDATION_FAILED >&2; exit 1; }
+ 
+       - name: Cleanup release signing material before runtime
+@@ -423,7 +462,7 @@
+         shell: bash
+         run: |
+           set -euo pipefail
+-          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME"
++          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME" --qr-type "$DPC_AIO_QR_TYPE"
+           test -f "dist/$DPC_AIO_QR_BUNDLE_NAME"
+           test -f "dist/$DPC_AIO_QR_BUNDLE_NAME.sha256"
+           test -f dist/QR-README.md
+@@ -493,7 +532,7 @@
+           else
+             signing_note="This run used the stable repository signing key and is update-compatible with other builds signed by that key."
+           fi
+-          notes="DPC-AIO $DPC_AIO_APP_VERSION rolling release from commit $GITHUB_SHA. Includes enterprise APK, Work Profile QR, Device Owner QR, validation reports and $DPC_AIO_QR_BUNDLE_NAME. Signing mode: ${{ needs.build.outputs.signing_mode }}. $signing_note"
++          notes="DPC-AIO $DPC_AIO_APP_VERSION rolling release from commit $GITHUB_SHA. Includes enterprise APK, selected QR type $DPC_AIO_QR_TYPE, validation reports and $DPC_AIO_QR_BUNDLE_NAME. Signing mode: ${{ needs.build.outputs.signing_mode }}. $signing_note"
+           rm -f dist/gradle-build.log
+           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes" --prerelease
+@@ -531,7 +570,7 @@
+         run: |
+           set -euo pipefail
+           tag="$GITHUB_REF_NAME"
+-          notes="DPC-AIO $DPC_AIO_APP_VERSION verified release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus $DPC_AIO_QR_BUNDLE_NAME."
++          notes="DPC-AIO $DPC_AIO_APP_VERSION verified release from commit $GITHUB_SHA. Includes selected QR type $DPC_AIO_QR_TYPE and compatibility QR assets plus $DPC_AIO_QR_BUNDLE_NAME."
+           rm -f dist/gradle-build.log
+           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+             echo "Release $tag already exists; updating notes and uploading verified assets with --clobber."
+--- a/.github/workflows/build-emergency-enrollment.yml
++++ b/.github/workflows/build-emergency-enrollment.yml
+@@ -2,7 +2,16 @@
+ 
+ on:
+   workflow_dispatch:
+-
++    inputs:
++      qr_type:
++        description: "Typ QR provisioning"
++        required: true
++        default: "both"
++        type: choice
++        options:
++          - both
++          - work-profile
++          - fully-managed
+ 
+ permissions:
+   contents: read
+@@ -40,6 +49,23 @@
+       - name: Checkout
+         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+ 
++      - name: Resolve QR selection
++        shell: bash
++        env:
++          DISPATCH_QR_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.qr_type || '' }}
++        run: |
++          set -euo pipefail
++          qr_type="${DISPATCH_QR_TYPE:-both}"
++          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
++            qr_type="both"
++          fi
++          case "$qr_type" in
++            both|work-profile|fully-managed) ;;
++            *) echo "Unsupported qr_type: $qr_type" >&2; exit 2 ;;
++          esac
++          echo "DPC_AIO_QR_TYPE=$qr_type" >> "$GITHUB_ENV"
++          echo "QR selection: $qr_type"
++
+       - name: Resolve project release metadata
+         id: metadata
+         shell: bash
+@@ -334,18 +360,20 @@
+           fi
+ 
+           cp "$apk" dist/$DPC_AIO_RELEASE_APK_NAME
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning.json dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-qr.png dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning.json dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-payload.txt dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-metadata.json dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-qr.png dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning.json dist/
+-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
+-         

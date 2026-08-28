@@ -1,0 +1,82 @@
+bundle, and verifies the public APK bytes after release.
+-- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. It requires no manual configuration inputs, resolves safe defaults automatically, and creates a run-specific PKCS12 signer, builds `enterpriseRelease`, generates Work Profile + Device Owner QR codes bound to that exact APK, publishes them to the `dpc-aio-emergency-enrollment` prerelease, and verifies the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
++- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. Manual runs expose only the `qr_type` dropdown, create a run-specific PKCS12 signer, build `enterpriseRelease`, generate the selected Work Profile and/or Device Owner QR code bound to that exact APK, publish it to the `dpc-aio-emergency-enrollment` prerelease, and verify the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
+ 
+ For a **Device Owner** QR, use a clean/factory-reset test device and scan `device-owner-qr.png` during Android Setup. For a **Work Profile**, use `work-profile-qr.png` in a supported managed-profile provisioning flow. Do not treat QR generation alone as runtime proof; use the CI validation JSON and Device Owner smoke evidence attached to the run/release.
+ 
++Manual **Build AIO + enrollment QR** runs show `QR type: both | work-profile | fully-managed` plus one free-text field, the password-backed release password (minimum 12 characters). Tag/push releases default deterministically to `both`. Emergency manual runs show the same QR type dropdown and no signing-password field.
++
+ ## Repository layout
+ 
+ - `apps/dpc/app/` — final Android application module (`:app-dpc`).
+--- a/RELEASE-VERIFICATION.json
++++ b/RELEASE-VERIFICATION.json
+@@ -13,7 +13,8 @@
+     "PROTECTED_OPERATION_VERIFIED": "PARTIAL",
+     "DEVICE_OWNER_VERIFIED": "NOT_RUN",
+     "WORK_PROFILE_VERIFIED": "NOT_RUN",
+-    "QR_RELEASE_BUNDLE_VERIFIED": "NOT_RUN"
++    "QR_RELEASE_BUNDLE_VERIFIED": "NOT_RUN",
++    "QR_WORKFLOW_CHOICE_VERIFIED": "NOT_RUN"
+   },
+   "sourceEvidence": {
+     "kotlinMains": {
+--- a/tools/tests/test_122_workflow_qr_choice_contract.py
++++ b/tools/tests/test_122_workflow_qr_choice_contract.py
+@@ -8,13 +8,13 @@
+ 
+ for token in [
+     "qr_type:",
+-    "type: choice",
++    'type: choice',
+     'default: "both"',
+-    "- both",
+-    "- work-profile",
+-    "- fully-managed",
+-    "DPC_AIO_QR_TYPE",
+-    "release_signing_password:",
++    '- both',
++    '- work-profile',
++    '- fully-managed',
++    'DPC_AIO_QR_TYPE',
++    'release_signing_password:',
+ ]:
+     assert token in main, token
+ 
+@@ -31,11 +31,10 @@
+ ]:
+     assert token in gradle, token
+ 
+-# Selection must control generation and validation, not only naming.
+-assert "selectedQrModes" in gradle
+-assert "DPC_AIO_QR_TYPE" in main
+-assert "DPC_AIO_QR_TYPE" in emergency
+-assert "work-profile-validation.json" in main
+-assert "device-owner-validation.json" in main
++assert 'selectedQrModes' in gradle
++assert 'DPC_AIO_QR_TYPE' in main
++assert 'DPC_AIO_QR_TYPE' in emergency
++assert 'work-profile-validation.json' in main
++assert 'device-owner-validation.json' in main
+ 
+ print("PASS: workflow QR choice contract")
+--- /dev/null
++++ b/tools/tests/test_122_qr_mode_matrix.py
+@@ -0,0 +1,17 @@
++#!/usr/bin/env python3
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++gradle = (ROOT / "apps/dpc/app/build.gradle.kts").read_text("utf-8")
++main = (ROOT / ".github/workflows/build-aio-enrollment.yml").read_text("utf-8")
++bundle = (ROOT / "tools/release/build_qr_release_bundle.py").read_text("utf-8")
++
++for mode in ("both", "work-profile", "fully-managed"):
++    assert mode in gradle
++    assert mode in main
++    assert mode in bundle
++assert 'selectedQrModes' in gradle
++assert '--expected-mode work-profile' in main
++assert '--expected-mode fully-managed' in main
++assert '"qrType"' in bundle
++print("PASS: three-mode QR selection matrix")
