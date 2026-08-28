@@ -43,7 +43,7 @@ class TestDpcParityDetailActivity : Activity() {
             ComponentName(this, AioDeviceAdminReceiver::class.java),
         ).read()
         val availability = TestDpcCapabilityResolver.resolve(entry, facts)
-        val router = TestDpcParityActionRouter()
+        val router = TestDpcParityActionRouter(this)
         val inputViews = linkedMapOf<String, EditText>()
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
