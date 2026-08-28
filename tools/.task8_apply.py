@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import re
+
+catalog_path = Path("apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt")
+text = catalog_path.read_text("utf-8")
+
+specs = {
+    "network_stats": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 23, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, unavailableReason = "Direct TestDPC NetworkStats execution is not exposed by the current DPC-AIO public-API surface.", replacementGuidance = "Use Enterprise Operations network logging and platform diagnostics for managed-network observability."',
+    "set_always_on_vpn": 'state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "network.always_on_vpn", minSdk = 24, inputs = listOf(ParityInputField(key = "package_name", label = "VPN package", type = ParityInputType.PACKAGE_NAME), ParityInputField(key = "lockdown", label = "Lockdown", type = ParityInputType.BOOLEAN))',
+    "set_get_preferential_network_service_status": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.preferential", minSdk = 31, owner = OwnerRequirement.PROFILE_OWNER, inputs = listOf(ParityInputField(key = "enabled", label = "Enabled", type = ParityInputType.BOOLEAN))',
+    "enterprise_slice": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 31, owner = OwnerRequirement.PROFILE_OWNER, unavailableReason = "Enterprise slice is represented by Android preferential-network service policy rather than a separate mutable slice API.", replacementGuidance = "Use Preferential Network Service Status; API 33+ also supports typed PreferentialNetworkServiceConfig lists."',
+    "set_global_http_proxy": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.set_global_proxy", minSdk = 21, owner = OwnerRequirement.DEVICE_OWNER, inputs = listOf(ParityInputField(key = "host", label = "Proxy host", type = ParityInputType.TEXT), ParityInputField(key = "port", label = "Proxy port", type = ParityInputType.INTEGER), ParityInputField(key = "exclusion_list", label = "Exclusion list (CSV)", type = ParityInputType.CSV, required = false))',
+    "clear_global_http_proxy": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.clear_global_proxy", minSdk = 21, owner = OwnerRequirement.DEVICE_OWNER',
+    "set_private_dns_mode": 'state = TestDpcImplementationState.NATIVE, destination = ParityDestination.NETWORK_CONTROL, minSdk = 29, owner = OwnerRequirement.DEVICE_OWNER',
+    "create_wifi_configuration": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 21, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, unavailableReason = "Legacy mutable WifiConfiguration creation is not reproduced as a direct parity handler.", replacementGuidance = "Use modern Wi-Fi network suggestion/specifier flows or the current admin-supported Wi-Fi policy APIs.", requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "create_eap_tls_wifi_configuration": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 21, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, unavailableReason = "Legacy mutable EAP-TLS WifiConfiguration creation is not reproduced directly.", replacementGuidance = "Use current enterprise Wi-Fi provisioning plus managed certificates and modern Wi-Fi APIs.", requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "enable_wifi_config_lockdown": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, handlerId = "network.wifi_lockdown", minSdk = 30, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, replacementGuidance = "Uses DevicePolicyManager.setConfiguredNetworksLockdownState instead of the legacy Settings.Global Wi-Fi lockdown switch.", requiredFeatures = setOf(PlatformFeature.WIFI), inputs = listOf(ParityInputField(key = "lockdown", label = "Lock down admin-configured networks", type = ParityInputType.BOOLEAN))',
+    "modify_wifi_configuration": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 21, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, unavailableReason = "Legacy arbitrary WifiConfiguration mutation is not exposed as a direct parity action.", replacementGuidance = "Use modern Wi-Fi suggestion/specifier flows and dedicated DPM Wi-Fi policy APIs.", requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "modify_owned_wifi_configuration": 'state = TestDpcImplementationState.MODERN_EQUIVALENT, minSdk = 31, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, unavailableReason = "Owned mutable WifiConfiguration editing is represented by current caller-owned/modern Wi-Fi APIs.", replacementGuidance = "Use caller-configured network APIs where supported or modern network suggestions.", requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "remove_not_owned_wifi_configurations": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.wifi_remove_non_caller", minSdk = 31, owner = OwnerRequirement.DEVICE_OWNER, requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "show_wifi_mac_address": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.wifi_mac", minSdk = 24, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, requiredFeatures = setOf(PlatformFeature.WIFI)',
+    "set_wifi_min_security_level": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.wifi_min_security", minSdk = 33, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, requiredFeatures = setOf(PlatformFeature.WIFI), inputs = listOf(ParityInputField(key = "level", label = "Minimum security (OPEN/PERSONAL/ENTERPRISE_EAP/ENTERPRISE_192)", type = ParityInputType.TEXT))',
+    "set_wifi_ssid_restriction": 'state = TestDpcImplementationState.IMPLEMENT_PUBLIC_API, handlerId = "network.wifi_ssid_policy", minSdk = 33, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, requiredFeatures = setOf(PlatformFeature.WIFI), inputs = listOf(ParityInputField(key = "policy_type", label = "Policy type (ALLOWLIST/DENYLIST)", type = ParityInputType.TEXT), ParityInputField(key = "ssids", label = "SSIDs (CSV)", type = ParityInputType.CSV))',
+}
+
+pattern = re.compile(r'^(\s*)entry\(testDpcKey = "([^"]+)", googleTitle = "([^"]+)", category = "([^"]+)",.*\),\s*$')
+out = []
+seen = set()
+for line in text.splitlines():
+    match = pattern.match(line)
+    if match and match.group(2) in specs:
+        key = match.group(2)
+        seen.add(key)
+        out.append(
+            f'{match.group(1)}entry(testDpcKey = "{key}", googleTitle = "{match.group(3)}", '
+            f'category = "{match.group(4)}", {specs[key]}),'
+        )
+    else:
+        out.append(line)
+missing = set(specs) - seen
+if missing:
+    raise SystemExit(f"Missing catalog entries: {sorted(missing)}")
+catalog_path.write_text("\n".join(out) + "\n", "utf-8")
+
+router_path = Path("apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt")
+router = router_path.read_text("utf-8")
+import_anchor = "import io.dpcaio.policy.android.parity.AndroidAppParityGateway\n"
+if "AndroidNetworkParityGateway" not in router:
+    router = router.replace(import_anchor, import_anchor + "import io.dpcaio.policy.android.parity.AndroidNetworkParityGateway\n")
+property_anchor = "    private val appParityGateway = AndroidAppParityGateway(appContext, admin)\n"
+if "networkParityGateway = " not in router:
+    router = router.replace(property_anchor, property_anchor + "    private val networkParityGateway = AndroidNetworkParityGateway(appContext, admin)\n")
+handler_anchor = '        "app.block_uninstall_list" to ParityActionHandler(::setUninstallBlockedList),\n'
+handler_lines = [
+    '        "network.preferential" to ParityActionHandler(::setPreferentialNetworkService),',
+    '        "network.set_global_proxy" to ParityActionHandler(::setGlobalProxy),',
+    '        "network.clear_global_proxy" to ParityActionHandler(::clearGlobalProxy),',
+    '        "network.wifi_lockdown" to ParityActionHandler(::setWifiLockdown),',
+    '        "network.wifi_remove_non_caller" to ParityActionHandler(::removeNonCallerWifiNetworks),',
+    '        "network.wifi_mac" to ParityActionHandler(::getWifiMac),',
+    '        "network.wifi_min_security" to ParityActionHandler(::setWifiMinimumSecurity),',
+    '        "network.wifi_ssid_policy" to ParityActionHandler(::setWifiSsidPolicy),',
+]
+if '"network.preferential"' not in router:
+    router = router.replace(handler_anchor, handler_anchor + "\n".join(handler_lines) + "\n")
+
+method_anchor = "    private fun parseBoolean(raw: String?): Boolean? = when (raw?.trim()?.lowercase()) {"
+method_lines = [
+    "    private fun setPreferentialNetworkService(request: ParityActionRequest): PolicyResult<String> {",
+    '        val enabled = parseBoolean(request.values["enabled"])',
+    '            ?: return invalidInput("enabled", "expected true/false")',
+    "        return networkParityGateway.setPreferentialNetworkServiceEnabled(enabled).asText { observed ->",
+    '            "enabled=${observed == true}"',
+    "        }",
+    "    }",
+    "",
+    "    private fun setGlobalProxy(request: ParityActionRequest): PolicyResult<String> {",
+    '        val host = requiredValue(request, "host")',
+    '            ?: return invalidInput("host", "proxy host is required")',
+    '        val port = request.values["port"]?.trim()?.toIntOrNull()',
+    '            ?: return invalidInput("port", "integer proxy port is required")',
+    '        val exclusionList = parseCsv(request.values["exclusion_list"])',
+    "        return networkParityGateway.setRecommendedGlobalProxy(host, port, exclusionList).asText {",
+    '            "host=$host,port=$port,exclusions=${exclusionList.size}"',
+    "        }",
+    "    }",
+    "",
+    "    private fun clearGlobalProxy(request: ParityActionRequest): PolicyResult<String> =",
+    '        networkParityGateway.clearRecommendedGlobalProxy().asText { "cleared=true" }',
+    "",
+    "    private fun setWifiLockdown(request: ParityActionRequest): PolicyResult<String> {",
+    '        val lockdown = parseBoolean(request.values["lockdown"])',
+    '            ?: return invalidInput("lockdown", "expected true/false")',
+    "        return networkParityGateway.setConfiguredNetworksLockdownState(lockdown).asText { observed ->",
+    '            "lockdown=${observed == true}"',
+    "        }",
+    "    }",
+    "",
+    "    private fun removeNonCallerWifiNetworks(request: ParityActionRequest): PolicyResult<String> =",
+    "        networkParityGateway.removeNonCallerConfiguredNetworks().asText { removed ->",
+    '            "removedAny=${removed == true}"',
+    "        }",
+    "",
+    "    private fun getWifiMac(request: ParityActionRequest): PolicyResult<String> =",
+    '        networkParityGateway.getWifiMacAddress().asText { mac -> "mac=${mac.orEmpty()}" }',
+    "",
+    "    private fun setWifiMinimumSecurity(request: ParityActionRequest): PolicyResult<String> {",
+    '        val raw = requiredValue(request, "level")',
+    '            ?: return invalidInput("level", "minimum Wi-Fi security level is required")',
+    "        val level = networkParityGateway.parseWifiSecurityLevel(raw)",
+    '            ?: return invalidInput("level", "expected OPEN, PERSONAL, ENTERPRISE_EAP, ENTERPRISE_192, or matching integer")',
+    "        return networkParityGateway.setMinimumRequiredWifiSecurityLevel(level).asText { observed ->",
+    '            "level=${observed ?: -1}"',
+    "        }",
+    "    }",
+    "",
+    "    private fun setWifiSsidPolicy(request: ParityActionRequest): PolicyResult<String> {",
+    '        val rawType = requiredValue(request, "policy_type")',
+    '            ?: return invalidInput("policy_type", "ALLOWLIST or DENYLIST is required")',
+    "        val policyType = networkParityGateway.parseWifiSsidPolicyType(rawType)",
+    '            ?: return invalidInput("policy_type", "expected ALLOWLIST or DENYLIST")',
+    '        val ssids = requiredPackages(request, "ssids")',
+    '            ?: return invalidInput("ssids", "at least one SSID is required")',
+    "        return networkParityGateway.setWifiSsidPolicy(policyType, ssids.toSet())",
+    "    }",
+    "",
+]
+if "private fun setPreferentialNetworkService" not in router:
+    router = router.replace(method_anchor, "\n".join(method_lines) + method_anchor)
+router_path.write_text(router, "utf-8")
+
+gateway_path = Path("apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidNetworkParityGateway.kt")
+gateway = gateway_path.read_text("utf-8")
+anchor = "    fun setMinimumRequiredWifiSecurityLevel(level: Int): PolicyResult<Int> {"
+helper_lines = [
+    "    fun parseWifiSecurityLevel(raw: String): Int? = when (raw.trim().uppercase()) {",
+    '        "OPEN", DevicePolicyManager.WIFI_SECURITY_OPEN.toString() -> DevicePolicyManager.WIFI_SECURITY_OPEN',
+    '        "PERSONAL", DevicePolicyManager.WIFI_SECURITY_PERSONAL.toString() -> DevicePolicyManager.WIFI_SECURITY_PERSONAL',
+    '        "ENTERPRISE_EAP", DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_EAP.toString() -> DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_EAP',
+    '        "ENTERPRISE_192", DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_192.toString() -> DevicePolicyManager.WIFI_SECURITY_ENTERPRISE_192',
+    "        else -> null",
+    "    }",
+    "",
+    "    fun parseWifiSsidPolicyType(raw: String): Int? = when (raw.trim().uppercase()) {",
+    '        "ALLOWLIST", WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_ALLOWLIST.toString() -> WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_ALLOWLIST',
+    '        "DENYLIST", WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_DENYLIST.toString() -> WifiSsidPolicy.WIFI_SSID_POLICY_TYPE_DENYLIST',
+    "        else -> null",
+    "    }",
+    "",
+]
+if "fun parseWifiSecurityLevel" not in gateway:
+    gateway = gateway.replace(anchor, "\n".join(helper_lines) + anchor)
+gateway_path.write_text(gateway, "utf-8")
+
+runner_path = Path("tools/run_host_tests.sh")
+runner = runner_path.read_text("utf-8")
+marker = 'python3 "$ROOT/tools/tests/test_130_app_package_parity_contract.py"\n'
+addition = marker + 'python3 "$ROOT/tools/tests/test_131_network_wifi_parity_contract.py"\n'
+if "test_131_network_wifi_parity_contract.py" not in runner:
+    if marker not in runner:
+        raise SystemExit("test_130 marker missing")
+    runner = runner.replace(marker, addition)
+runner_path.write_text(runner, "utf-8")
