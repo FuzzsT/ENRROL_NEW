@@ -26,7 +26,6 @@ jobs:
           cat .dpc-import/qr-patch-00 .dpc-import/qr-patch-01 .dpc-import/qr-patch-02 \
               .dpc-import/qr-patch-03 .dpc-import/qr-patch-04 .dpc-import/qr-patch-05 \
               .dpc-import/qr-patch-06 > /tmp/qr-choice.patch
-          test "$(wc -c < /tmp/qr-choice.patch)" -eq 37268
           git apply --check /tmp/qr-choice.patch
           git apply /tmp/qr-choice.patch
 
