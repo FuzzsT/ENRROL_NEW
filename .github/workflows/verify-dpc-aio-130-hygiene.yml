@@ -6,6 +6,11 @@ on:
       - fix/dpc-aio-130-hygiene-gates
     paths:
       - .github/workflows/verify-dpc-aio-130-hygiene.yml
+      - apps/dpc/app/build.gradle.kts
+      - tools/run_host_tests.sh
+      - tools/verify-aio
+      - tools/bundle-tool
+      - tools/tests/test_127_tooling_hygiene_contract.py
 
 permissions:
   contents: read
@@ -82,6 +87,7 @@ jobs:
           set -euo pipefail
           python3 tools/tests/test_126_android_parity_runtime_facts_contract.py
           python3 tools/tests/test_127_tooling_hygiene_contract.py
+          python3 tools/tests/test_101_offline_bundle_cli.py
           python3 tools/tests/test_122_workflow_qr_choice_contract.py
           python3 tools/tests/test_122_qr_mode_matrix.py
           python3 tools/tests/test_102_qr_production_readiness_contract.py
