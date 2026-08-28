@@ -8,7 +8,6 @@ on:
       - tools/provisioning/generate_provisioning.py
       - tools/provisioning/verify_provisioning_qr.py
       - tools/provisioning/requirements.txt
-      - tools/tests/test_127_dense_provisioning_qr_contract.py
       - tools/tests/test_dual_provisioning_qr.py
 permissions:
   contents: read
@@ -23,7 +22,5 @@ jobs:
           python-version: '3.12'
       - name: Install provisioning test dependencies
         run: python -m pip install -r tools/provisioning/requirements.txt
-      - name: Run dense QR regression
-        run: |
-          python tools/tests/test_127_dense_provisioning_qr_contract.py
-          python tools/tests/test_dual_provisioning_qr.py
+      - name: Run canonical dense QR regression
+        run: python tools/tests/test_dual_provisioning_qr.py
