@@ -6,8 +6,11 @@ on:
       - fix/dpc-aio-130-hygiene-gates
     paths:
       - .github/workflows/verify-dpc-aio-130-hygiene.yml
+      - .github/workflows/build-aio-enrollment.yml
+      - .github/workflows/build-emergency-enrollment.yml
       - apps/dpc/app/build.gradle.kts
       - tools/run_host_tests.sh
+      - tools/runtime/android_device_owner_smoke.py
       - tools/verify-aio
       - tools/bundle-tool
       - tools/release/publish_to_github.sh
@@ -20,7 +23,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 70
     steps:
       - name: Checkout branch
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -83,7 +86,7 @@ jobs:
           python3 -m pip install --quiet pyyaml
           python3 -m pip install --quiet -r tools/provisioning/requirements.txt
 
-      - name: Verify focused hygiene and QR contracts
+      - name: Verify focused hygiene QR and runtime contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -92,6 +95,7 @@ jobs:
           python3 tools/tests/test_128_android_runtime_smoke_hardening.py
           python3 tools/tests/test_101_offline_bundle_cli.py
           python3 tools/tests/test_github_publish_kit_contract.py
+          python3 tools/tests/test_112_android_runtime_smoke_contract.py
           python3 tools/tests/test_122_workflow_qr_choice_contract.py
           python3 tools/tests/test_122_qr_mode_matrix.py
           python3 tools/tests/test_102_qr_production_readiness_contract.py
@@ -122,3 +126,50 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew :policy-android:compileDebugKotlin :app-dpc:compileEnterpriseReleaseKotlin --console=plain --stacktrace
+
+      - name: Build enterprise debug APK for Device Owner smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app-dpc:assembleEnterpriseDebug --console=plain --stacktrace
+          apk_dir='apps/dpc/app/build/outputs/apk/enterprise/debug'
+          mapfile -t apks < <(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print | sort)
+          [[ ${#apks[@]} -eq 1 ]] || { printf 'Expected exactly one enterprise debug APK, found %d\n' "${#apks[@]}" >&2; exit 1; }
+          echo "DPC_AIO_RUNTIME_TEST_APK=${apks[0]}" >> "$GITHUB_ENV"
+
+      - name: Enable KVM group perms
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AOSP Device Owner runtime smoke
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          script: >-
+            python3 tools/runtime/android_device_owner_smoke.py
+            --apk "$DPC_AIO_RUNTIME_TEST_APK"
+            --out dist/android-runtime-smoke-verifier.json
+            --expected-version "1.3.0"
+
+      - name: Require runtime PASS evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('dist/android-runtime-smoke-verifier.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          assert report.get('state') == 'PASS', report
+          assert report.get('diagnostics', {}).get('deviceOwner') is True, report
+          assert report.get('diagnostics', {}).get('profileOwner') is not True, report
+          print('ANDROID_RUNTIME_SMOKE_VERIFIER: PASS')
+          PY
