@@ -105,8 +105,9 @@ class TestDpcParityDetailActivity : Activity() {
         }
 
         val resultView = TextView(this).apply { setPaddingDp(0, 12, 0, 4) }
-        if (entry.handlerId != null) {
-            if (availability is ParityAvailability.Available && router.isRegistered(entry.handlerId)) {
+        val handlerId = entry.handlerId
+        if (handlerId != null) {
+            if (availability is ParityAvailability.Available && router.isRegistered(handlerId)) {
                 body.addView(Button(this).apply {
                     text = "Execute"
                     isAllCaps = false
