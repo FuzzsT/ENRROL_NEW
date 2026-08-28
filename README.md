@@ -26,9 +26,11 @@ Repository target: `local-localhost-app-system/dpc_android`.
 Two CI enrollment paths are intentionally separate:
 
 - **Build AIO + enrollment QR** (`.github/workflows/build-aio-enrollment.yml`) — production path. Requires a stable signing keystore/fingerprint in GitHub Secrets/Variables, runs the Android Device Owner smoke test, publishes the exact APK + QR bundle, and verifies the public APK bytes after release.
-- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. It requires no manual configuration inputs, resolves safe defaults automatically, and creates a run-specific PKCS12 signer, builds `enterpriseRelease`, generates Work Profile + Device Owner QR codes bound to that exact APK, publishes them to the `dpc-aio-emergency-enrollment` prerelease, and verifies the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
+- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. Manual runs expose only the `qr_type` dropdown, create a run-specific PKCS12 signer, build `enterpriseRelease`, generate the selected Work Profile and/or Device Owner QR code bound to that exact APK, publish it to the `dpc-aio-emergency-enrollment` prerelease, and verify the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
 
 For a **Device Owner** QR, use a clean/factory-reset test device and scan `device-owner-qr.png` during Android Setup. For a **Work Profile**, use `work-profile-qr.png` in a supported managed-profile provisioning flow. Do not treat QR generation alone as runtime proof; use the CI validation JSON and Device Owner smoke evidence attached to the run/release.
+
+Manual **Build AIO + enrollment QR** runs show `QR type: both | work-profile | fully-managed` plus one free-text field, the password-backed release password (minimum 12 characters). Tag/push releases default deterministically to `both`. Emergency manual runs show the same QR type dropdown and no signing-password field.
 
 ## Repository layout
 

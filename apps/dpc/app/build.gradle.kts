@@ -203,6 +203,30 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 if (configuredMode !in setOf("auto", "work-profile", "fully-managed")) {
                     throw GradleException("Unsupported DPC_AIO_PROVISIONING_MODE: $configuredMode")
                 }
+                val qrType = provisioningQrType.get().trim()
+                val selectedQrModes: Set<String> = when (qrType) {
+                    "both" -> linkedSetOf("work-profile", "fully-managed")
+                    "work-profile" -> linkedSetOf("work-profile")
+                    "fully-managed" -> linkedSetOf("fully-managed")
+                    else -> throw GradleException("Unsupported DPC_AIO_QR_TYPE: $qrType")
+                }
+
+                if ("work-profile" !in selectedQrModes) {
+                    listOf(
+                        "work-profile-provisioning.json",
+                        "work-profile-provisioning-payload.txt",
+                        "work-profile-provisioning-metadata.json",
+                        "work-profile-qr.png",
+                    ).forEach { outDir.resolve(it).delete() }
+                }
+                if ("fully-managed" !in selectedQrModes) {
+                    listOf(
+                        "device-owner-provisioning.json",
+                        "device-owner-provisioning-payload.txt",
+                        "device-owner-provisioning-metadata.json",
+                        "device-owner-qr.png",
+                    ).forEach { outDir.resolve(it).delete() }
+                }
 
                 fun generate(mode: String, targetDir: java.io.File) {
                     targetDir.mkdirs()
@@ -273,13 +297,6 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     }
                 }
 
-                val qrType = provisioningQrType.get().trim()
-                val selectedQrModes: Set<String> = when (qrType) {
-                    "both" -> linkedSetOf("work-profile", "fully-managed")
-                    "work-profile" -> linkedSetOf("work-profile")
-                    "fully-managed" -> linkedSetOf("fully-managed")
-                    else -> throw GradleException("Unsupported DPC_AIO_QR_TYPE: $qrType")
-                }
                 val compatibilityMode = when (qrType) {
                     "work-profile" -> "work-profile"
                     "fully-managed" -> "fully-managed"
@@ -293,7 +310,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     modeQrName: String,
                     tempName: String,
                 ) {
-                    val sourceDir = if (configuredMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
+                    val sourceDir = if (compatibilityMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
                     mapOf(
                         "provisioning.json" to "$prefix-provisioning.json",
                         "provisioning-payload.txt" to "$prefix-provisioning-payload.txt",
@@ -317,18 +334,22 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 }
 
                 val qr = outDir.resolve("provisioning-qr.png")
-                val workProfileQr = outDir.resolve("work-profile-qr.png")
-                val deviceOwnerQr = outDir.resolve("device-owner-qr.png")
-                if (!qr.isFile) throw GradleException("Provisioning generator did not create $qr")
-                if ("work-profile" in selectedQrModes && !workProfileQr.isFile) {
-                    throw GradleException("Provisioning generator did not create $workProfileQr")
+                if (!qr.isFile) {
+                    throw GradleException("Provisioning generator did not create compatibility provisioning-qr.png")
                 }
-                if ("fully-managed" in selectedQrModes && !deviceOwnerQr.isFile) {
-                    throw GradleException("Provisioning generator did not create $deviceOwnerQr")
+                if ("work-profile" in selectedQrModes && !outDir.resolve("work-profile-qr.png").isFile) {
+                    throw GradleException("Requested work-profile QR was not generated")
+                }
+                if ("fully-managed" in selectedQrModes && !outDir.resolve("device-owner-qr.png").isFile) {
+                    throw GradleException("Requested fully-managed QR was not generated")
                 }
                 logger.lifecycle("Provisioning QR: ${qr.absolutePath}")
-                if ("work-profile" in selectedQrModes) logger.lifecycle("Work-profile QR: ${workProfileQr.absolutePath}")
-                if ("fully-managed" in selectedQrModes) logger.lifecycle("Device-owner QR: ${deviceOwnerQr.absolutePath}")
+                if ("work-profile" in selectedQrModes) {
+                    logger.lifecycle("Work-profile QR: ${outDir.resolve("work-profile-qr.png").absolutePath}")
+                }
+                if ("fully-managed" in selectedQrModes) {
+                    logger.lifecycle("Device-owner QR: ${outDir.resolve("device-owner-qr.png").absolutePath}")
+                }
             }
         }
         tasks.matching { it.name == "assemble$variant" }.configureEach {

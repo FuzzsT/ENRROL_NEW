@@ -36,11 +36,12 @@ for token in [
     'provisioning-validation.json',
     'work-profile-validation.json',
     'device-owner-validation.json',
+    '--qr-type "$DPC_AIO_QR_TYPE"',
 ]:
     if token not in workflow: errors.append(f'workflow missing {token}')
 
 script=read('tools/release/build_qr_release_bundle.py')
-for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
+for token in ['MODE_ASSETS','--qr-type','qrType','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
     if token not in script: errors.append(f'bundle builder missing {token}')
 
 readme=read('README.md')
