@@ -1,0 +1,84 @@
+name: Fix Task 8 feature helper
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-network-wifi-parity
+    paths:
+      - .github/workflows/fix-task8-core-helper.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Patch catalog helper, manifest, and contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          catalog = Path('apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt')
+          text = catalog.read_text()
+          old = 'private fun entry(testDpcKey:String,googleTitle:String,category:String,state:TestDpcImplementationState,handlerId:String?=null,destination:ParityDestination?=null,minSdk:Int=21,owner:OwnerRequirement=OwnerRequirement.NONE,unavailableReason:String?=null,destructive:Boolean=false,replacementGuidance:String?=null,inputs:List<ParityInputField> = emptyList())=TestDpcParityEntry(id="testdpc.$testDpcKey",testDpcKey=testDpcKey,googleTitle=googleTitle,category=category,description=googleTitle,implementationState=state,handlerId=handlerId,destination=destination,minSdk=minSdk,ownerRequirement=owner,unavailableReason=unavailableReason,destructive=destructive,replacementGuidance=replacementGuidance,inputs=inputs)'
+          new = 'private fun entry(testDpcKey:String,googleTitle:String,category:String,state:TestDpcImplementationState,handlerId:String?=null,destination:ParityDestination?=null,minSdk:Int=21,owner:OwnerRequirement=OwnerRequirement.NONE,unavailableReason:String?=null,destructive:Boolean=false,replacementGuidance:String?=null,requiredFeatures:Set<PlatformFeature> = emptySet(),inputs:List<ParityInputField> = emptyList())=TestDpcParityEntry(id="testdpc.$testDpcKey",testDpcKey=testDpcKey,googleTitle=googleTitle,category=category,description=googleTitle,implementationState=state,handlerId=handlerId,destination=destination,minSdk=minSdk,ownerRequirement=owner,requiredFeatures=requiredFeatures,unavailableReason=unavailableReason,destructive=destructive,replacementGuidance=replacementGuidance,inputs=inputs)'
+          if old not in text:
+              raise SystemExit('catalog helper anchor missing')
+          catalog.write_text(text.replace(old, new, 1))
+
+          manifest = Path('apps/dpc/app/src/main/AndroidManifest.xml')
+          m = manifest.read_text()
+          perm = '    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n'
+          if perm not in m:
+              anchor = '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n'
+              if anchor not in m:
+                  raise SystemExit('manifest permission anchor missing')
+              m = m.replace(anchor, anchor + perm, 1)
+          manifest.write_text(m)
+
+          test = Path('tools/tests/test_131_network_wifi_parity_contract.py')
+          t = test.read_text()
+          if 'MANIFEST = ROOT / "apps/dpc/app/src/main/AndroidManifest.xml"' not in t:
+              anchor = 'CATALOG = ROOT / "apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt"\n'
+              t = t.replace(anchor, anchor + 'MANIFEST = ROOT / "apps/dpc/app/src/main/AndroidManifest.xml"\n', 1)
+          if 'requiredFeatures:Set<PlatformFeature>' not in t:
+              anchor = 'catalog = CATALOG.read_text("utf-8")\n'
+              t = t.replace(anchor, anchor + 'manifest = MANIFEST.read_text("utf-8")\n\nassert "requiredFeatures:Set<PlatformFeature>" in catalog, "catalog helper must forward requiredFeatures"\nassert "requiredFeatures=requiredFeatures" in catalog, "catalog helper must populate TestDpcParityEntry.requiredFeatures"\nassert "android.permission.CHANGE_WIFI_STATE" in manifest, "removeNonCallerConfiguredNetworks requires CHANGE_WIFI_STATE"\n', 1)
+          test.write_text(t)
+
+          verifier = Path('.github/workflows/verify-network-wifi-parity-compile.yml')
+          v = verifier.read_text()
+          manifest_path = '      - apps/dpc/app/src/main/AndroidManifest.xml\n'
+          if manifest_path not in v:
+              anchor = '      - apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt\n'
+              v = v.replace(anchor, anchor + manifest_path, 1)
+          verifier.write_text(v)
+          PY
+
+      - name: Verify strengthened Task 8 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_123_testdpc_parity_catalog_169.py
+          python3 tools/tests/test_124_parity_handler_coverage.py
+          python3 tools/tests/test_131_network_wifi_parity_contract.py
+          git diff --check
+
+      - name: Commit fix and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/fix-task8-core-helper.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: forward Wi-Fi feature gates and permission'
+          git push origin HEAD:feat/dpc-aio-130-network-wifi-parity
