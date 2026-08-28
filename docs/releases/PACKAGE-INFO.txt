@@ -1,4 +1,4 @@
-DPC-AIO 1.2.0
+DPC-AIO 1.3.0
 Variant: Enterprise + Samsung OEM AIO
 Production enrollment artifact: DPC-AIO-enterprise-release.apk
 Baseline invariant: DPC-AIO 1.0.2 QR Production Readiness

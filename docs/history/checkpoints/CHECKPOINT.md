@@ -1,8 +1,8 @@
-> Current release target: DPC-AIO 1.2.0 Enterprise + Samsung OEM AIO
+> Current release target: DPC-AIO 1.3.0 Enterprise + Samsung OEM AIO
 
-# DPC-AIO checkpoint 1.2.0
+# DPC-AIO checkpoint 1.3.0
 
-- versionCode 26 / versionName 1.2.0
+- versionCode 27 / versionName 1.3.0
 - 1.0.2 QR Production Readiness retained as a hard prerequisite
 - Protected Targets / Protected Operations Guard shared by permission, component, app and offline mutation paths
 - Enterprise Transaction Engine with revalidation, readback and compare-and-set rollback
