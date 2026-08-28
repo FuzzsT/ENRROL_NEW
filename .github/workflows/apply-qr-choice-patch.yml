@@ -1,0 +1,111 @@
+name: Apply QR choice completion patch
+
+on:
+  push:
+    branches:
+      - fix/dpc-aio-130-qr-choice-complete
+    paths:
+      - .github/workflows/apply-qr-choice-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .dpc-import/qr-patch-00 .dpc-import/qr-patch-01 .dpc-import/qr-patch-02 \
+              .dpc-import/qr-patch-03 .dpc-import/qr-patch-04 .dpc-import/qr-patch-05 \
+              .dpc-import/qr-patch-06 > /tmp/qr-choice.patch
+          test "$(wc -c < /tmp/qr-choice.patch)" -eq 37268
+          git apply --check /tmp/qr-choice.patch
+          git apply /tmp/qr-choice.patch
+
+      - name: Verify QR choice contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pyyaml
+          python3 tools/tests/test_122_workflow_qr_choice_contract.py
+          python3 tools/tests/test_114_qr_release_bundle_contract.py
+          python3 tools/tests/test_115_app_pin_and_provisioning_modes_contract.py
+          python3 tools/tests/test_122_qr_mode_matrix.py
+          python3 tools/tests/test_102_qr_production_readiness_contract.py
+          python3 tools/tests/test_provisioning_build_integration.py
+          python3 tools/tests/test_113_github_upload_ready_contract.py
+          python3 tools/tests/test_release_secret_scan.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          bash -n tools/run_host_tests.sh
+          python3 - <<'PY'
+          import yaml
+          for path in (
+              '.github/workflows/build-aio-enrollment.yml',
+              '.github/workflows/build-emergency-enrollment.yml',
+          ):
+              with open(path, encoding='utf-8') as stream:
+                  yaml.safe_load(stream)
+          print('PASS: workflow YAML parses')
+          PY
+
+      - name: Verify release bundle selection matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          make_common() {
+            local d="$1"; mkdir -p "$d"
+            for f in DPC-AIO-enterprise-release.apk provisioning-qr.png provisioning.json provisioning-payload.txt provisioning-metadata.json android-runtime-smoke.json build-environment.json; do
+              printf x > "$d/$f"
+            done
+            printf '{"ok":true}\n' > "$d/provisioning-validation.json"
+          }
+          make_mode() {
+            local d="$1" mode="$2"
+            if [[ "$mode" == work-profile ]]; then
+              for f in work-profile-provisioning.json work-profile-provisioning-payload.txt work-profile-provisioning-metadata.json work-profile-qr.png; do printf x > "$d/$f"; done
+              printf '{"ok":true}\n' > "$d/work-profile-validation.json"
+            else
+              for f in device-owner-provisioning.json device-owner-provisioning-payload.txt device-owner-provisioning-metadata.json device-owner-qr.png; do printf x > "$d/$f"; done
+              printf '{"ok":true}\n' > "$d/device-owner-validation.json"
+            fi
+          }
+          for mode in work-profile fully-managed both; do
+            d="$tmp/$mode"; make_common "$d"
+            [[ "$mode" == fully-managed ]] || make_mode "$d" work-profile
+            [[ "$mode" == work-profile ]] || make_mode "$d" fully-managed
+            python3 tools/release/build_qr_release_bundle.py \
+              --dist "$d" --version 1.2.0 \
+              --apk-url https://example.invalid/DPC-AIO-enterprise-release.apk \
+              --apk-name DPC-AIO-enterprise-release.apk --qr-type "$mode" >/dev/null
+            python3 - "$d/RELEASE-INDEX.json" "$mode" <<'PY'
+          import json, sys
+          path, mode = sys.argv[1:]
+          data = json.load(open(path, encoding='utf-8'))
+          assert data['qrType'] == mode
+          ids = {entry['id'] for entry in data['qr']}
+          assert 'compatibility' in ids
+          assert ('work-profile' in ids) == (mode in ('work-profile', 'both'))
+          assert ('device-owner' in ids) == (mode in ('fully-managed', 'both'))
+          PY
+          done
+
+      - name: Commit verified result and remove bootstrap files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/apply-qr-choice-patch.yml .dpc-import/qr-patch-0{0,1,2,3,4,5,6}
+          git add .
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'feat: complete DPC-AIO QR workflow choice [skip ci]'
+          git push origin HEAD:"$GITHUB_REF_NAME"
