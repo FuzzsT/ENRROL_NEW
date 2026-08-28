@@ -1,0 +1,44 @@
+name: Verify final DPC 1.3.0 topology
+
+on:
+  push:
+    branches:
+      - fix/dpc-aio-130-hygiene-gates
+    paths:
+      - .github/workflows/verify-final-dpc-130-topology.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-final-dpc-130-topology.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Remove validation-only workflow from working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/verify-final-dpc-130-topology.yml
+          test "$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | wc -l)" -eq 2
+
+      - name: Run final topology and diagnostics gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_113_github_upload_ready_contract.py
+          python3 tools/tests/test_130_management_enrollment_diagnostics_contract.py
+          python3 tools/tests/test_enrollment_session_store_contract.py
+          python3 tools/tests/test_enrollment_ui_contract.py
+          python3 tools/tests/test_diagnostics_contract.py
+          python3 tools/tests/test_release_secret_scan.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          git diff --check
