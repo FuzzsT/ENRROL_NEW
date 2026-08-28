@@ -9,8 +9,10 @@ dashboard = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActi
 pin_manager = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcPinManager.kt').read_text(encoding='utf-8')
 pin_settings = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcPinSettingsActivity.kt').read_text(encoding='utf-8')
 
-# Explicit Android Enterprise modes are always generated and independently validated.
+# Explicit Android Enterprise modes are selected by DPC_AIO_QR_TYPE; both remains the default compatibility behavior.
 for token in [
+    'providers.environmentVariable("DPC_AIO_QR_TYPE")',
+    '"both" -> linkedSetOf("work-profile", "fully-managed")',
     'publishExplicitMode("work-profile"',
     'publishExplicitMode("fully-managed"',
     'work-profile-qr.png',
@@ -38,4 +40,4 @@ assert 'DpcPinManager' not in (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/ap
 assert 'DpcPinManager' not in (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PolicyComplianceActivity.kt').read_text(encoding='utf-8')
 assert 'Set PIN' in pin_settings and 'Disable PIN' in pin_settings and 'Remove PIN' in pin_settings
 
-print('PASS: explicit work-profile + fully-managed QR generation and app PIN UI contract')
+print('PASS: selectable work-profile + fully-managed QR generation and app PIN UI contract')

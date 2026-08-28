@@ -249,3 +249,7 @@ python3 "$ROOT/tools/tests/test_119_dashboard_menu_contract.py"
 python3 "$ROOT/tools/tests/test_120_device_lifecycle_expanded_controls.py"
 
 python3 tools/tests/test_121_responsive_ui_contract.py
+
+python3 tools/tests/test_122_workflow_qr_choice_contract.py
+
+python3 tools/tests/test_122_qr_mode_matrix.py

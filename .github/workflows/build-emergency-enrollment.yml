@@ -2,7 +2,16 @@ name: Emergency enrollment (ephemeral signing)
 
 on:
   workflow_dispatch:
-
+    inputs:
+      qr_type:
+        description: "Typ QR provisioning"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - work-profile
+          - fully-managed
 
 permissions:
   contents: read
@@ -39,6 +48,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Resolve QR selection
+        shell: bash
+        env:
+          DISPATCH_QR_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.qr_type || '' }}
+        run: |
+          set -euo pipefail
+          qr_type="${DISPATCH_QR_TYPE:-both}"
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            qr_type="both"
+          fi
+          case "$qr_type" in
+            both|work-profile|fully-managed) ;;
+            *) echo "Unsupported qr_type: $qr_type" >&2; exit 2 ;;
+          esac
+          echo "DPC_AIO_QR_TYPE=$qr_type" >> "$GITHUB_ENV"
+          echo "QR selection: $qr_type"
 
       - name: Resolve project release metadata
         id: metadata
@@ -334,18 +360,20 @@ jobs:
           fi
 
           cp "$apk" dist/$DPC_AIO_RELEASE_APK_NAME
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-payload.txt dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-metadata.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/provisioning-qr.png dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-payload.txt dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-provisioning-metadata.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/work-profile-qr.png dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-payload.txt dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-provisioning-metadata.json dist/
-          cp apps/dpc/app/build/outputs/provisioning/enterprise/release/device-owner-qr.png dist/
+          src='apps/dpc/app/build/outputs/provisioning/enterprise/release'
+          cp "$src"/provisioning.json "$src"/provisioning-payload.txt "$src"/provisioning-metadata.json "$src"/provisioning-qr.png dist/
+          case "$DPC_AIO_QR_TYPE" in
+            both|work-profile)
+              cp "$src"/work-profile-provisioning.json "$src"/work-profile-provisioning-payload.txt \
+                 "$src"/work-profile-provisioning-metadata.json "$src"/work-profile-qr.png dist/
+              ;;
+          esac
+          case "$DPC_AIO_QR_TYPE" in
+            both|fully-managed)
+              cp "$src"/device-owner-provisioning.json "$src"/device-owner-provisioning-payload.txt \
+                 "$src"/device-owner-provisioning-metadata.json "$src"/device-owner-qr.png dist/
+              ;;
+          esac
           printf '%s\n' "$DPC_AIO_SIGNING_MODE" > dist/signing-mode.txt
           printf '%s\n' "$observed" > dist/signing-cert-sha256.txt
           sha256sum dist/$DPC_AIO_RELEASE_APK_NAME > dist/$DPC_AIO_RELEASE_APK_NAME.sha256
@@ -370,8 +398,12 @@ jobs:
           }
 
           validate_one dist/provisioning-validation.json --json dist/provisioning.json --qr dist/provisioning-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat_mode"
-          validate_one dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
-          validate_one dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
+          if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "work-profile" ]]; then
+            validate_one dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
+          fi
+          if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "fully-managed" ]]; then
+            validate_one dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$verifier_apksigner" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
+          fi
 
           if [[ "$status" != "0" ]]; then
             echo "QR_VALIDATION_FAILED: local QR/APK validation failed; validation reports were preserved for artifact upload." >&2
@@ -408,7 +440,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME"
+          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME" --qr-type "$DPC_AIO_QR_TYPE"
 
       - name: Upload emergency enrollment artifacts
         if: ${{ always() && hashFiles('dist/**') != '' }}
@@ -448,7 +480,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$DPC_AIO_EMERGENCY_RELEASE_TAG"
-          notes="Run-specific emergency DPC-AIO $DPC_AIO_APP_VERSION enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other and include $DPC_AIO_QR_BUNDLE_NAME. The signer is ephemeral, so this build is not update-stable across independent runs."
+          notes="Run-specific emergency DPC-AIO $DPC_AIO_APP_VERSION enrollment build from commit $GITHUB_SHA. APK and selected QR type $DPC_AIO_QR_TYPE are verified against each other and include $DPC_AIO_QR_BUNDLE_NAME. The signer is ephemeral, so this build is not update-stable across independent runs."
           rm -f dist/gradle-build.log
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "DPC-AIO Emergency Enrollment" --notes "$notes" --prerelease

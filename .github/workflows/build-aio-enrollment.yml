@@ -3,6 +3,15 @@ name: Build AIO + enrollment QR
 on:
   workflow_dispatch:
     inputs:
+      qr_type:
+        description: "Typ QR provisioning"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - work-profile
+          - fully-managed
       release_signing_password:
         description: "Jedyne pole do wpisania: hasło do podpisu password-backed release (min. 12 znaków; używaj tego samego przy kolejnych runach)"
         required: true
@@ -55,6 +64,37 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Resolve QR selection
+        shell: bash
+        env:
+          DISPATCH_QR_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.qr_type || '' }}
+        run: |
+          set -euo pipefail
+          qr_type="${DISPATCH_QR_TYPE:-both}"
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            qr_type="both"
+          fi
+          case "$qr_type" in
+            both|work-profile|fully-managed) ;;
+            *) echo "Unsupported qr_type: $qr_type" >&2; exit 2 ;;
+          esac
+          echo "DPC_AIO_QR_TYPE=$qr_type" >> "$GITHUB_ENV"
+          echo "QR selection: $qr_type"
+
+      - name: Mask manual release password
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          RELEASE_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
+        run: |
+          set -euo pipefail
+          if (( ${#RELEASE_SIGNING_PASSWORD} < 12 )); then
+            echo "release_signing_password must contain at least 12 characters" >&2
+            exit 2
+          fi
+          printf '::add-mask::%s\n' "$RELEASE_SIGNING_PASSWORD"
+          printf 'DPC_AIO_MANUAL_SIGNING_PASSWORD=%s\n' "$RELEASE_SIGNING_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Resolve project release metadata
         id: metadata
@@ -228,21 +268,6 @@ jobs:
           echo "Target APK URL (created after local validation): $url"
           echo "Persistent signing keystore source (optional; first run may return 404): $signing_url"
 
-      - name: Load manual signing password
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          password="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
-          import json, sys
-          with open(sys.argv[1], encoding='utf-8') as f:
-              print(json.load(f).get('inputs', {}).get('release_signing_password', ''), end='')
-          PY
-          )"
-          [[ ${#password} -ge 12 ]] || { echo 'RELEASE_SIGNING_PASSWORD_TOO_SHORT: minimum 12 characters' >&2; exit 1; }
-          printf '::add-mask::%s\n' "$password"
-          printf 'DPC_AIO_MANUAL_SIGNING_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
-
       - name: Prepare enterprise release signing
         id: signing
         env:
@@ -358,8 +383,18 @@ jobs:
           test -s "$apk"
           cp "$apk" "dist/$DPC_AIO_RELEASE_APK_NAME"
           cp "$src"/provisioning.json "$src"/provisioning-payload.txt "$src"/provisioning-metadata.json "$src"/provisioning-qr.png dist/
-          cp "$src"/work-profile-provisioning.json "$src"/work-profile-provisioning-payload.txt "$src"/work-profile-provisioning-metadata.json "$src"/work-profile-qr.png dist/
-          cp "$src"/device-owner-provisioning.json "$src"/device-owner-provisioning-payload.txt "$src"/device-owner-provisioning-metadata.json "$src"/device-owner-qr.png dist/
+          case "$DPC_AIO_QR_TYPE" in
+            both|work-profile)
+              cp "$src"/work-profile-provisioning.json "$src"/work-profile-provisioning-payload.txt \
+                 "$src"/work-profile-provisioning-metadata.json "$src"/work-profile-qr.png dist/
+              ;;
+          esac
+          case "$DPC_AIO_QR_TYPE" in
+            both|fully-managed)
+              cp "$src"/device-owner-provisioning.json "$src"/device-owner-provisioning-payload.txt \
+                 "$src"/device-owner-provisioning-metadata.json "$src"/device-owner-qr.png dist/
+              ;;
+          esac
           if [[ -n "${DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH:-}" && -f "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" ]]; then
             cp "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" dist/DPC-AIO-signing-keystore.enc
           fi
@@ -377,8 +412,12 @@ jobs:
             echo "===== $report ====="; cat "$report" || true
           }
           check dist/provisioning-validation.json --json dist/provisioning.json --qr dist/provisioning-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat"
-          check dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
-          check dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
+          if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "work-profile" ]]; then
+            check dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist//work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
+          fi
+          if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "fully-managed" ]]; then
+            check dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
+          fi
           [[ "$status" == 0 ]] || { echo QR_VALIDATION_FAILED >&2; exit 1; }
 
       - name: Cleanup release signing material before runtime
@@ -423,7 +462,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME"
+          python3 tools/release/build_qr_release_bundle.py --dist dist --version "$DPC_AIO_APP_VERSION" --apk-url "$DPC_AIO_PROVISIONING_APK_URL" --apk-name "$DPC_AIO_RELEASE_APK_NAME" --qr-type "$DPC_AIO_QR_TYPE"
           test -f "dist/$DPC_AIO_QR_BUNDLE_NAME"
           test -f "dist/$DPC_AIO_QR_BUNDLE_NAME.sha256"
           test -f dist/QR-README.md
@@ -493,7 +532,7 @@ jobs:
           else
             signing_note="This run used the stable repository signing key and is update-compatible with other builds signed by that key."
           fi
-          notes="DPC-AIO $DPC_AIO_APP_VERSION rolling release from commit $GITHUB_SHA. Includes enterprise APK, Work Profile QR, Device Owner QR, validation reports and $DPC_AIO_QR_BUNDLE_NAME. Signing mode: ${{ needs.build.outputs.signing_mode }}. $signing_note"
+          notes="DPC-AIO $DPC_AIO_APP_VERSION rolling release from commit $GITHUB_SHA. Includes enterprise APK, selected QR type $DPC_AIO_QR_TYPE, validation reports and $DPC_AIO_QR_BUNDLE_NAME. Signing mode: ${{ needs.build.outputs.signing_mode }}. $signing_note"
           rm -f dist/gradle-build.log
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes" --prerelease
@@ -531,7 +570,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          notes="DPC-AIO $DPC_AIO_APP_VERSION verified release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus $DPC_AIO_QR_BUNDLE_NAME."
+          notes="DPC-AIO $DPC_AIO_APP_VERSION verified release from commit $GITHUB_SHA. Includes selected QR type $DPC_AIO_QR_TYPE and compatibility QR assets plus $DPC_AIO_QR_BUNDLE_NAME."
           rm -f dist/gradle-build.log
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists; updating notes and uploading verified assets with --clobber."

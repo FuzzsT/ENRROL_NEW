@@ -8,13 +8,13 @@ gradle = (ROOT / "apps/dpc/app/build.gradle.kts").read_text("utf-8")
 
 for token in [
     "qr_type:",
-    "type: choice",
+    'type: choice',
     'default: "both"',
-    "- both",
-    "- work-profile",
-    "- fully-managed",
-    "DPC_AIO_QR_TYPE",
-    "release_signing_password:",
+    '- both',
+    '- work-profile',
+    '- fully-managed',
+    'DPC_AIO_QR_TYPE',
+    'release_signing_password:',
 ]:
     assert token in main, token
 
@@ -31,11 +31,10 @@ for token in [
 ]:
     assert token in gradle, token
 
-# Selection must control generation and validation, not only naming.
-assert "selectedQrModes" in gradle
-assert "DPC_AIO_QR_TYPE" in main
-assert "DPC_AIO_QR_TYPE" in emergency
-assert "work-profile-validation.json" in main
-assert "device-owner-validation.json" in main
+assert 'selectedQrModes' in gradle
+assert 'DPC_AIO_QR_TYPE' in main
+assert 'DPC_AIO_QR_TYPE' in emergency
+assert 'work-profile-validation.json' in main
+assert 'device-owner-validation.json' in main
 
 print("PASS: workflow QR choice contract")
