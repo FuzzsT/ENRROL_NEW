@@ -14,6 +14,9 @@ data class DpcDiagnosticsSnapshot(
     val manufacturer: String,
     val model: String,
     val dpcVersion: String,
+    val managementState: ManagementDiagnosticState,
+    val ownerPolicyReady: Boolean,
+    val moduleAvailabilitySemantics: String,
     val deviceOwner: Boolean,
     val profileOwner: Boolean,
     val organizationOwnedProfile: Boolean,
@@ -53,6 +56,9 @@ data class DpcDiagnosticsSnapshot(
         put("manufacturer", manufacturer)
         put("model", model)
         put("dpcVersion", dpcVersion)
+        put("managementState", managementState.name)
+        put("ownerPolicyReady", ownerPolicyReady)
+        put("moduleAvailabilitySemantics", moduleAvailabilitySemantics)
         put("deviceOwner", deviceOwner)
         put("profileOwner", profileOwner)
         put("organizationOwnedProfile", organizationOwnedProfile)
@@ -106,11 +112,21 @@ data class DpcDiagnosticsSnapshot(
             val cope = gateway.getCopePolicySnapshot().value
             val offline = OfflineDeploymentStore(context).load()
 
+            val managementState = when {
+                management.ownership == io.dpcaio.core.model.OwnershipMode.DEVICE_OWNER -> ManagementDiagnosticState.DEVICE_OWNER
+                management.ownership == io.dpcaio.core.model.OwnershipMode.PROFILE_OWNER && management.organizationOwnedProfile -> ManagementDiagnosticState.ORGANIZATION_OWNED_PROFILE
+                management.ownership == io.dpcaio.core.model.OwnershipMode.PROFILE_OWNER -> ManagementDiagnosticState.PROFILE_OWNER
+                else -> ManagementDiagnosticState.UNMANAGED
+            }
+
             return DpcDiagnosticsSnapshot(
                 apiLevel = management.apiLevel,
                 manufacturer = Build.MANUFACTURER,
                 model = Build.MODEL,
                 dpcVersion = version,
+                managementState = managementState,
+                ownerPolicyReady = managementState != ManagementDiagnosticState.UNMANAGED,
+                moduleAvailabilitySemantics = "MODULE_SURFACE_EXECUTABLE_NOT_POLICY_ACTION_READINESS",
                 deviceOwner = management.ownership == io.dpcaio.core.model.OwnershipMode.DEVICE_OWNER,
                 profileOwner = management.ownership == io.dpcaio.core.model.OwnershipMode.PROFILE_OWNER,
                 organizationOwnedProfile = management.organizationOwnedProfile,
