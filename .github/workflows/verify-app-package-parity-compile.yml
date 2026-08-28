@@ -6,6 +6,11 @@ on:
       - feat/dpc-aio-130-app-package-parity
     paths:
       - .github/workflows/verify-app-package-parity-compile.yml
+      - apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidAppParityGateway.kt
+      - apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt
+      - apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt
+      - tools/tests/test_130_app_package_parity_contract.py
+      - tools/run_host_tests.sh
 
 permissions:
   contents: write
