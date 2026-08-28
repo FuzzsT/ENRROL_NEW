@@ -12,13 +12,14 @@ def main() -> None:
     required = [
         "class AndroidParityRuntimeFactsProvider",
         "Build.VERSION.SDK_INT",
-        "isDeviceOwnerApp(context.packageName)",
-        "isProfileOwnerApp(context.packageName)",
+        "isDeviceOwnerApp(packageName)",
+        "isProfileOwnerApp(packageName)",
         "PackageManager.FEATURE_WIFI",
         "PackageManager.FEATURE_TELEPHONY",
         "PackageManager.FEATURE_TELEPHONY_EUICC",
         "PackageManager.FEATURE_CAMERA_ANY",
         "PackageManager.FEATURE_NFC",
+        "PackageManager.FEATURE_MANAGED_USERS",
         "getDelegatedScopes",
         "ParityRuntimeFacts(",
         "PlatformFeature.WIFI",
@@ -26,6 +27,7 @@ def main() -> None:
         "PlatformFeature.EUICC",
         "PlatformFeature.CAMERA",
         "PlatformFeature.NFC",
+        "PlatformFeature.MANAGED_USERS",
     ]
     missing = [token for token in required if token not in text]
     if missing:
