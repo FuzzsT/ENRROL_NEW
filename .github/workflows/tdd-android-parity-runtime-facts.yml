@@ -7,6 +7,7 @@ on:
       - .github/workflows/tdd-android-parity-runtime-facts.yml
       - apps/dpc/modules/policy/android/src/main/kotlin/io/dpcaio/policy/android/parity/AndroidParityRuntimeFactsProvider.kt
       - tools/tests/test_126_android_parity_runtime_facts_contract.py
+      - tools/tests/test_project_layout.py
 permissions:
   contents: write
 jobs:
