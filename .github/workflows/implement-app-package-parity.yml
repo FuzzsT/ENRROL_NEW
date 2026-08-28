@@ -1,0 +1,126 @@
+name: Implement Task 7 app package parity
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-app-package-parity
+    paths:
+      - .github/workflows/implement-app-package-parity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Update Task 7 catalog records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt')
+          lines = path.read_text('utf-8').splitlines()
+
+          replacements = {
+              'enable_system_apps_by_package_name': '        entry(testDpcKey = "enable_system_apps_by_package_name", googleTitle = "@string/enable_system_apps_by_package_name", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.enable_system_package", destination = ParityDestination.ACTIVITY_MANAGER, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "System package name", type = ParityInputType.PACKAGE_NAME))),',
+              'enable_system_apps_by_intent': '        entry(testDpcKey = "enable_system_apps_by_intent", googleTitle = "@string/enable_system_apps_by_intent", category = "@string/apps_management_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.enable_system_intent", owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "intent_uri", label = "Intent URI", type = ParityInputType.TEXT))),',
+              'install_existing_packages': '        entry(testDpcKey = "install_existing_packages", googleTitle = "@string/install_existing_packages_title", category = "@string/apps_management_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.install_existing", minSdk = 28, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Existing package name", type = ParityInputType.PACKAGE_NAME))),',
+              'uninstall_package': '        entry(testDpcKey = "uninstall_package", googleTitle = "@string/uninstall_packages_title", category = "@string/apps_management_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.uninstall", minSdk = 23, owner = OwnerRequirement.DEVICE_OWNER, destructive = true, inputs = listOf(ParityInputField(key = "package_name", label = "Package to uninstall", type = ParityInputType.PACKAGE_NAME))),',
+              'hide_apps': '        entry(testDpcKey = "hide_apps", googleTitle = "@string/hide_apps_title", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.hide", destination = ParityDestination.ACTIVITY_MANAGER, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Package to hide", type = ParityInputType.PACKAGE_NAME))),',
+              'hide_apps_parent': '        entry(testDpcKey = "hide_apps_parent", googleTitle = "@string/hide_apps_parent_title", category = "@string/apps_management_title", state = TestDpcImplementationState.MODERN_EQUIVALENT, destination = ParityDestination.WORK_PROFILE_COPE, minSdk = 30, owner = OwnerRequirement.COPE, unavailableReason = "Direct parent-profile package hiding is not exposed as a standalone parity action in DPC-AIO.", replacementGuidance = "Use Work Profile / COPE controls for parent-profile application policy."),',
+              'unhide_apps': '        entry(testDpcKey = "unhide_apps", googleTitle = "@string/unhide_apps_title", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.unhide", destination = ParityDestination.ACTIVITY_MANAGER, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Package to unhide", type = ParityInputType.PACKAGE_NAME))),',
+              'unhide_apps_parent': '        entry(testDpcKey = "unhide_apps_parent", googleTitle = "@string/unhide_apps_parent_title", category = "@string/apps_management_title", state = TestDpcImplementationState.MODERN_EQUIVALENT, destination = ParityDestination.WORK_PROFILE_COPE, minSdk = 30, owner = OwnerRequirement.COPE, unavailableReason = "Direct parent-profile package unhiding is not exposed as a standalone parity action in DPC-AIO.", replacementGuidance = "Use Work Profile / COPE controls for parent-profile application policy."),',
+              'suspend_apps': '        entry(testDpcKey = "suspend_apps", googleTitle = "@string/suspend_apps_title", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.suspend", destination = ParityDestination.ACTIVITY_MANAGER, minSdk = 24, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "packages", label = "Packages (CSV)", type = ParityInputType.CSV))),',
+              'unsuspend_apps': '        entry(testDpcKey = "unsuspend_apps", googleTitle = "@string/unsuspend_apps_title", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.unsuspend", destination = ParityDestination.ACTIVITY_MANAGER, minSdk = 24, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "packages", label = "Packages (CSV)", type = ParityInputType.CSV))),',
+              'clear_app_data': '        entry(testDpcKey = "clear_app_data", googleTitle = "@string/clear_app_data_title", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.clear_data", destination = ParityDestination.ACTIVITY_MANAGER, minSdk = 28, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, destructive = true, inputs = listOf(ParityInputField(key = "package_name", label = "Package to clear", type = ParityInputType.PACKAGE_NAME))),',
+              'keep_uninstalled_packages': '        entry(testDpcKey = "keep_uninstalled_packages", googleTitle = "@string/keep_uninstalled_packages", category = "@string/apps_management_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.keep_uninstalled", minSdk = 28, owner = OwnerRequirement.DEVICE_OWNER, inputs = listOf(ParityInputField(key = "packages", label = "Packages to retain (CSV)", type = ParityInputType.CSV))),',
+              'managed_configurations': '        entry(testDpcKey = "managed_configurations", googleTitle = "@string/managed_configurations", category = "@string/apps_management_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.managed_configurations", destination = ParityDestination.ACTIVITY_MANAGER, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Managed package", type = ParityInputType.PACKAGE_NAME), ParityInputField(key = "restrictions", label = "Restrictions (CSV key=value)", type = ParityInputType.CSV, required = false))),',
+              'disable_metered_data': '        entry(testDpcKey = "disable_metered_data", googleTitle = "@string/metered_data_restriction", category = "@string/apps_management_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.disable_metered_data", minSdk = 28, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "packages", label = "Packages (CSV)", type = ParityInputType.CSV))),',
+              'app_feedback_notifications': '        entry(testDpcKey = "app_feedback_notifications", googleTitle = "@string/app_feedback_notifications", category = "@string/apps_management_title", state = TestDpcImplementationState.DEPRECATED_UNAVAILABLE, minSdk = 24, unavailableReason = "TestDPC app-feedback notification control has no standalone supported DevicePolicyManager parity action in the current DPC-AIO policy surface."),',
+              'app_restrictions_managing_package': '        entry(testDpcKey = "app_restrictions_managing_package", googleTitle = "@string/app_restrictions_managing_package", category = "@string/delegation_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.restrictions_manager", owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Restrictions manager package (blank clears)", type = ParityInputType.PACKAGE_NAME, required = false))),',
+              'manage_cert_installer': '        entry(testDpcKey = "manage_cert_installer", googleTitle = "@string/manage_cert_installer", category = "@string/delegation_title", state = TestDpcImplementationState.MODERN_EQUIVALENT, destination = ParityDestination.CREDENTIAL_CENTER, minSdk = 23, unavailableReason = "DPC-AIO uses current certificate delegation controls instead of the legacy dedicated TestDPC cert-installer screen.", replacementGuidance = "Use Credential Center delegation controls."),',
+              'generic_delegation': '        entry(testDpcKey = "generic_delegation", googleTitle = "@string/generic_delegation", category = "@string/delegation_title", state = TestDpcImplementationState.NATIVE, handlerId = "delegation.set_scopes", destination = ParityDestination.ENTERPRISE_POLICY_HUB, minSdk = 26, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Delegate package", type = ParityInputType.PACKAGE_NAME), ParityInputField(key = "scopes", label = "Delegated scopes (CSV)", type = ParityInputType.CSV))),',
+              'block_uninstallation_by_pkg': '        entry(testDpcKey = "block_uninstallation_by_pkg", googleTitle = "@string/block_uninstallation_by_pkg", category = "@string/block_uninstallation_title", state = TestDpcImplementationState.NATIVE, handlerId = "app.block_uninstall", destination = ParityDestination.ACTIVITY_MANAGER, owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "package_name", label = "Package", type = ParityInputType.PACKAGE_NAME), ParityInputField(key = "blocked", label = "Block uninstall", type = ParityInputType.BOOLEAN))),',
+              'block_uninstallation_list': '        entry(testDpcKey = "block_uninstallation_list", googleTitle = "@string/block_uninstallation_list", category = "@string/block_uninstallation_title", state = TestDpcImplementationState.EXPOSE_BACKEND, handlerId = "app.block_uninstall_list", owner = OwnerRequirement.DEVICE_OR_PROFILE_OWNER, inputs = listOf(ParityInputField(key = "packages", label = "Packages (CSV)", type = ParityInputType.CSV), ParityInputField(key = "blocked", label = "Block uninstall", type = ParityInputType.BOOLEAN))),',
+          }
+
+          seen = set()
+          for i, line in enumerate(lines):
+              for key, replacement in replacements.items():
+                  if f'testDpcKey = "{key}"' in line:
+                      assert key not in seen, f'duplicate catalog key {key}'
+                      lines[i] = replacement
+                      seen.add(key)
+                      break
+          missing = set(replacements) - seen
+          assert not missing, f'missing catalog keys: {sorted(missing)}'
+          path.write_text('\n'.join(lines) + '\n', 'utf-8')
+          PY
+
+      - name: Wire Task 7 contract into canonical host runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/run_host_tests.sh')
+          text = path.read_text('utf-8')
+          marker = 'python3 "$ROOT/tools/tests/test_129_qr_stale_alias_cleanup.py"\n'
+          addition = 'python3 "$ROOT/tools/tests/test_130_app_package_parity_contract.py"\n'
+          if addition not in text:
+              assert text.count(marker) == 1, 'unexpected Task 7 test insertion point'
+              text = text.replace(marker, marker + addition, 1)
+          path.write_text(text, 'utf-8')
+          PY
+
+      - name: Verify focused Task 7 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_123_testdpc_parity_catalog_169.py
+          python3 tools/tests/test_124_parity_handler_coverage.py
+          python3 tools/tests/test_125_parity_ui_contract.py
+          python3 tools/tests/test_130_app_package_parity_contract.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          python3 tools/tests/test_release_secret_scan.py
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('tools/run_host_tests.sh').read_text('utf-8').splitlines()
+          cutoff = next(i for i, line in enumerate(src) if line.startswith('python3 "$ROOT/tools/tests/test_project_layout.py"'))
+          Path('tools/.parity-core-host.sh').write_text('\n'.join(src[:cutoff]) + '\n', 'utf-8')
+          PY
+          bash tools/.parity-core-host.sh
+          rm tools/.parity-core-host.sh
+          git diff --check
+
+      - name: Remove implementation-only workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/verify-app-package-parity-red.yml .github/workflows/implement-app-package-parity.yml
+          git diff --check
+
+      - name: Commit Task 7 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: add app package TestDPC parity APIs'
+          git push origin HEAD:feat/dpc-aio-130-app-package-parity
