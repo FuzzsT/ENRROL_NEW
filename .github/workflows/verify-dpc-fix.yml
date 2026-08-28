@@ -47,7 +47,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "platforms;android-37" "build-tools;37.0.0" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
+          sdkmanager_bin="$(command -v sdkmanager)"
+          list="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$sdkmanager_bin" --list --channel=3 > "$list"
+          platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1=="platforms;android-37"{print $1}' "$list" | head -n1)"
+          if [[ -z "$platform_pkg" ]]; then
+            platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^platforms;android-37\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
+          fi
+          if [[ -z "$platform_pkg" ]] && grep -q 'platforms;android-CinnamonBun' "$list"; then
+            platform_pkg='platforms;android-CinnamonBun'
+          fi
+          [[ -n "$platform_pkg" ]] || { echo 'Android 17 platform not found' >&2; exit 1; }
+          build_tools_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^build-tools;37\.[0-9]+\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg='build-tools;36.0.0'
+          echo "Selected platform: $platform_pkg"
+          echo "Selected build tools: $build_tools_pkg"
+          "$sdkmanager_bin" "$platform_pkg" "$build_tools_pkg" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar" ]]; then
+            installed="$ANDROID_SDK_ROOT/platforms/${platform_pkg#platforms;}"
+            [[ -d "$installed" ]] && ln -sfn "$installed" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
           test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
 
       - name: Install host dependencies
