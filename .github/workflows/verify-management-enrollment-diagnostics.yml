@@ -11,7 +11,9 @@ on:
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentStatusActivity.kt
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsSnapshot.kt
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsActivity.kt
+      - tools/tests/test_enrollment_session_store_contract.py
       - tools/tests/test_enrollment_ui_contract.py
+      - tools/tests/test_diagnostics_contract.py
       - tools/tests/test_130_management_enrollment_diagnostics_contract.py
   pull_request:
     branches:
@@ -23,7 +25,9 @@ on:
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/EnrollmentStatusActivity.kt
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsSnapshot.kt
       - apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcDiagnosticsActivity.kt
+      - tools/tests/test_enrollment_session_store_contract.py
       - tools/tests/test_enrollment_ui_contract.py
+      - tools/tests/test_diagnostics_contract.py
       - tools/tests/test_130_management_enrollment_diagnostics_contract.py
 
 permissions:
