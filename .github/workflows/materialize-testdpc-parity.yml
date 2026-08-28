@@ -1,0 +1,92 @@
+name: Materialize missing TestDPC parity catalog
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/materialize-testdpc-parity.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: Fetch exact pinned TestDPC XML
+        shell: bash
+        run: |
+          set -euo pipefail
+          dst='_upstream/google/extracted/android-testdpc-master/src/main/res/xml'; mkdir -p "$dst"
+          curl -fsSL https://raw.githubusercontent.com/googlesamples/android-testdpc/master/src/main/res/xml/device_policy_header.xml -o "$dst/device_policy_header.xml"
+          curl -fsSL https://raw.githubusercontent.com/googlesamples/android-testdpc/master/src/main/res/xml/profile_policy_header.xml -o "$dst/profile_policy_header.xml"
+          [[ "$(git hash-object "$dst/device_policy_header.xml")" == '96e294b88dd28156e13cbe0bb5ed6d6ffad2884f' ]]
+          [[ "$(git hash-object "$dst/profile_policy_header.xml")" == 'e487219281142794abfed4a89dfc535ccdddd88c' ]]
+      - name: Generate catalog from pinned XML and approved Task-2 classifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          ROOT=Path.cwd(); XML=ROOT/'_upstream/google/extracted/android-testdpc-master/src/main/res/xml'; OUT=ROOT/'apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity'; TEST=ROOT/'apps/dpc/modules/policy/core/src/test/kotlin/io/dpcaio/policy/parity'; OUT.mkdir(parents=True,exist_ok=True); TEST.mkdir(parents=True,exist_ok=True)
+          A='{http://schemas.android.com/apk/res/android}'; T='{http://schemas.android.com/apk/res-auto}'
+          N=set('set_organization_id add_account enable_system_apps_by_package_name hide_apps unhide_apps suspend_apps unsuspend_apps clear_app_data managed_configurations generic_delegation block_uninstallation_by_pkg disable_camera disable_screen_capture install_key_certificate install_ca_certificate remove_all_ca_certificates grant_key_pair_to_app lock_now manage_lock_task set_lock_task_features set_private_dns_mode set_permission_policy manage_app_permissions disable_status_bar reenable_status_bar disable_keyguard reenable_keyguard system_update_policy set_affiliation_ids set_device_organization_name set_auto_time set_auto_time_zone enable_security_logging request_security_logs request_pre_reboot_security_logs enable_network_logging request_network_logs enable_usb_data_signaling set_factory_reset_protection_policy suspend_personal_apps profile_max_time_off cross_profile_apps_allowlist set_profile_organization_name'.split())
+          M=set('app_status remove_account enable_system_apps install_apk_package manage_cert_installer get_ca_certificates password_complexity required_password_complexity lock_screen_policy password_constraints set_required_password_complexity managed_profile_policies set_auto_time_required cross_profile_apps disable_cross_profile_caller_id disable_cross_profile_contacts_search set_location_mode'.split())
+          E=set('set_profile_name set_disable_account_management get_disable_account_management remove_key_certificate reset_password set_always_on_vpn set_location_enabled add_cross_profile_intent_filter clear_cross_profile_intent_filters'.split())
+          DEST={'set_organization_id':'ENTERPRISE_OPERATIONS','add_account':'GOOGLE_ACCOUNT_MANAGER','enable_system_apps_by_package_name':'ACTIVITY_MANAGER','hide_apps':'ACTIVITY_MANAGER','unhide_apps':'ACTIVITY_MANAGER','suspend_apps':'ACTIVITY_MANAGER','unsuspend_apps':'ACTIVITY_MANAGER','clear_app_data':'ACTIVITY_MANAGER','managed_configurations':'ACTIVITY_MANAGER','generic_delegation':'ENTERPRISE_POLICY_HUB','block_uninstallation_by_pkg':'ACTIVITY_MANAGER','disable_camera':'DEVICE_LIFECYCLE','disable_screen_capture':'DEVICE_LIFECYCLE','install_key_certificate':'CREDENTIAL_CENTER','install_ca_certificate':'CREDENTIAL_CENTER','remove_all_ca_certificates':'CREDENTIAL_CENTER','grant_key_pair_to_app':'CREDENTIAL_CENTER','lock_now':'DEVICE_LIFECYCLE','manage_lock_task':'DEVICE_LIFECYCLE','set_lock_task_features':'DEVICE_LIFECYCLE','set_private_dns_mode':'NETWORK_CONTROL','set_permission_policy':'PERMISSION_MANAGER','manage_app_permissions':'PERMISSION_MANAGER','disable_status_bar':'ENTERPRISE_POLICY_HUB','reenable_status_bar':'ENTERPRISE_POLICY_HUB','disable_keyguard':'DEVICE_LIFECYCLE','reenable_keyguard':'DEVICE_LIFECYCLE','system_update_policy':'ENTERPRISE_OPERATIONS','set_affiliation_ids':'ENTERPRISE_OPERATIONS','set_device_organization_name':'ENTERPRISE_OPERATIONS','set_auto_time':'ENTERPRISE_OPERATIONS','set_auto_time_zone':'ENTERPRISE_OPERATIONS','enable_security_logging':'ENTERPRISE_OPERATIONS','request_security_logs':'ENTERPRISE_OPERATIONS','request_pre_reboot_security_logs':'ENTERPRISE_OPERATIONS','enable_network_logging':'NETWORK_CONTROL','request_network_logs':'NETWORK_CONTROL','enable_usb_data_signaling':'ENTERPRISE_POLICY_HUB','set_factory_reset_protection_policy':'DEVICE_LIFECYCLE','suspend_personal_apps':'ACTIVITY_MANAGER','profile_max_time_off':'WORK_PROFILE_COPE','cross_profile_apps_allowlist':'WORK_PROFILE_COPE','set_profile_organization_name':'WORK_PROFILE_COPE'}
+          HAND={'set_profile_name':'profile.set_name','set_disable_account_management':'account.set_management_disabled','get_disable_account_management':'account.get_management_disabled','remove_key_certificate':'credential.remove_key_pair','reset_password':'credential.reset_with_token','set_always_on_vpn':'network.always_on_vpn','set_location_enabled':'location.set_enabled','add_cross_profile_intent_filter':'cross_profile.add_intent_filter','clear_cross_profile_intent_filters':'cross_profile.clear_intent_filters'}
+          SDK={'L':21,'M':23,'N':24,'O':26,'P':28,'Q':29,'R':30,'S':31,'T':33,'U':34,'V':35}
+          def state(k): return 'NATIVE' if k in N else 'MODERN_EQUIVALENT' if k in M else 'EXPOSE_BACKEND' if k in E else 'IMPLEMENT_PUBLIC_API'
+          def owner(v):
+              if v=='deviceOwner': return 'DEVICE_OWNER'
+              if v=='profileOwner': return 'PROFILE_OWNER'
+              if v=='orgOwnedProfileOwner': return 'COPE'
+              if v and ('deviceOwner' in v or 'profileOwner' in v or 'orgOwnedProfileOwner' in v): return 'DEVICE_OR_PROFILE_OWNER'
+              return 'NONE'
+          def q(s): return '"'+(s or '').replace('\\','\\\\').replace('"','\\"').replace('\n','\\n')+'"'
+          records=[]
+          for fname in ('device_policy_header.xml','profile_policy_header.xml'):
+              root=ET.parse(XML/fname).getroot()
+              def walk(node,cat='(top)'):
+                  for e in node:
+                      nextcat=e.attrib.get(A+'title',cat) if e.tag.endswith('PreferenceCategory') else cat
+                      k=e.attrib.get(A+'key')
+                      if k: records.append((k,e.attrib.get(A+'title','(dynamic/no title)'),cat,SDK.get(e.attrib.get(T+'minSdkVersion','L'),21),owner(e.attrib.get(T+'admin',''))))
+                      walk(e,nextcat)
+              walk(root)
+          assert len(records)==169 and len({x[0] for x in records})==169
+          lines=[]
+          for k,title,cat,min_sdk,own in records:
+              st=state(k); args=[f'testDpcKey = {q(k)}',f'googleTitle = {q(title)}',f'category = {q(cat)}',f'state = TestDpcImplementationState.{st}']
+              if k in HAND: args.append(f'handlerId = {q(HAND[k])}')
+              if k in DEST: args.append(f'destination = ParityDestination.{DEST[k]}')
+              if min_sdk!=21: args.append(f'minSdk = {min_sdk}')
+              if own!='NONE': args.append(f'owner = OwnerRequirement.{own}')
+              if st in ('IMPLEMENT_PUBLIC_API','MODERN_EQUIVALENT'): args.append(f'unavailableReason = {q("Planned public-API parity implementation is not wired yet." if st=="IMPLEMENT_PUBLIC_API" else "Use the existing DPC-AIO modern equivalent surface.")}')
+              lines.append('        entry('+', '.join(args)+')')
+          catalog='''package io.dpcaio.policy.parity\n\nobject TestDpcParityCatalog {\n private fun entry(testDpcKey:String,googleTitle:String,category:String,state:TestDpcImplementationState,handlerId:String?=null,destination:ParityDestination?=null,minSdk:Int=21,owner:OwnerRequirement=OwnerRequirement.NONE,unavailableReason:String?=null)=TestDpcParityEntry(id="testdpc.$testDpcKey",testDpcKey=testDpcKey,googleTitle=googleTitle,category=category,description=googleTitle,implementationState=state,handlerId=handlerId,destination=destination,minSdk=minSdk,ownerRequirement=owner,unavailableReason=unavailableReason)\n val entries:List<TestDpcParityEntry> = listOf(\n'''+',\n'.join(lines)+'''\n )\n private val byId=entries.associateBy{it.id};private val byTestDpcKey=entries.associateBy{it.testDpcKey}\n fun findById(id:String)=byId[id];fun findByTestDpcKey(key:String)=byTestDpcKey[key]\n}\n'''
+          core_test='''package io.dpcaio.policy.parity\nobject TestDpcParityCatalogTest { @JvmStatic fun main(args:Array<String>){val e=TestDpcParityCatalog.entries;check(e.size==169);check(e.map{it.testDpcKey}.toSet().size==169);check(e.map{it.id}.toSet().size==169);e.forEach{x->when(x.implementationState){TestDpcImplementationState.NATIVE->check(x.destination!=null);TestDpcImplementationState.EXPOSE_BACKEND,TestDpcImplementationState.IMPLEMENT_PUBLIC_API,TestDpcImplementationState.MODERN_EQUIVALENT,TestDpcImplementationState.DEVICE_CAPABILITY_REQUIRED->check(x.handlerId!=null||x.destination!=null||x.unavailableReason!=null);TestDpcImplementationState.DEPRECATED_UNAVAILABLE->check(!x.unavailableReason.isNullOrBlank())}};println("PASS: TestDPC parity catalog core") } }\n'''
+          (OUT/'TestDpcParityCatalog.kt').write_text(catalog); (TEST/'TestDpcParityCatalogTest.kt').write_text(core_test)
+          print('PARITY_COUNTS',len(records),sum(state(k)=='NATIVE' for k,*_ in records),sum(state(k)=='MODERN_EQUIVALENT' for k,*_ in records),sum(state(k)=='EXPOSE_BACKEND' for k,*_ in records))
+          PY
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_123_testdpc_parity_catalog_169.py
+          chmod +x gradlew
+          ./gradlew :policy-core:compileKotlin :policy-core:compileTestKotlin --console=plain
+          python3 tools/tests/test_non_sdk_api_scan.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add _upstream/google/extracted/android-testdpc-master/src/main/res/xml/device_policy_header.xml _upstream/google/extracted/android-testdpc-master/src/main/res/xml/profile_policy_header.xml apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt apps/dpc/modules/policy/core/src/test/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalogTest.kt
+          git commit -m 'feat: complete pinned 169-entry TestDPC parity catalog'
+          git push origin HEAD:main
