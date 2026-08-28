@@ -73,9 +73,10 @@ jobs:
           from pathlib import Path
           src = Path('tools/run_host_tests.sh').read_text('utf-8').splitlines()
           cutoff = next(i for i, line in enumerate(src) if line.startswith('python3 "$ROOT/tools/tests/test_project_layout.py"'))
-          Path('/tmp/parity-core-host.sh').write_text('\n'.join(src[:cutoff]) + '\n', 'utf-8')
+          Path('tools/.parity-core-host.sh').write_text('\n'.join(src[:cutoff]) + '\n', 'utf-8')
           PY
-          bash /tmp/parity-core-host.sh
+          bash tools/.parity-core-host.sh
+          rm tools/.parity-core-host.sh
           git diff --check
 
       - name: Remove validation-only workflows
