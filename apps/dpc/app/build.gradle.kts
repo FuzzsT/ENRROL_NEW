@@ -225,6 +225,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                         "device-owner-provisioning-payload.txt",
                         "device-owner-provisioning-metadata.json",
                         "device-owner-qr.png",
+                        "fully-managed-qr.png",
                     ).forEach { outDir.resolve(it).delete() }
                 }
 
