@@ -14,6 +14,7 @@ import io.dpcaio.policy.android.AndroidDevicePolicyGateway
 import io.dpcaio.policy.android.AndroidGlobalLocationPolicyGateway
 import io.dpcaio.policy.android.AndroidWorkProfileLifecycleGateway
 import io.dpcaio.policy.android.parity.AndroidAppParityGateway
+import io.dpcaio.policy.android.parity.AndroidNetworkParityGateway
 import io.dpcaio.policy.parity.ParityActionHandler
 import io.dpcaio.policy.parity.ParityActionRequest
 import io.dpcaio.policy.parity.ParityActionResult
@@ -30,6 +31,7 @@ class TestDpcParityActionRouter(context: Context) {
     private val credentialRecoveryGateway = AndroidCredentialRecoveryGateway(appContext, admin)
     private val devicePolicyGateway = AndroidDevicePolicyGateway(appContext, admin)
     private val appParityGateway = AndroidAppParityGateway(appContext, admin)
+    private val networkParityGateway = AndroidNetworkParityGateway(appContext, admin)
 
     private val handlers: Map<String, ParityActionHandler> = mapOf(
         "profile.set_name" to ParityActionHandler(::setProfileName),
@@ -57,6 +59,14 @@ class TestDpcParityActionRouter(context: Context) {
         "delegation.set_scopes" to ParityActionHandler(::setDelegatedScopes),
         "app.block_uninstall" to ParityActionHandler(::setUninstallBlocked),
         "app.block_uninstall_list" to ParityActionHandler(::setUninstallBlockedList),
+        "network.preferential" to ParityActionHandler(::setPreferentialNetworkService),
+        "network.set_global_proxy" to ParityActionHandler(::setGlobalProxy),
+        "network.clear_global_proxy" to ParityActionHandler(::clearGlobalProxy),
+        "network.wifi_lockdown" to ParityActionHandler(::setWifiLockdown),
+        "network.wifi_remove_non_caller" to ParityActionHandler(::removeNonCallerWifiNetworks),
+        "network.wifi_mac" to ParityActionHandler(::getWifiMac),
+        "network.wifi_min_security" to ParityActionHandler(::setWifiMinimumSecurity),
+        "network.wifi_ssid_policy" to ParityActionHandler(::setWifiSsidPolicy),
     )
 
     fun isRegistered(handlerId: String): Boolean = handlers.containsKey(handlerId)
@@ -308,6 +318,63 @@ class TestDpcParityActionRouter(context: Context) {
         return PolicyResult.success("packages=${packages.size},blocked=$blocked", "READBACK_NOT_AVAILABLE")
     }
 
+    private fun setPreferentialNetworkService(request: ParityActionRequest): PolicyResult<String> {
+        val enabled = parseBoolean(request.values["enabled"])
+            ?: return invalidInput("enabled", "expected true/false")
+        return networkParityGateway.setPreferentialNetworkServiceEnabled(enabled).asText { observed ->
+            "enabled=${observed == true}"
+        }
+    }
+
+    private fun setGlobalProxy(request: ParityActionRequest): PolicyResult<String> {
+        val host = requiredValue(request, "host")
+            ?: return invalidInput("host", "proxy host is required")
+        val port = request.values["port"]?.trim()?.toIntOrNull()
+            ?: return invalidInput("port", "integer proxy port is required")
+        val exclusionList = parseCsv(request.values["exclusion_list"])
+        return networkParityGateway.setRecommendedGlobalProxy(host, port, exclusionList).asText {
+            "host=$host,port=$port,exclusions=${exclusionList.size}"
+        }
+    }
+
+    private fun clearGlobalProxy(request: ParityActionRequest): PolicyResult<String> =
+        networkParityGateway.clearRecommendedGlobalProxy().asText { "cleared=true" }
+
+    private fun setWifiLockdown(request: ParityActionRequest): PolicyResult<String> {
+        val lockdown = parseBoolean(request.values["lockdown"])
+            ?: return invalidInput("lockdown", "expected true/false")
+        return networkParityGateway.setConfiguredNetworksLockdownState(lockdown).asText { observed ->
+            "lockdown=${observed == true}"
+        }
+    }
+
+    private fun removeNonCallerWifiNetworks(request: ParityActionRequest): PolicyResult<String> =
+        networkParityGateway.removeNonCallerConfiguredNetworks().asText { removed ->
+            "removedAny=${removed == true}"
+        }
+
+    private fun getWifiMac(request: ParityActionRequest): PolicyResult<String> =
+        networkParityGateway.getWifiMacAddress().asText { mac -> "mac=${mac.orEmpty()}" }
+
+    private fun setWifiMinimumSecurity(request: ParityActionRequest): PolicyResult<String> {
+        val raw = requiredValue(request, "level")
+            ?: return invalidInput("level", "minimum Wi-Fi security level is required")
+        val level = networkParityGateway.parseWifiSecurityLevel(raw)
+            ?: return invalidInput("level", "expected OPEN, PERSONAL, ENTERPRISE_EAP, ENTERPRISE_192, or matching integer")
+        return networkParityGateway.setMinimumRequiredWifiSecurityLevel(level).asText { observed ->
+            "level=${observed ?: -1}"
+        }
+    }
+
+    private fun setWifiSsidPolicy(request: ParityActionRequest): PolicyResult<String> {
+        val rawType = requiredValue(request, "policy_type")
+            ?: return invalidInput("policy_type", "ALLOWLIST or DENYLIST is required")
+        val policyType = networkParityGateway.parseWifiSsidPolicyType(rawType)
+            ?: return invalidInput("policy_type", "expected ALLOWLIST or DENYLIST")
+        val ssids = requiredPackages(request, "ssids")
+            ?: return invalidInput("ssids", "at least one SSID is required")
+        return networkParityGateway.setWifiSsidPolicy(policyType, ssids.toSet())
+    }
     private fun parseBoolean(raw: String?): Boolean? = when (raw?.trim()?.lowercase()) {
         "true", "1", "yes", "on" -> true
         "false", "0", "no", "off" -> false
