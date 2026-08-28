@@ -50,6 +50,8 @@ KOTLIN_TEST_MAINS=(
   io.dpcaio.policy.CopePolicyModelsTestKt
   io.dpcaio.policy.WorkProfileLifecycleTestKt
   io.dpcaio.policy.CredentialRecoveryTestKt
+  io.dpcaio.policy.parity.TestDpcParityCatalogTest
+  io.dpcaio.policy.parity.TestDpcCapabilityResolverTest
   io.dpcaio.permission.EffectiveCapabilityResolverTestKt
   io.dpcaio.permission.PermissionActionPlannerTestKt
   io.dpcaio.permission.PermissionPolicyCoordinatorTestKt
@@ -160,6 +162,8 @@ python3 "$ROOT/tools/tests/test_dual_provisioning_qr.py"
 python3 "$ROOT/tools/tests/test_work_profile_provisioning.py"
 python3 "$ROOT/tools/tests/test_provisioning_build_integration.py"
 python3 "$ROOT/tools/tests/test_123_testdpc_parity_catalog_169.py"
+python3 "$ROOT/tools/tests/test_124_parity_handler_coverage.py"
+python3 "$ROOT/tools/tests/test_125_parity_ui_contract.py"
 python3 "$ROOT/tools/tests/test_release_version_contract.py"
 python3 "$ROOT/tools/tests/test_knox_lab_license_contract.py"
 python3 "$ROOT/tools/tests/test_knox_startup_android_contract.py"
