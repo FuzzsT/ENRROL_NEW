@@ -52,7 +52,11 @@ def render_png(text: str, output: Path) -> None:
         import qrcode
     except ImportError as exc:
         raise RuntimeError('Python package qrcode[pil] is required; install tools/provisioning/requirements.txt') from exc
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
+    # Four modules is the QR minimum quiet zone, but dense Android Enterprise
+    # payloads at our canonical GitHub Releases URL are not decoded reliably by
+    # OpenCV with only that minimum. Six modules remains standards-compliant
+    # and gives setup/CI scanners enough separation from the image boundary.
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=6)
     qr.add_data(text)
     qr.make(fit=True)
     image = qr.make_image(fill_color='black', back_color='white')
