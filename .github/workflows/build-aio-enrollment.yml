@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       qr_type:
-        description: "Typ QR provisioning"
+        description: "QR code: both = QR1 Work Profile + QR2 Fully Managed; work-profile = QR1 only; fully-managed = QR2 only"
         required: true
         default: "both"
         type: choice
@@ -42,6 +42,7 @@ jobs:
       contents: read
     outputs:
       signing_mode: ${{ steps.signing.outputs.mode }}
+      qr_type: ${{ steps.qr.outputs.qr_type }}
       app_version: ${{ steps.metadata.outputs.app_version }}
       qr_bundle_name: ${{ steps.metadata.outputs.qr_bundle_name }}
       release_apk_name: ${{ steps.config.outputs.release_apk_name }}
@@ -66,6 +67,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Resolve QR selection
+        id: qr
         shell: bash
         env:
           DISPATCH_QR_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.qr_type || '' }}
@@ -80,6 +82,7 @@ jobs:
             *) echo "Unsupported qr_type: $qr_type" >&2; exit 2 ;;
           esac
           echo "DPC_AIO_QR_TYPE=$qr_type" >> "$GITHUB_ENV"
+          echo "qr_type=$qr_type" >> "$GITHUB_OUTPUT"
           echo "QR selection: $qr_type"
 
       - name: Mask manual release password
@@ -413,7 +416,7 @@ jobs:
           }
           check dist/provisioning-validation.json --json dist/provisioning.json --qr dist/provisioning-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode "$compat"
           if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "work-profile" ]]; then
-            check dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist//work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
+            check dist/work-profile-validation.json --json dist/work-profile-provisioning.json --qr dist/work-profile-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode work-profile
           fi
           if [[ "$DPC_AIO_QR_TYPE" == "both" || "$DPC_AIO_QR_TYPE" == "fully-managed" ]]; then
             check dist/device-owner-validation.json --json dist/device-owner-provisioning.json --qr dist/device-owner-qr.png --apk "dist/$DPC_AIO_RELEASE_APK_NAME" --apksigner "$signer" --expected-apk-url "$DPC_AIO_PROVISIONING_APK_URL" --expected-mode fully-managed
@@ -493,6 +496,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      DPC_AIO_QR_TYPE: ${{ needs.build.outputs.qr_type }}
       DPC_AIO_APP_VERSION: ${{ needs.build.outputs.app_version }}
       DPC_AIO_QR_BUNDLE_NAME: ${{ needs.build.outputs.qr_bundle_name }}
       DPC_AIO_RELEASE_APK_NAME: ${{ needs.build.outputs.release_apk_name }}

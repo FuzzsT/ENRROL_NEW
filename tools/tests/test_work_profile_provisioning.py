@@ -56,6 +56,10 @@ fun main() {
     check(ProvisioningModeSelector.select("fully-managed", listOf(fm, mp), fm, mp) == fm)
     check(ProvisioningModeSelector.select("work-profile", listOf(fm), fm, mp) == null)
     check(ProvisioningModeSelector.select("auto", listOf(fm, mp), fm, mp) == fm)
+    // TestDPC-compatible fallback: absent/empty allowed modes means both core modes are available.
+    check(ProvisioningModeSelector.select("work-profile", emptyList(), fm, mp) == mp)
+    check(ProvisioningModeSelector.select("fully-managed", emptyList(), fm, mp) == fm)
+    check(ProvisioningModeSelector.select("auto", emptyList(), fm, mp) == fm)
 }
 ''', encoding='utf-8')
         jar = td / 'selector-test.jar'
