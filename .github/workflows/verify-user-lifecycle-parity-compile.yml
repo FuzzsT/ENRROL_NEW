@@ -10,21 +10,39 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - name: Install Android SDK components
+      - uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: platform-tools
+      - name: Install Android 17 SDK components
+        shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          if ! "$SDKMANAGER" "platforms;android-37"; then
-            "$SDKMANAGER" "platforms;android-CinnamonBun"
+          set -euo pipefail
+          sdkmanager_bin="$(command -v sdkmanager)"
+          list="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$sdkmanager_bin" --list --channel=3 > "$list"
+          platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1=="platforms;android-37"{print $1}' "$list" | head -n1)"
+          if [[ -z "$platform_pkg" ]]; then
+            platform_pkg="$(awk -F'|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)} $1 ~ /^platforms;android-37\.[0-9]+$/{print $1}' "$list" | sort -V | tail -n1)"
           fi
-          "$SDKMANAGER" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+          if [[ -z "$platform_pkg" ]] && grep -q 'platforms;android-CinnamonBun' "$list"; then
+            platform_pkg='platforms;android-CinnamonBun'
+          fi
+          [[ -n "$platform_pkg" ]] || { echo 'Android 17 platform not found' >&2; exit 1; }
+          "$sdkmanager_bin" "$platform_pkg" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1" --channel=3
+          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar" ]]; then
+            installed="$ANDROID_SDK_ROOT/platforms/${platform_pkg#platforms;}"
+            [[ -d "$installed" ]] && ln -sfn "$installed" "$ANDROID_SDK_ROOT/platforms/android-37"
+          fi
+          test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
       - name: Focused parity gates
         run: |
           python3 tools/tests/test_132_user_lifecycle_parity_contract.py
