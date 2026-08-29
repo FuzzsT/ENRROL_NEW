@@ -15,6 +15,7 @@ import io.dpcaio.policy.android.AndroidGlobalLocationPolicyGateway
 import io.dpcaio.policy.android.AndroidWorkProfileLifecycleGateway
 import io.dpcaio.policy.android.parity.AndroidAppParityGateway
 import io.dpcaio.policy.android.parity.AndroidNetworkParityGateway
+import io.dpcaio.policy.android.parity.AndroidUserParityGateway
 import io.dpcaio.policy.parity.ParityActionHandler
 import io.dpcaio.policy.parity.ParityActionRequest
 import io.dpcaio.policy.parity.ParityActionResult
@@ -32,6 +33,7 @@ class TestDpcParityActionRouter(context: Context) {
     private val devicePolicyGateway = AndroidDevicePolicyGateway(appContext, admin)
     private val appParityGateway = AndroidAppParityGateway(appContext, admin)
     private val networkParityGateway = AndroidNetworkParityGateway(appContext, admin)
+    private val userParityGateway = AndroidUserParityGateway(appContext, admin)
 
     private val handlers: Map<String, ParityActionHandler> = mapOf(
         "profile.set_name" to ParityActionHandler(::setProfileName),
@@ -67,6 +69,27 @@ class TestDpcParityActionRouter(context: Context) {
         "network.wifi_mac" to ParityActionHandler(::getWifiMac),
         "network.wifi_min_security" to ParityActionHandler(::setWifiMinimumSecurity),
         "network.wifi_ssid_policy" to ParityActionHandler(::setWifiSsidPolicy),
+        "user.create" to ParityActionHandler(::createManagedUser),
+        "user.remove" to ParityActionHandler(::removeManagedUser),
+        "user.switch" to ParityActionHandler(::switchManagedUser),
+        "user.start_background" to ParityActionHandler(::startManagedUserInBackground),
+        "user.stop" to ParityActionHandler(::stopManagedUser),
+        "user.logout" to ParityActionHandler(::logoutManagedUser),
+        "user.logout_enabled" to ParityActionHandler(::setLogoutEnabled),
+        "user.session_messages" to ParityActionHandler(::setUserSessionMessages),
+        "user.is_affiliated" to ParityActionHandler(::queryAffiliatedUser),
+        "user.is_ephemeral" to ParityActionHandler(::queryEphemeralUser),
+        "user.restriction" to ParityActionHandler { request -> setUserRestriction(request, false) },
+        "user.restriction_parent" to ParityActionHandler { request -> setUserRestriction(request, true) },
+        "user.short_support" to ParityActionHandler(::setShortSupportMessage),
+        "user.long_support" to ParityActionHandler(::setLongSupportMessage),
+        "device.request_bugreport" to ParityActionHandler(::requestBugreport),
+        "device.backup_service" to ParityActionHandler(::setBackupServiceEnabled),
+        "device.common_criteria" to ParityActionHandler(::setCommonCriteriaModeEnabled),
+        "device.reboot" to ParityActionHandler(::rebootDevice),
+        "device.wipe_profile" to ParityActionHandler(::wipeManagedProfile),
+        "device.factory_reset" to ParityActionHandler(::factoryResetDevice),
+        "device.transfer_ownership" to ParityActionHandler(::transferOwnership),
     )
 
     fun isRegistered(handlerId: String): Boolean = handlers.containsKey(handlerId)
@@ -112,6 +135,125 @@ class TestDpcParityActionRouter(context: Context) {
             result.value?.takeIf { it.isNotBlank() }?.let { append(" => ").append(it) }
         }
         return ParityActionResult(success = result.isSuccess, message = message)
+    }
+
+    private fun createManagedUser(request: ParityActionRequest): PolicyResult<String> {
+        val name = requiredValue(request, "name")
+            ?: return invalidInput("name", "user name is required")
+        val rawFlags = request.values["flags"]?.trim().orEmpty()
+        val flags = if (rawFlags.isBlank()) 0 else rawFlags.toIntOrNull()
+            ?: return invalidInput("flags", "expected integer flags")
+        return userParityGateway.createAndManageUser(name, flags).asText { serial ->
+            "userSerial=${serial ?: "unknown"}"
+        }
+    }
+
+    private fun removeManagedUser(request: ParityActionRequest): PolicyResult<String> {
+        val serial = requiredValue(request, "user_serial")
+            ?: return invalidInput("user_serial", "user serial is required")
+        return userParityGateway.removeUser(serial).asText { "removedSerial=$serial" }
+    }
+
+    private fun switchManagedUser(request: ParityActionRequest): PolicyResult<String> {
+        val serial = requiredValue(request, "user_serial")
+            ?: return invalidInput("user_serial", "user serial is required")
+        return userParityGateway.switchUser(serial).asText { "switchSerial=$serial" }
+    }
+
+    private fun startManagedUserInBackground(request: ParityActionRequest): PolicyResult<String> {
+        val serial = requiredValue(request, "user_serial")
+            ?: return invalidInput("user_serial", "user serial is required")
+        return userParityGateway.startUserInBackground(serial).asText { result -> "result=${result ?: -1},serial=$serial" }
+    }
+
+    private fun stopManagedUser(request: ParityActionRequest): PolicyResult<String> {
+        val serial = requiredValue(request, "user_serial")
+            ?: return invalidInput("user_serial", "user serial is required")
+        return userParityGateway.stopUser(serial).asText { result -> "result=${result ?: -1},serial=$serial" }
+    }
+
+    private fun logoutManagedUser(request: ParityActionRequest): PolicyResult<String> =
+        userParityGateway.logoutUser().asText { result -> "result=${result ?: -1}" }
+
+    private fun setLogoutEnabled(request: ParityActionRequest): PolicyResult<String> {
+        val enabled = parseBoolean(request.values["enabled"])
+            ?: return invalidInput("enabled", "expected true/false")
+        return userParityGateway.setLogoutEnabled(enabled).asText { "enabled=$enabled" }
+    }
+
+    private fun setUserSessionMessages(request: ParityActionRequest): PolicyResult<String> {
+        val start = request.values["start_message"]?.takeIf { it.isNotBlank() }
+        val end = request.values["end_message"]?.takeIf { it.isNotBlank() }
+        return userParityGateway.setUserSessionMessages(start, end).asText {
+            "start=${if (start == null) "<cleared>" else "set"},end=${if (end == null) "<cleared>" else "set"}"
+        }
+    }
+
+    private fun queryAffiliatedUser(request: ParityActionRequest): PolicyResult<String> =
+        userParityGateway.isAffiliatedUser().asText { affiliated -> "affiliated=${affiliated == true}" }
+
+    private fun queryEphemeralUser(request: ParityActionRequest): PolicyResult<String> =
+        userParityGateway.isEphemeralUser().asText { ephemeral -> "ephemeral=${ephemeral == true}" }
+
+    private fun setUserRestriction(request: ParityActionRequest, parent: Boolean): PolicyResult<String> {
+        val key = requiredValue(request, "restriction_key")
+            ?: return invalidInput("restriction_key", "UserManager restriction key is required")
+        val enabled = parseBoolean(request.values["enabled"])
+            ?: return invalidInput("enabled", "expected true/false")
+        return userParityGateway.setUserRestriction(key, enabled, parent).asText {
+            "restriction=$key,enabled=$enabled,parent=$parent"
+        }
+    }
+
+    private fun setShortSupportMessage(request: ParityActionRequest): PolicyResult<String> {
+        val message = request.values["message"]?.takeIf { it.isNotBlank() }
+        return userParityGateway.setShortSupportMessage(message).asText { "shortSupport=${if (message == null) "cleared" else "set"}" }
+    }
+
+    private fun setLongSupportMessage(request: ParityActionRequest): PolicyResult<String> {
+        val message = request.values["message"]?.takeIf { it.isNotBlank() }
+        return userParityGateway.setLongSupportMessage(message).asText { "longSupport=${if (message == null) "cleared" else "set"}" }
+    }
+
+    private fun requestBugreport(request: ParityActionRequest): PolicyResult<String> =
+        userParityGateway.requestBugreport().asText { "bugreport=requested" }
+
+    private fun setBackupServiceEnabled(request: ParityActionRequest): PolicyResult<String> {
+        val enabled = parseBoolean(request.values["enabled"])
+            ?: return invalidInput("enabled", "expected true/false")
+        return userParityGateway.setBackupServiceEnabled(enabled).asText { "backupService=$enabled" }
+    }
+
+    private fun setCommonCriteriaModeEnabled(request: ParityActionRequest): PolicyResult<String> {
+        val enabled = parseBoolean(request.values["enabled"])
+            ?: return invalidInput("enabled", "expected true/false")
+        return userParityGateway.setCommonCriteriaModeEnabled(enabled).asText { "commonCriteria=$enabled" }
+    }
+
+    private fun rebootDevice(request: ParityActionRequest): PolicyResult<String> =
+        userParityGateway.reboot().asText { "reboot=requested" }
+
+    private fun wipeManagedProfile(request: ParityActionRequest): PolicyResult<String> {
+        val flags = parseOptionalFlags(request) ?: return invalidInput("flags", "expected integer flags")
+        return userParityGateway.wipeManagedProfile(flags).asText { "profileWipe=requested,flags=$flags" }
+    }
+
+    private fun factoryResetDevice(request: ParityActionRequest): PolicyResult<String> {
+        val flags = parseOptionalFlags(request) ?: return invalidInput("flags", "expected integer flags")
+        return userParityGateway.factoryResetDevice(flags).asText { "factoryReset=requested,flags=$flags" }
+    }
+
+    private fun transferOwnership(request: ParityActionRequest): PolicyResult<String> {
+        val raw = requiredValue(request, "target_component")
+            ?: return invalidInput("target_component", "target admin component is required")
+        val target = ComponentName.unflattenFromString(raw)
+            ?: return invalidInput("target_component", "expected package/class component")
+        return userParityGateway.transferOwnership(target).asText { "target=${target.flattenToShortString()}" }
+    }
+
+    private fun parseOptionalFlags(request: ParityActionRequest): Int? {
+        val raw = request.values["flags"]?.trim().orEmpty()
+        return if (raw.isBlank()) 0 else raw.toIntOrNull()
     }
 
     private fun setProfileName(request: ParityActionRequest): PolicyResult<String> {
