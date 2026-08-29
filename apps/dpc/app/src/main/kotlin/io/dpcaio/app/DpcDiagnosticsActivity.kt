@@ -39,6 +39,7 @@ class DpcDiagnosticsActivity : Activity() {
                 appendLine()
                 appendLine("Samsung firmware profile:")
                 appendLine("Sales code: ${firmware.salesCode ?: "unknown"}")
+                appendLine("Carrier ID: ${firmware.carrierId ?: "unknown"}")
                 appendLine("Multi-CSC: ${firmware.multiCsc ?: "unknown"}")
                 appendLine("Country ISO: ${firmware.countryIso ?: "unknown"}")
                 appendLine("OMC path: ${firmware.omcPath ?: "unavailable"}")
@@ -47,6 +48,9 @@ class DpcDiagnosticsActivity : Activity() {
                 appendLine("Build PDA: ${firmware.buildPda ?: "unavailable"}")
                 appendLine("Build incremental: ${firmware.buildIncremental ?: "unavailable"}")
                 appendLine("System-property probe: ${if (firmware.propertyAccessAvailable) "available" else "blocked/unavailable"}")
+                appendLine("Carrier provisioning layer: ${if (firmware.carrierProvisioningPresent) "detected" else "not observed"}")
+                appendLine("Carrier evidence packages: ${firmware.carrierPackageCount}")
+                appendLine("Samsung connectivity overlay: ${if (firmware.connectivityOverlayPresent) "detected" else "not observed"}")
                 appendLine("Firmware package probes: ${firmware.observedPackageCount}/${firmware.packages.size} observed")
                 firmware.packages.forEach { probe ->
                     val state = if (probe.installed) {
@@ -54,7 +58,7 @@ class DpcDiagnosticsActivity : Activity() {
                     } else {
                         "not observed"
                     }
-                    appendLine("  ${probe.packageName} — ${probe.role}: $state")
+                    appendLine("  ${probe.packageName} — ${probe.packageClass} — ${probe.role}: $state")
                 }
                 appendLine()
                 appendLine("Shizuku binder: ${snapshot.shizukuBinderAlive}")
