@@ -1,0 +1,18 @@
+name: Verify Samsung carrier evidence RED
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-samsung-carrier-evidence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run carrier evidence contract
+        run: python3 tools/tests/test_134_samsung_carrier_evidence_contract.py
