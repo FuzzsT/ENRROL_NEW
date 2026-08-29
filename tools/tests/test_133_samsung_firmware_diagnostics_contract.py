@@ -36,7 +36,7 @@ for token in [
     'Class.forName("android.os.SystemProperties")',
     "SamsungFirmwareEvidenceCatalog.salesCodePropertyKeys",
     "SamsungFirmwareEvidenceCatalog.omcPathPropertyKeys",
-    "SamsungFirmwareEvidenceCatalog.packageRoles",
+    "SamsungFirmwareEvidenceCatalog.packageEvidence",
     "PackageManager.ApplicationInfoFlags",
     "Build.MANUFACTURER",
 ]:
