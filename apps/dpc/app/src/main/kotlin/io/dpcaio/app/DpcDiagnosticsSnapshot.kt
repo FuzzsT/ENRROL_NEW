@@ -6,7 +6,10 @@ import android.os.Build
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.VisibilityClass
 import io.dpcaio.policy.android.AndroidDevicePolicyGateway
+import io.dpcaio.samsung.firmware.SamsungFirmwareProfile
+import io.dpcaio.samsung.firmware.android.AndroidSamsungFirmwareProbe
 import io.dpcaio.shizuku.AndroidShizukuRuntime
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class DpcDiagnosticsSnapshot(
@@ -24,6 +27,7 @@ data class DpcDiagnosticsSnapshot(
     val samsungDevice: Boolean,
     val knoxAvailable: Boolean,
     val knoxLicenseActive: Boolean,
+    val samsungFirmware: SamsungFirmwareProfile,
     val shizukuBinderAlive: Boolean,
     val shizukuPermissionGranted: Boolean,
     val dhizukuCompiled: Boolean,
@@ -66,6 +70,30 @@ data class DpcDiagnosticsSnapshot(
         put("samsungDevice", samsungDevice)
         put("knoxAvailable", knoxAvailable)
         put("knoxLicenseActive", knoxLicenseActive)
+        put("samsungFirmware", JSONObject().apply {
+            put("samsungDevice", samsungFirmware.samsungDevice)
+            putNullable("salesCode", samsungFirmware.salesCode)
+            putNullable("multiCsc", samsungFirmware.multiCsc)
+            putNullable("countryIso", samsungFirmware.countryIso)
+            putNullable("omcPath", samsungFirmware.omcPath)
+            putNullable("omcEtcPath", samsungFirmware.omcEtcPath)
+            putNullable("omcBuildVersion", samsungFirmware.omcBuildVersion)
+            putNullable("buildPda", samsungFirmware.buildPda)
+            putNullable("buildIncremental", samsungFirmware.buildIncremental)
+            put("propertyAccessAvailable", samsungFirmware.propertyAccessAvailable)
+            put("observedPackageCount", samsungFirmware.observedPackageCount)
+            put("packages", JSONArray().apply {
+                samsungFirmware.packages.forEach { probe ->
+                    put(JSONObject().apply {
+                        put("packageName", probe.packageName)
+                        put("role", probe.role)
+                        put("installed", probe.installed)
+                        putNullable("enabled", probe.enabled)
+                        putNullable("systemApp", probe.systemApp)
+                    })
+                }
+            })
+        })
         put("shizukuBinderAlive", shizukuBinderAlive)
         put("shizukuPermissionGranted", shizukuPermissionGranted)
         put("dhizukuCompiled", dhizukuCompiled)
@@ -111,6 +139,7 @@ data class DpcDiagnosticsSnapshot(
             val update = gateway.getSystemUpdatePolicySpec().value
             val cope = gateway.getCopePolicySnapshot().value
             val offline = OfflineDeploymentStore(context).load()
+            val samsungFirmware = AndroidSamsungFirmwareProbe(context).read()
 
             val managementState = when {
                 management.ownership == io.dpcaio.core.model.OwnershipMode.DEVICE_OWNER -> ManagementDiagnosticState.DEVICE_OWNER
@@ -134,6 +163,7 @@ data class DpcDiagnosticsSnapshot(
                 samsungDevice = management.samsungDevice,
                 knoxAvailable = management.knoxAvailable,
                 knoxLicenseActive = management.knoxLicenseActive,
+                samsungFirmware = samsungFirmware,
                 shizukuBinderAlive = shizuku?.binderAlive ?: false,
                 shizukuPermissionGranted = shizuku?.permissionGranted ?: false,
                 dhizukuCompiled = runCatching { Class.forName("io.dpcaio.delegation.dhizuku.DhizukuCompatRuntime") }.isSuccess,
