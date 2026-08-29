@@ -20,6 +20,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Provision host test dependencies
+        run: python3 -m pip install -r tools/provisioning/requirements.txt
       - name: Wire canonical host runner
         run: |
           python3 - <<'PY'
