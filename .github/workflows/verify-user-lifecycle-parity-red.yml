@@ -1,0 +1,18 @@
+name: Verify user lifecycle parity RED
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-user-lifecycle-parity
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run user lifecycle parity contract
+        run: python3 tools/tests/test_132_user_lifecycle_parity_contract.py
