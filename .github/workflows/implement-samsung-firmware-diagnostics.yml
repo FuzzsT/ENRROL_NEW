@@ -1,0 +1,58 @@
+name: Implement Samsung firmware diagnostics contract
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-samsung-firmware-diagnostics
+    paths:
+      - .github/workflows/implement-samsung-firmware-diagnostics.yml
+
+permissions:
+  contents: write
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: Wire contract into canonical host runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/run_host_tests.sh')
+          text = path.read_text()
+          marker = 'python3 "$ROOT/tools/tests/test_diagnostics_contract.py"\n'
+          addition = marker + 'python3 "$ROOT/tools/tests/test_133_samsung_firmware_diagnostics_contract.py"\n'
+          if 'test_133_samsung_firmware_diagnostics_contract.py' not in text:
+              if marker not in text:
+                  raise SystemExit('diagnostics runner marker missing')
+              text = text.replace(marker, addition, 1)
+              path.write_text(text)
+          PY
+      - name: Run focused diagnostics contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_diagnostics_contract.py
+          python3 tools/tests/test_133_samsung_firmware_diagnostics_contract.py
+          python3 tools/tests/test_non_sdk_api_scan.py
+          python3 tools/tests/test_release_secret_scan.py
+          git diff --check
+      - name: Commit canonical runner wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/run_host_tests.sh
+          if git diff --cached --quiet; then
+            echo 'runner already wired'
+          else
+            git commit -m 'test: run Samsung firmware diagnostics contract'
+            git push origin HEAD:feat/dpc-aio-130-samsung-firmware-diagnostics
+          fi
