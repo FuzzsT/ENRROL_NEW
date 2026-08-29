@@ -1,0 +1,32 @@
+name: Implement user lifecycle parity
+
+on:
+  push:
+    branches:
+      - feat/dpc-aio-130-user-lifecycle-parity
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply source patch
+        run: python3 tools/patch_user_lifecycle_parity.py
+      - name: Commit source changes when needed
+        run: |
+          if git diff --quiet -- apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt tools/run_host_tests.sh; then
+            echo "No source patch needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/dpc/modules/policy/core/src/main/kotlin/io/dpcaio/policy/parity/TestDpcParityCatalog.kt \
+                  apps/dpc/app/src/main/kotlin/io/dpcaio/app/TestDpcParityActionRouter.kt \
+                  tools/run_host_tests.sh
+          git commit -m "feat: wire user lifecycle parity actions"
+          git push origin HEAD:feat/dpc-aio-130-user-lifecycle-parity
