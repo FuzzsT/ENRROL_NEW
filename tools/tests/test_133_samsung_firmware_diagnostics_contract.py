@@ -24,16 +24,19 @@ for token in [
     "com.swiftkey.swiftkeyconfigurator",
     "com.touchtype.swiftkey",
     "com.amazon.appmanager",
+    '"ro.csc.sales_code"',
+    '"ro.boot.sales_code"',
+    '"persist.sys.omc_path"',
+    '"ro.omc.build.version"',
 ]:
     assert token in core, token
 
 for token in [
     "class AndroidSamsungFirmwareProbe",
     'Class.forName("android.os.SystemProperties")',
-    '"ro.csc.sales_code"',
-    '"ro.boot.sales_code"',
-    '"persist.sys.omc_path"',
-    '"ro.omc.build.version"',
+    "SamsungFirmwareEvidenceCatalog.salesCodePropertyKeys",
+    "SamsungFirmwareEvidenceCatalog.omcPathPropertyKeys",
+    "SamsungFirmwareEvidenceCatalog.packageRoles",
     "PackageManager.ApplicationInfoFlags",
     "Build.MANUFACTURER",
 ]:
