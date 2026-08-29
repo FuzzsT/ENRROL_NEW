@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import io.dpcaio.samsung.firmware.SamsungFirmwareEvidenceCatalog
+import io.dpcaio.samsung.firmware.SamsungFirmwarePackageEvidence
 import io.dpcaio.samsung.firmware.SamsungFirmwarePackageProbe
 import io.dpcaio.samsung.firmware.SamsungFirmwareProfile
 
@@ -19,6 +20,7 @@ class AndroidSamsungFirmwareProbe(context: Context) {
         return SamsungFirmwareProfile(
             samsungDevice = Build.MANUFACTURER.equals("samsung", ignoreCase = true),
             salesCode = firstProperty(SamsungFirmwareEvidenceCatalog.salesCodePropertyKeys),
+            carrierId = firstProperty(SamsungFirmwareEvidenceCatalog.carrierIdPropertyKeys),
             multiCsc = properties.get(SamsungFirmwareEvidenceCatalog.multiCscProperty),
             countryIso = firstProperty(SamsungFirmwareEvidenceCatalog.countryIsoPropertyKeys),
             omcPath = omcPath,
@@ -28,8 +30,8 @@ class AndroidSamsungFirmwareProbe(context: Context) {
             buildIncremental = properties.get(SamsungFirmwareEvidenceCatalog.buildIncrementalProperty)
                 ?: Build.VERSION.INCREMENTAL.takeIf { it.isNotBlank() },
             propertyAccessAvailable = properties.available,
-            packages = SamsungFirmwareEvidenceCatalog.packageRoles.map { (packageName, role) ->
-                packageProbe(packageName, role)
+            packages = SamsungFirmwareEvidenceCatalog.packageEvidence.map { (packageName, evidence) ->
+                packageProbe(packageName, evidence)
             },
         )
     }
@@ -37,11 +39,15 @@ class AndroidSamsungFirmwareProbe(context: Context) {
     private fun firstProperty(keys: List<String>): String? =
         keys.asSequence().mapNotNull(properties::get).firstOrNull()
 
-    private fun packageProbe(packageName: String, role: String): SamsungFirmwarePackageProbe {
+    private fun packageProbe(
+        packageName: String,
+        evidence: SamsungFirmwarePackageEvidence,
+    ): SamsungFirmwarePackageProbe {
         val info = applicationInfo(packageName)
         return SamsungFirmwarePackageProbe(
             packageName = packageName,
-            role = role,
+            role = evidence.role,
+            packageClass = evidence.packageClass,
             installed = info != null,
             enabled = info?.enabled,
             systemApp = info?.let {

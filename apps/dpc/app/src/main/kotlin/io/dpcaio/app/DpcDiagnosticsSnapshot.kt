@@ -73,6 +73,7 @@ data class DpcDiagnosticsSnapshot(
         put("samsungFirmware", JSONObject().apply {
             put("samsungDevice", samsungFirmware.samsungDevice)
             putNullable("salesCode", samsungFirmware.salesCode)
+            putNullable("carrierId", samsungFirmware.carrierId)
             putNullable("multiCsc", samsungFirmware.multiCsc)
             putNullable("countryIso", samsungFirmware.countryIso)
             putNullable("omcPath", samsungFirmware.omcPath)
@@ -82,11 +83,15 @@ data class DpcDiagnosticsSnapshot(
             putNullable("buildIncremental", samsungFirmware.buildIncremental)
             put("propertyAccessAvailable", samsungFirmware.propertyAccessAvailable)
             put("observedPackageCount", samsungFirmware.observedPackageCount)
+            put("carrierProvisioningPresent", samsungFirmware.carrierProvisioningPresent)
+            put("carrierPackageCount", samsungFirmware.carrierPackageCount)
+            put("connectivityOverlayPresent", samsungFirmware.connectivityOverlayPresent)
             put("packages", JSONArray().apply {
                 samsungFirmware.packages.forEach { probe ->
                     put(JSONObject().apply {
                         put("packageName", probe.packageName)
                         put("role", probe.role)
+                        put("packageClass", probe.packageClass.name)
                         put("installed", probe.installed)
                         putNullable("enabled", probe.enabled)
                         putNullable("systemApp", probe.systemApp)
