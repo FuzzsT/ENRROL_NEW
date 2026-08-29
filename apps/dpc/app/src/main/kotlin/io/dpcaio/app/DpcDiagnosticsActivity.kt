@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 class DpcDiagnosticsActivity : Activity() {
@@ -19,6 +18,7 @@ class DpcDiagnosticsActivity : Activity() {
 
     private fun render() {
         val snapshot = DpcDiagnosticsSnapshot.capture(this)
+        val firmware = snapshot.samsungFirmware
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPaddingDp(24, 24, 24, 24)
@@ -36,6 +36,27 @@ class DpcDiagnosticsActivity : Activity() {
                 appendLine("Samsung: ${snapshot.samsungDevice}")
                 appendLine("Knox runtime: ${snapshot.knoxAvailable}")
                 appendLine("Knox license active: ${snapshot.knoxLicenseActive}")
+                appendLine()
+                appendLine("Samsung firmware profile:")
+                appendLine("Sales code: ${firmware.salesCode ?: "unknown"}")
+                appendLine("Multi-CSC: ${firmware.multiCsc ?: "unknown"}")
+                appendLine("Country ISO: ${firmware.countryIso ?: "unknown"}")
+                appendLine("OMC path: ${firmware.omcPath ?: "unavailable"}")
+                appendLine("OMC etc path: ${firmware.omcEtcPath ?: "unavailable"}")
+                appendLine("OMC build: ${firmware.omcBuildVersion ?: "unavailable"}")
+                appendLine("Build PDA: ${firmware.buildPda ?: "unavailable"}")
+                appendLine("Build incremental: ${firmware.buildIncremental ?: "unavailable"}")
+                appendLine("System-property probe: ${if (firmware.propertyAccessAvailable) "available" else "blocked/unavailable"}")
+                appendLine("Firmware package probes: ${firmware.observedPackageCount}/${firmware.packages.size} observed")
+                firmware.packages.forEach { probe ->
+                    val state = if (probe.installed) {
+                        "installed, enabled=${probe.enabled}, system=${probe.systemApp}"
+                    } else {
+                        "not observed"
+                    }
+                    appendLine("  ${probe.packageName} — ${probe.role}: $state")
+                }
+                appendLine()
                 appendLine("Shizuku binder: ${snapshot.shizukuBinderAlive}")
                 appendLine("Shizuku permission: ${snapshot.shizukuPermissionGranted}")
                 appendLine("Dhizuku compiled: ${snapshot.dhizukuCompiled}")
