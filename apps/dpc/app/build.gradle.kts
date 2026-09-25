@@ -27,8 +27,8 @@ android {
         applicationId = "io.dpcaio.app"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 27
-        versionName = "1.3.0"
+        versionCode = 28
+        versionName = "1.3.1"
         buildConfigField("String", "ENROLLMENT_SIGNING_PUBLIC_KEY", buildConfigString(enrollmentSigningPublicKey.get()))
         buildConfigField("String", "OFFLINE_SIGNING_PUBLIC_KEY", buildConfigString(offlineSigningPublicKey.get()))
     }
