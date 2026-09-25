@@ -8,10 +8,10 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'tools/release/prepare_enterprise_signing.sh'
 WORKFLOW = ROOT / '.github/workflows/build-aio-enrollment.yml'
-PASSWORD = 'RunOnly-Strong-Pass-114!'
+PASSWORD = 'RunOnly-Strong-Pass-114!'\nNEW_PASSWORD = 'RunOnly-New-Strong-Pass-114!'
 
 
-def run_prepare(event_name: str, password: str = '', persisted_url: str = ''):
+def run_prepare(event_name: str, password: str = '', persisted_url: str = '', allow_rotation: str = 'false'):
     td_obj = tempfile.TemporaryDirectory()
     td = Path(td_obj.name)
     env_file = td / 'github-env'
@@ -84,13 +84,38 @@ try:
 finally:
     run2.cleanup()
 
-run3, cp3, _, _, _ = run_prepare('workflow_dispatch', 'Wrong-Password-114-Long!', carry.as_uri())
+run3, cp3, _, _, _ = run_prepare('workflow_dispatch', NEW_PASSWORD, carry.as_uri())
 try:
     assert cp3.returncode != 0
     assert 'PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH' in cp3.stderr or 'PERSISTED_SIGNING_KEY_INVALID' in cp3.stderr
 finally:
     run3.cleanup()
+
+run3b, cp3b, env3b, out3b, files3b = run_prepare('workflow_dispatch', NEW_PASSWORD, carry.as_uri(), 'true')
+try:
+    assert cp3b.returncode == 0, cp3b.stderr + cp3b.stdout
+    assert 'persisted_signing_key=rotated' in out3b
+    assert 'signing_key_rotated=true' in out3b
+    assert 'DPC_AIO_SIGNING_EXPORT_PREVIOUS_ENCRYPTED_PATH=' in env3b
+    assert 'DPC-AIO-signing-keystore.previous.enc' in files3b
+    assert 'DPC-AIO-signing-keystore.enc' in files3b
+    cert3b = [line.split('=',1)[1] for line in out3b.splitlines() if line.startswith('signing_cert_sha256=')][-1]
+    assert cert3b != cert1
+    carry_new = Path(tempfile.mkdtemp()) / 'persisted-new.enc'
+    carry_new.write_bytes(files3b['DPC-AIO-signing-keystore.enc'])
+finally:
+    run3b.cleanup()
+
+run3c, cp3c, _, out3c, _ = run_prepare('workflow_dispatch', NEW_PASSWORD, carry_new.as_uri())
+try:
+    assert cp3c.returncode == 0, cp3c.stderr + cp3c.stdout
+    assert 'persisted_signing_key=restored' in out3c
+    cert3c = [line.split('=',1)[1] for line in out3c.splitlines() if line.startswith('signing_cert_sha256=')][-1]
+    assert cert3c == cert3b
+finally:
+    run3c.cleanup()
     shutil.rmtree(carry.parent, ignore_errors=True)
+    shutil.rmtree(carry_new.parent, ignore_errors=True)
 
 run4, cp4, _, _, _ = run_prepare('workflow_dispatch', '')
 try:
