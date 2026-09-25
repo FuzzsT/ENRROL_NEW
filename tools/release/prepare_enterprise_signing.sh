@@ -138,6 +138,17 @@ if [[ ! "$alias" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
+rotation_raw="${DPC_AIO_ALLOW_SIGNING_KEY_ROTATION:-false}"
+case "${rotation_raw,,}" in
+  true|1|yes) allow_rotation="true" ;;
+  false|0|no|"") allow_rotation="false" ;;
+  *)
+    echo "SIGNING_KEY_ROTATION_FLAG_INVALID: expected true/false" >&2
+    exit 1
+    ;;
+esac
+signing_key_rotated="false"
+
 export DPC_AIO_EFFECTIVE_SIGNING_PASSWORD="$password"
 keytool_bin="$(command -v keytool)"
 certificate="$RUNNER_TEMP/dpc-aio-enterprise-release.cer"
@@ -153,22 +164,51 @@ if [[ -n "$persisted_url" ]]; then
   encrypted_in="$RUNNER_TEMP/dpc-aio-persisted-signing.enc"
   if curl -fsSL --connect-timeout 10 --max-time 60 "$persisted_url" -o "$encrypted_in"; then
     persisted_state="downloaded"
-    if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+    decrypt_ok="false"
+    validate_ok="false"
+    if openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
         -in "$encrypted_in" -out "$keystore" \
         -pass env:DPC_AIO_EFFECTIVE_SIGNING_PASSWORD >/dev/null 2>&1; then
-      echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: existing release signing keystore could not be decrypted with the entered password" >&2
+      decrypt_ok="true"
+      chmod 600 "$keystore"
+      if validate_keystore "$keystore" "$alias" "$password"; then
+        validate_ok="true"
+      fi
+    fi
+
+    if [[ "$decrypt_ok" == "true" && "$validate_ok" == "true" ]]; then
+      rm -f "$encrypted_in"
+      append_output persisted_signing_key "restored"
+      echo "Enterprise release signing mode: PASSWORD_RELEASE_KEYSTORE (restored from rolling release)"
+    else
+      if [[ "$decrypt_ok" != "true" ]]; then
+        reason="password-mismatch"
+        echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: existing release signing keystore could not be decrypted with the entered password" >&2
+      else
+        reason="invalid-keystore"
+        echo "PERSISTED_SIGNING_KEY_INVALID: decrypted keystore does not contain the expected alias or password" >&2
+      fi
+
+      if [[ "$allow_rotation" != "true" ]]; then
+        rm -f "$encrypted_in" "$keystore"
+        echo "SIGNING_KEY_ROTATION_REQUIRED: rerun manually with rotate_signing_key_on_password_mismatch enabled only if breaking update compatibility is intentional" >&2
+        exit 1
+      fi
+
+      previous_encrypted="$RUNNER_TEMP/DPC-AIO-signing-keystore.previous.enc"
+      cp "$encrypted_in" "$previous_encrypted"
+      chmod 600 "$previous_encrypted"
+      previous_cipher_sha256="$(sha256sum "$previous_encrypted" | awk '{print toupper($1)}')"
+      append_env DPC_AIO_SIGNING_EXPORT_PREVIOUS_ENCRYPTED_PATH "$previous_encrypted"
+      append_output persisted_signing_key "rotated"
+      append_output signing_rotation_reason "$reason"
+      append_output previous_encrypted_keystore_sha256 "$previous_cipher_sha256"
+      signing_key_rotated="true"
+      persisted_state="rotating"
       rm -f "$encrypted_in" "$keystore"
-      exit 1
+      echo "PERSISTED_SIGNING_KEY_ROTATION_ENABLED: old encrypted keystore preserved as DPC-AIO-signing-keystore.previous.enc; generating a new release signer." >&2
+      echo "WARNING: APKs signed with the previous key are not update-compatible with the new signer." >&2
     fi
-    rm -f "$encrypted_in"
-    chmod 600 "$keystore"
-    if ! validate_keystore "$keystore" "$alias" "$password"; then
-      echo "PERSISTED_SIGNING_KEY_INVALID: decrypted keystore does not contain the expected alias or password" >&2
-      rm -f "$keystore"
-      exit 1
-    fi
-    append_output persisted_signing_key "restored"
-    echo "Enterprise release signing mode: PASSWORD_RELEASE_KEYSTORE (restored from rolling release)"
   else
     rm -f "$encrypted_in"
   fi
@@ -186,7 +226,9 @@ if [[ ! -s "$keystore" ]]; then
     -storetype PKCS12 \
     -storepass:env DPC_AIO_EFFECTIVE_SIGNING_PASSWORD \
     -keypass:env DPC_AIO_EFFECTIVE_SIGNING_PASSWORD
-  append_output persisted_signing_key "created"
+  if [[ "$persisted_state" != "rotating" ]]; then
+    append_output persisted_signing_key "created"
+  fi
   echo "Enterprise release signing mode: PASSWORD_RELEASE_KEYSTORE (new rolling-release key)"
 fi
 
@@ -209,6 +251,7 @@ encrypt_keystore_for_release "$keystore" "$password"
 append_env DPC_AIO_SIGNING_MODE "PASSWORD_RELEASE_KEYSTORE"
 append_output mode "password-release-keystore"
 append_output signing_cert_sha256 "$expected"
+append_output signing_key_rotated "$signing_key_rotated"
 
 echo "Effective signing certificate SHA-256: $expected"
 echo "Password-backed encrypted keystore will be published with the rolling release for update-compatible future manual runs."
