@@ -10,7 +10,7 @@ signing = (ROOT / 'tools/release/prepare_enterprise_signing.sh').read_text('utf-
 assert "release_signing_password:" in workflow
 inputs = workflow.split('workflow_dispatch:',1)[1].split('push:',1)[0]
 keys = re.findall(r'^      ([A-Za-z0-9_]+):\s*$', inputs, flags=re.M)
-assert keys == ['release_signing_password'], keys
+assert keys == ['release_signing_password', 'rotate_signing_key_on_password_mismatch'], keys
 
 for name in [
     'DPC_AIO_DEFAULT_RELEASE_APK_NAME',
