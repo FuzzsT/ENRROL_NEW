@@ -52,11 +52,7 @@ def render_png(text: str, output: Path) -> None:
         import qrcode
     except ImportError as exc:
         raise RuntimeError('Python package qrcode[pil] is required; install tools/provisioning/requirements.txt') from exc
-    # Four modules is the QR minimum quiet zone, but dense Android Enterprise
-    # payloads at our canonical GitHub Releases URL are not decoded reliably by
-    # OpenCV with only that minimum. Six modules remains standards-compliant
-    # and gives setup/CI scanners enough separation from the image boundary.
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=6)
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
     qr.add_data(text)
     qr.make(fit=True)
     image = qr.make_image(fill_color='black', back_color='white')
@@ -97,17 +93,11 @@ def main() -> int:
         raise SystemExit('signature checksum requested but apksigner certificate SHA-256 could not be read')
 
     mode = 'signature' if cert is not None else 'package'
-    allow_offline = bool(args.allow_offline or args.offline_mode in ('FULL_OFFLINE', 'OFFLINE_THEN_SYNC'))
     payload = {
         COMPONENT: f'{args.package}/{args.receiver}',
         DOWNLOAD: args.apk_url,
+        ALLOW_OFFLINE: bool(args.allow_offline or args.offline_mode in ('FULL_OFFLINE', 'OFFLINE_THEN_SYNC')),
     }
-    # Android 13+ defines PROVISIONING_ALLOW_OFFLINE=false as the framework
-    # default. Omit the false value to keep setup-wizard QR codes smaller and
-    # easier to scan; include the extra only when offline provisioning is
-    # intentionally requested.
-    if allow_offline:
-        payload[ALLOW_OFFLINE] = True
     metadata = {
         'schema': 1,
         'packageName': args.package,
@@ -132,11 +122,8 @@ def main() -> int:
     admin_extras = {
         REQUESTED_MODE: args.provisioning_mode,
         ENROLLMENT_SOURCE: args.enrollment_source,
+        ENROLLMENT_OFFLINE_MODE: args.offline_mode,
     }
-    # EnrollmentConfigParser already defaults to ONLINE when this custom extra
-    # is absent. Avoid serializing the redundant default into every QR.
-    if args.offline_mode != 'ONLINE':
-        admin_extras[ENROLLMENT_OFFLINE_MODE] = args.offline_mode
     if args.enrollment_endpoint:
         admin_extras[ENROLLMENT_ENDPOINT] = args.enrollment_endpoint
     if args.offline_bundle_id:

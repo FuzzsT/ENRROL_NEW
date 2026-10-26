@@ -32,7 +32,7 @@ class SamsungSettingsEditorActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = if (Build.MANUFACTURER.equals("samsung", true)) "Samsung Settings Editor" else "Settings Editor"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20,20,20,20) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
         namespace = Spinner(this).apply { adapter = ArrayAdapter(this@SamsungSettingsEditorActivity, android.R.layout.simple_spinner_dropdown_item, listOf("SYSTEM","SECURE","GLOBAL")) }
         key = EditText(this).apply { hint = "setting key" }
         value = EditText(this).apply { hint = "value" }
@@ -41,7 +41,6 @@ class SamsungSettingsEditorActivity : Activity() {
         val write = Button(this).apply { text = "Write + verify stability"; setOnClickListener { writeValue() } }
         root.addView(namespace); root.addView(key); root.addView(value); root.addView(read); root.addView(write)
         root.addView(status, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        DpcUiShell.install(this, root)
         setContentView(root)
         shizuku.bind()
     }

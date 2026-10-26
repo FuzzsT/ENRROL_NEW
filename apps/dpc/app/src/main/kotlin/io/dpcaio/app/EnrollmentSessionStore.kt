@@ -7,21 +7,13 @@ import io.dpcaio.core.model.EnrollmentSource
 import io.dpcaio.core.model.EnrollmentStage
 import java.security.MessageDigest
 
-sealed interface EnrollmentSessionReadResult {
-    data object Absent : EnrollmentSessionReadResult
-    data class Present(val session: EnrollmentSession) : EnrollmentSessionReadResult
-    data class Corrupt(val errorClass: String) : EnrollmentSessionReadResult
-}
-
 class EnrollmentSessionStore(context: Context) {
     private val prefs = context.createDeviceProtectedStorageContext()
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun readResult(): EnrollmentSessionReadResult {
-        if (!prefs.contains(KEY_SESSION_ID)) return EnrollmentSessionReadResult.Absent
+    fun read(): EnrollmentSession? {
+        val sessionId = prefs.getString(KEY_SESSION_ID, null) ?: return null
         return runCatching {
-            val sessionId = prefs.getString(KEY_SESSION_ID, null)
-                ?: error("Enrollment session id is missing")
             EnrollmentSession(
                 sessionId = sessionId,
                 createdAt = prefs.getLong(KEY_CREATED_AT, 0L),
@@ -42,16 +34,7 @@ class EnrollmentSessionStore(context: Context) {
                 lastError = prefs.getString(KEY_LAST_ERROR, null)?.let(EnrollmentErrorCode::valueOf),
                 lastSuccessfulStage = prefs.getString(KEY_LAST_SUCCESSFUL_STAGE, null)?.let(EnrollmentStage::valueOf),
             )
-        }.fold(
-            onSuccess = EnrollmentSessionReadResult::Present,
-            onFailure = { EnrollmentSessionReadResult.Corrupt(it.javaClass.simpleName) },
-        )
-    }
-
-    fun read(): EnrollmentSession? = when (val result = readResult()) {
-        EnrollmentSessionReadResult.Absent -> null
-        is EnrollmentSessionReadResult.Present -> result.session
-        is EnrollmentSessionReadResult.Corrupt -> null
+        }.getOrNull()
     }
 
     fun write(session: EnrollmentSession) {

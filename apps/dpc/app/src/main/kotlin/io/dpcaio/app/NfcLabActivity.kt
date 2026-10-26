@@ -20,7 +20,7 @@ class NfcLabActivity : Activity(), NfcAdapter.ReaderCallback {
         super.onCreate(savedInstanceState)
         title = "NFC Lab"
         adapter = NfcAdapter.getDefaultAdapter(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20,20,20,20) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
         output = TextView(this).apply { setTextIsSelectable(true) }
         trace = EditText(this).apply { hint = "Paste DPC-AIO-NFC/1 trace for owned/synthetic HCE replay"; minLines = 8 }
         root.addView(Button(this).apply { text = "Enable reader"; setOnClickListener { enableReader() } })
@@ -28,7 +28,6 @@ class NfcLabActivity : Activity(), NfcAdapter.ReaderCallback {
         root.addView(Button(this).apply { text = "Install replay trace"; setOnClickListener { installTrace() } })
         root.addView(Button(this).apply { text = "Clear replay"; setOnClickListener { SyntheticNfcReplayRegistry.clear(); output.text = "replay cleared" } })
         root.addView(output)
-        DpcUiShell.install(this, root)
         setContentView(root)
     }
 

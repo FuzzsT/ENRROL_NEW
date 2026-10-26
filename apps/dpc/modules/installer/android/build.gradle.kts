@@ -8,5 +8,5 @@ android {
 dependencies {
     implementation(project(":installer-core"))
     implementation(project(":core-model"))
-    api(project(":policy-core"))
+    implementation(project(":policy-core"))
 }

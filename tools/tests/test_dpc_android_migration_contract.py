@@ -26,7 +26,7 @@ if transient:
     errors.append('transient python bytecode present: ' + ', '.join(transient[:5]))
 
 readme = read('README.md')
-if 'local-localhost-app-system/dpc_android' not in readme:
+if 'FuzzsT/ENRROL_NEW' not in readme:
     errors.append('README missing dpc_android target')
 
 prod = read('.github/workflows/build-aio-enrollment.yml')

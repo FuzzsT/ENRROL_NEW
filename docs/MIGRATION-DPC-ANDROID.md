@@ -1,8 +1,8 @@
 # DPC-AIO migration target: dpc_android
 
-Destination repository: `https://github.com/local-localhost-app-system/dpc_android`
+Destination repository: `https://github.com/FuzzsT/ENRROL_NEW`
 
-This repository is the expanded DPC-AIO 1.2.0 source tree. The Android application is built directly from the repository root; source is not hidden inside a release archive.
+This repository is the expanded DPC-AIO 1.1.4 source tree. The Android application is built directly from the repository root; source is not hidden inside a release archive.
 
 ## Enrollment release paths
 

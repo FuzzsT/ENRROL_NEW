@@ -34,7 +34,7 @@ class OfflineSetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Full Offline Setup"
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20, 20, 20, 20) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
         body.addView(TextView(this).apply { text = "FULL OFFLINE / OFFLINE THEN SYNC\nFinal state: OFFLINE_VERIFIED only after package/policy readback" })
         body.addView(Button(this).apply { text = "FULL OFFLINE"; setOnClickListener { mode = OfflineMode.FULL_OFFLINE; renderState("Mode: FULL OFFLINE") } })
         body.addView(Button(this).apply { text = "OFFLINE THEN SYNC"; setOnClickListener { mode = OfflineMode.OFFLINE_THEN_SYNC; renderState("Mode: OFFLINE THEN SYNC") } })
@@ -44,7 +44,7 @@ class OfflineSetupActivity : Activity() {
         body.addView(Button(this).apply { text = "Refresh state"; setOnClickListener { showPersistedState() } })
         output = TextView(this).apply { setTextIsSelectable(true) }
         body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(DpcUiShell.scroll(this, body))
+        setContentView(ScrollView(this).apply { addView(body) })
         showPersistedState()
     }
 
@@ -75,8 +75,7 @@ class OfflineSetupActivity : Activity() {
     private fun preview() {
         val file = importedBundle
         val inspected = bundleInspection
-        val manifest = inspected?.manifest
-        if (file == null || !file.isFile || manifest == null) {
+        if (file == null || !file.isFile || inspected?.manifest == null) {
             renderState("${OfflineReadinessStatus.OFFLINE_BUNDLE_INVALID}\nImport and verify an offline bundle first")
             return
         }
@@ -92,10 +91,10 @@ class OfflineSetupActivity : Activity() {
             if (dpm.isDeviceOwnerApp(packageName)) add("PACKAGE_INSTALL")
         }
         val readiness = OfflineReadinessPlanner().evaluate(
-            manifest,
+            inspected.manifest,
             OfflineReadinessInput(
                 signatureVerified = inspected.signatureVerified && inspected.signingIdentityIssues.isEmpty() && inspected.packagePlan.ready,
-                schemaSupported = manifest.schemaVersion == 1,
+                schemaSupported = inspected.manifest.schemaVersion == 1,
                 currentAndroidApi = android.os.Build.VERSION.SDK_INT,
                 provisioningMode = provisioningMode,
                 currentDpcVersion = BuildConfig.VERSION_NAME,
@@ -106,8 +105,8 @@ class OfflineSetupActivity : Activity() {
         renderState(buildString {
             appendLine("${readiness.status}")
             appendLine("Mode: ${if (mode == OfflineMode.FULL_OFFLINE) "FULL OFFLINE" else "OFFLINE THEN SYNC"}")
-            appendLine("Bundle: ${manifest.bundleId}")
-            appendLine("Packages: ${manifest.packages.size}")
+            appendLine("Bundle: ${inspected.manifest.bundleId}")
+            appendLine("Packages: ${inspected.manifest.packages.size}")
             appendLine("Verified files: ${inspected.packagePlan.verifiedFiles.size}")
             appendLine("Capabilities: ${capabilities.sorted()}")
             readiness.details.forEach(::appendLine)
@@ -119,11 +118,11 @@ class OfflineSetupActivity : Activity() {
     private fun applySupported() {
         val file = importedBundle
         val inspected = bundleInspection
-        val manifest = inspected?.manifest
-        if (file == null || inspected?.ready != true || manifest == null) {
+        if (file == null || inspected?.ready != true || inspected.manifest == null) {
             renderState("OFFLINE_BUNDLE_INVALID\nSigned manifest/package verification must pass before apply")
             return
         }
+        val manifest = inspected.manifest
         coordinator.startFullOffline(manifest.bundleId)
         deploymentStore.save(
             OfflineDeploymentState(

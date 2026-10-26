@@ -1,10 +1,10 @@
-# DPC-AIO 1.3.0 — TestDPC Parity + Enterprise + Samsung OEM AIO
+# DPC-AIO 1.1.4 — Enterprise + Samsung OEM AIO
 
 Android Enterprise DPC workspace with production QR enrollment, protected enterprise operations, deterministic capability routing and explicit verification evidence.
 
-## 1.3.0 highlights
+## 1.1.4 highlights
 
-- **QR Release Bundle:** tagged/continuous GitHub releases now include dedicated Work Profile, Device Owner and compatibility QR assets plus JSON/payload/metadata, validation reports, `SHA256SUMS.txt`, `RELEASE-INDEX.json`, `QR-README.md` and a single `DPC-AIO-1.3.0-QR-RELEASE-BUNDLE.zip`.
+- **QR Release Bundle:** tagged/continuous GitHub releases now include dedicated Work Profile, Device Owner and compatibility QR assets plus JSON/payload/metadata, validation reports, `SHA256SUMS.txt`, `RELEASE-INDEX.json`, `QR-README.md` and a single `DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip`.
 - The bundle is created only after the signed APK, QR/APK binding checks and AOSP Device Owner runtime smoke succeed in CI.
 
 - **GitHub Upload Ready / Hardened:** read-only build permissions, isolated write-only publish job, step-scoped signing secrets, immutable SHA-pinned GitHub Actions and signing-material cleanup before emulator execution.
@@ -21,16 +21,14 @@ Android Enterprise DPC workspace with production QR enrollment, protected enterp
 
 ## Enrollment quick start
 
-Repository target: `local-localhost-app-system/dpc_android`.
+Repository target: `FuzzsT/ENRROL_NEW`.
 
 Two CI enrollment paths are intentionally separate:
 
 - **Build AIO + enrollment QR** (`.github/workflows/build-aio-enrollment.yml`) — production path. Requires a stable signing keystore/fingerprint in GitHub Secrets/Variables, runs the Android Device Owner smoke test, publishes the exact APK + QR bundle, and verifies the public APK bytes after release.
-- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. Manual runs expose only the `qr_type` dropdown, create a run-specific PKCS12 signer, build `enterpriseRelease`, generate the selected Work Profile and/or Device Owner QR code bound to that exact APK, publish it to the `dpc-aio-emergency-enrollment` prerelease, and verify the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
+- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. It creates a run-specific PKCS12 signer, builds `enterpriseRelease`, generates Work Profile + Device Owner QR codes bound to that exact APK, publishes them to the `dpc-aio-emergency-enrollment` prerelease, and verifies the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
 
 For a **Device Owner** QR, use a clean/factory-reset test device and scan `device-owner-qr.png` during Android Setup. For a **Work Profile**, use `work-profile-qr.png` in a supported managed-profile provisioning flow. Do not treat QR generation alone as runtime proof; use the CI validation JSON and Device Owner smoke evidence attached to the run/release.
-
-Manual **Build AIO + enrollment QR** runs show `QR type: both | work-profile | fully-managed` plus one free-text field, the password-backed release password (minimum 12 characters). Tag/push releases default deterministically to `both`. Emergency manual runs show the same QR type dropdown and no signing-password field.
 
 ## Repository layout
 

@@ -15,12 +15,10 @@ class PolicyComplianceActivity : Activity() {
     }
 
     private fun runEnrollment() {
-        val checkingView = TextView(this).apply {
+        setContentView(TextView(this).apply {
             text = "Checking enterprise enrollment…"
-            setPaddingDp(32, 32, 32, 32)
-        }
-        DpcUiShell.install(this, checkingView)
-        setContentView(checkingView)
+            setPadding(32, 32, 32, 32)
+        })
         Thread {
             val outcome = EnrollmentExecutionRouter(this).execute(intent)
             runOnUiThread {
@@ -39,7 +37,7 @@ class PolicyComplianceActivity : Activity() {
     private fun renderFailure(message: String, retryable: Boolean) {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPaddingDp(32, 32, 32, 32)
+            setPadding(32, 32, 32, 32)
         }
         body.addView(TextView(this).apply { text = message })
         if (retryable) body.addView(Button(this).apply {
@@ -50,7 +48,6 @@ class PolicyComplianceActivity : Activity() {
             text = "Enrollment diagnostics"
             setOnClickListener { startActivity(Intent(this@PolicyComplianceActivity, EnrollmentStatusActivity::class.java)) }
         })
-        DpcUiShell.install(this, body)
         setContentView(body)
     }
 }

@@ -38,7 +38,7 @@ class EnrollmentManualActivity : Activity() {
         val status = TextView(this)
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPaddingDp(28, 28, 28, 28)
+            setPadding(28, 28, 28, 28)
             addView(endpoint)
             addView(token)
             addView(profile)
@@ -89,6 +89,6 @@ class EnrollmentManualActivity : Activity() {
                 setOnClickListener { startActivity(android.content.Intent(this@EnrollmentManualActivity, EnrollmentStatusActivity::class.java)) }
             })
         }
-        setContentView(DpcUiShell.scroll(this, body))
+        setContentView(ScrollView(this).apply { addView(body) })
     }
 }

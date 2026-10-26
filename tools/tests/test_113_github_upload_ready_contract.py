@@ -5,32 +5,6 @@ ROOT=Path(__file__).resolve().parents[2]
 errors=[]
 read=lambda p:(ROOT/p).read_text('utf-8')
 
-workflow_dir=ROOT/'.github/workflows'
-expected_workflows={
-    'build-aio-enrollment.yml': 'Build AIO + enrollment QR',
-    'build-emergency-enrollment.yml': 'Emergency enrollment (ephemeral signing)',
-}
-workflows={
-    path.name: path
-    for path in workflow_dir.iterdir()
-    if path.is_file() and path.suffix in {'.yml', '.yaml'}
-}
-if workflows.keys() != expected_workflows.keys():
-    errors.append(f'unexpected workflow topology: {sorted(workflows)}')
-for filename, expected_name in expected_workflows.items():
-    path=workflows.get(filename)
-    if path is None:
-        continue
-    workflow_text=path.read_text('utf-8')
-    name_match=re.search(r'^name:\s*(.+?)\s*$', workflow_text, re.M)
-    observed_name=name_match.group(1).strip('"\'') if name_match else None
-    if observed_name != expected_name:
-        errors.append(f'unexpected workflow name for {filename}: {observed_name!r}')
-    if '${{ github.run_id }}-${{ github.run_attempt }}' not in workflow_text:
-        errors.append(f'{filename} artifact names are not unique per run attempt')
-    if 'GH_TOKEN: ${{ github.token }}' not in workflow_text:
-        errors.append(f'{filename} publish job does not use automatic github.token')
-
 app=read('apps/dpc/app/build.gradle.kts')
 vm=re.search(r'versionName\s*=\s*"([0-9.]+)"', app)
 if not vm or tuple(map(int,vm.group(1).split('.'))) < (1,1,3): errors.append('versionName >=1.1.3 required')
@@ -38,11 +12,11 @@ m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 24: errors.append('versionCode >=24 required')
 
 readme=read('README.md')
-if not re.search(r'DPC-AIO 1\.\d+\.\d+', readme):
-    errors.append('README does not identify a stable DPC-AIO 1.x release')
+if 'DPC-AIO 1.1.' not in readme:
+    errors.append('README does not identify a 1.1.x release')
 
 prov=read('docs/releases/SOURCE-COMMIT.txt')
-if '0.6.7' in prov or not re.search(r'1\.\d+\.\d+', prov):
+if '0.6.7' in prov or '1.1.' not in prov:
     errors.append('SOURCE-COMMIT provenance is stale')
 
 gitignore=read('.gitignore')

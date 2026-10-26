@@ -50,8 +50,6 @@ KOTLIN_TEST_MAINS=(
   io.dpcaio.policy.CopePolicyModelsTestKt
   io.dpcaio.policy.WorkProfileLifecycleTestKt
   io.dpcaio.policy.CredentialRecoveryTestKt
-  io.dpcaio.policy.parity.TestDpcParityCatalogTest
-  io.dpcaio.policy.parity.TestDpcCapabilityResolverTest
   io.dpcaio.permission.EffectiveCapabilityResolverTestKt
   io.dpcaio.permission.PermissionActionPlannerTestKt
   io.dpcaio.permission.PermissionPolicyCoordinatorTestKt
@@ -74,7 +72,6 @@ KOTLIN_TEST_MAINS=(
   io.dpcaio.activity.ActivityLaunchCoordinatorTestKt
   io.dpcaio.activity.ActivityExecutorRouterTestKt
   io.dpcaio.activity.ComponentControlTestKt
-  io.dpcaio.activity.ActivityBrowserModelTestKt
   io.dpcaio.offline.OfflineAndroidCompatibilityTestKt
   io.dpcaio.samsung.settings.SamsungSettingEditCoordinatorTestKt
   io.dpcaio.samsung.settings.SamsungSettingRoutePlannerTestKt
@@ -140,7 +137,6 @@ python3 "$ROOT/tools/tests/test_permission_manager_100_android_contract.py"
 python3 "$ROOT/tools/tests/test_permission_manager_100_ui_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_android_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_shizuku_contract.py"
-python3 "$ROOT/tools/tests/test_activity_explorer_concurrent_map_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_ui_contract.py"
 python3 "$ROOT/tools/tests/test_100_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_101_build_resolver.py"
@@ -161,9 +157,6 @@ python3 "$ROOT/tools/tests/test_build_provisioning_qr.py"
 python3 "$ROOT/tools/tests/test_dual_provisioning_qr.py"
 python3 "$ROOT/tools/tests/test_work_profile_provisioning.py"
 python3 "$ROOT/tools/tests/test_provisioning_build_integration.py"
-python3 "$ROOT/tools/tests/test_123_testdpc_parity_catalog_169.py"
-python3 "$ROOT/tools/tests/test_124_parity_handler_coverage.py"
-python3 "$ROOT/tools/tests/test_125_parity_ui_contract.py"
 python3 "$ROOT/tools/tests/test_release_version_contract.py"
 python3 "$ROOT/tools/tests/test_knox_lab_license_contract.py"
 python3 "$ROOT/tools/tests/test_knox_startup_android_contract.py"
@@ -205,7 +198,6 @@ python3 "$ROOT/tools/tests/test_permission_manager_100_ui_contract.py"
 python3 "$ROOT/tools/tests/test_shizuku_permission_mutation_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_android_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_shizuku_contract.py"
-python3 "$ROOT/tools/tests/test_activity_explorer_concurrent_map_contract.py"
 python3 "$ROOT/tools/tests/test_component_manager_ui_contract.py"
 python3 "$ROOT/tools/tests/test_100_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_protected_targets_110_contract.py"
@@ -222,11 +214,8 @@ python3 "$ROOT/tools/tests/test_app_management_location_110_contract.py"
 python3 "$ROOT/tools/tests/test_110_verification_report.py"
 python3 "$ROOT/tools/tests/test_110_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_diagnostics_contract.py"
-python3 "$ROOT/tools/tests/test_133_samsung_firmware_diagnostics_contract.py"
-python3 "$ROOT/tools/tests/test_134_samsung_carrier_evidence_contract.py"
 python3 "$ROOT/tools/tests/test_non_sdk_api_scan.py"
 python3 "$ROOT/tools/tests/test_release_secret_scan.py"
-python3 "$ROOT/tools/tests/test_gradle_ci_output_filter.py"
 python3 "$ROOT/tools/tests/test_knox_lab_token_bundle.py"
 node --test "$ROOT/services/provisioning/test"/*.test.mjs
 python3 "$ROOT/tools/tests/test_release_gate.py"
@@ -249,23 +238,3 @@ python3 "$ROOT/tools/tests/test_github_publish_kit_contract.py"
 python3 "$ROOT/tools/tests/test_113_release_gate_contract.py"
 python3 "$ROOT/tools/tests/test_qr_release_bundle_builder.py"
 python3 "$ROOT/tools/tests/test_114_qr_release_bundle_contract.py"
-
-python3 "$ROOT/tools/tests/test_115_app_pin_and_provisioning_modes_contract.py"
-python3 "$ROOT/tools/tests/test_116_safe_insets_ui_contract.py"
-python3 "$ROOT/tools/tests/test_117_activity_manager_persistence_contract.py"
-python3 "$ROOT/tools/tests/test_118_activity_manager_3_contract.py"
-python3 "$ROOT/tools/tests/test_119_dashboard_menu_contract.py"
-python3 "$ROOT/tools/tests/test_120_device_lifecycle_expanded_controls.py"
-
-python3 tools/tests/test_121_responsive_ui_contract.py
-
-python3 tools/tests/test_122_workflow_qr_choice_contract.py
-
-python3 tools/tests/test_122_qr_mode_matrix.py
-python3 "$ROOT/tools/tests/test_126_android_parity_runtime_facts_contract.py"
-python3 "$ROOT/tools/tests/test_127_tooling_hygiene_contract.py"
-python3 "$ROOT/tools/tests/test_128_android_runtime_smoke_hardening.py"
-python3 "$ROOT/tools/tests/test_129_qr_stale_alias_cleanup.py"
-python3 "$ROOT/tools/tests/test_130_app_package_parity_contract.py"
-python3 "$ROOT/tools/tests/test_131_network_wifi_parity_contract.py"
-python3 "$ROOT/tools/tests/test_132_user_lifecycle_parity_contract.py"

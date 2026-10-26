@@ -60,48 +60,9 @@ def decode_qr(path: Path) -> dict:
     image = cv2.imread(str(path))
     if image is None:
         raise ValueError('QR image is unreadable')
-
-    # Dense Android Enterprise payloads can be standards-valid yet fail in
-    # OpenCV when the image contains only the minimum four-module quiet zone.
-    # First try the artifact unchanged. Then retry with an extra white margin
-    # so already-published QR images remain verifiable without changing their
-    # payload bytes. QRCodeDetectorAruco remains an additional decoder when the
-    # installed OpenCV build exposes it.
-    height, width = image.shape[:2]
-    padding = max(16, min(height, width) // 35)
-    variants = [
-        ('native', image),
-        ('padded', cv2.copyMakeBorder(
-            image, padding, padding, padding, padding,
-            cv2.BORDER_CONSTANT, value=(255, 255, 255),
-        )),
-    ]
-    aruco_cls = getattr(cv2, 'QRCodeDetectorAruco', None)
-    tried: list[str] = []
-
-    for variant_name, candidate in variants:
-        decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(candidate)
-        tried.append(f'QRCodeDetector/{variant_name}')
-        if points is not None and decoded:
-            break
-
-        decoded = ''
-        points = None
-        if aruco_cls is not None:
-            decoded, points, _ = aruco_cls().detectAndDecode(candidate)
-            tried.append(f'QRCodeDetectorAruco/{variant_name}')
-            if points is not None and decoded:
-                break
-    else:
-        decoded = ''
-        points = None
-
+    decoded, points, _ = cv2.QRCodeDetector().detectAndDecode(image)
     if points is None or not decoded:
-        raise ValueError(
-            f'QR image could not be decoded by OpenCV detectors '
-            f'(image={width}x{height}; tried {" + ".join(tried)})'
-        )
-
+        raise ValueError('QR image could not be decoded')
     value = json.loads(decoded)
     if not isinstance(value, dict):
         raise ValueError('QR payload must decode to a JSON object')

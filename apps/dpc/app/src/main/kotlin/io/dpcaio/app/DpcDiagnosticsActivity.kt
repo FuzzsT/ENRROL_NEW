@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class DpcDiagnosticsActivity : Activity() {
@@ -18,49 +19,21 @@ class DpcDiagnosticsActivity : Activity() {
 
     private fun render() {
         val snapshot = DpcDiagnosticsSnapshot.capture(this)
-        val firmware = snapshot.samsungFirmware
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPaddingDp(24, 24, 24, 24)
+            setPadding(24, 24, 24, 24)
         }
         body.addView(TextView(this).apply {
             text = buildString {
                 appendLine("Android API: ${snapshot.apiLevel}")
                 appendLine("Device: ${snapshot.manufacturer} ${snapshot.model}")
                 appendLine("DPC: ${snapshot.dpcVersion}")
-                appendLine("Management state: ${snapshot.managementState}")
-                appendLine("Owner policy ready: ${snapshot.ownerPolicyReady}")
                 appendLine("Device Owner: ${snapshot.deviceOwner}")
                 appendLine("Profile Owner: ${snapshot.profileOwner}")
                 appendLine("Organization-owned: ${snapshot.organizationOwnedProfile}")
                 appendLine("Samsung: ${snapshot.samsungDevice}")
                 appendLine("Knox runtime: ${snapshot.knoxAvailable}")
                 appendLine("Knox license active: ${snapshot.knoxLicenseActive}")
-                appendLine()
-                appendLine("Samsung firmware profile:")
-                appendLine("Sales code: ${firmware.salesCode ?: "unknown"}")
-                appendLine("Carrier ID: ${firmware.carrierId ?: "unknown"}")
-                appendLine("Multi-CSC: ${firmware.multiCsc ?: "unknown"}")
-                appendLine("Country ISO: ${firmware.countryIso ?: "unknown"}")
-                appendLine("OMC path: ${firmware.omcPath ?: "unavailable"}")
-                appendLine("OMC etc path: ${firmware.omcEtcPath ?: "unavailable"}")
-                appendLine("OMC build: ${firmware.omcBuildVersion ?: "unavailable"}")
-                appendLine("Build PDA: ${firmware.buildPda ?: "unavailable"}")
-                appendLine("Build incremental: ${firmware.buildIncremental ?: "unavailable"}")
-                appendLine("System-property probe: ${if (firmware.propertyAccessAvailable) "available" else "blocked/unavailable"}")
-                appendLine("Carrier provisioning layer: ${if (firmware.carrierProvisioningPresent) "detected" else "not observed"}")
-                appendLine("Carrier evidence packages: ${firmware.carrierPackageCount}")
-                appendLine("Samsung connectivity overlay: ${if (firmware.connectivityOverlayPresent) "detected" else "not observed"}")
-                appendLine("Firmware package probes: ${firmware.observedPackageCount}/${firmware.packages.size} observed")
-                firmware.packages.forEach { probe ->
-                    val state = if (probe.installed) {
-                        "installed, enabled=${probe.enabled}, system=${probe.systemApp}"
-                    } else {
-                        "not observed"
-                    }
-                    appendLine("  ${probe.packageName} — ${probe.packageClass} — ${probe.role}: $state")
-                }
-                appendLine()
                 appendLine("Shizuku binder: ${snapshot.shizukuBinderAlive}")
                 appendLine("Shizuku permission: ${snapshot.shizukuPermissionGranted}")
                 appendLine("Dhizuku compiled: ${snapshot.dhizukuCompiled}")
@@ -71,9 +44,8 @@ class DpcDiagnosticsActivity : Activity() {
                 appendLine("Modules integrated: ${snapshot.moduleCounts.integrated}")
                 appendLine("Modules visible: ${snapshot.moduleCounts.visible}")
                 appendLine("Modules hidden: ${snapshot.moduleCounts.hidden}")
-                appendLine("Module surfaces executable: ${snapshot.moduleCounts.available}")
-                appendLine("Module surfaces blocked: ${snapshot.moduleCounts.unavailable}")
-                appendLine("Module availability semantics: ${snapshot.moduleAvailabilitySemantics}")
+                appendLine("Modules available: ${snapshot.moduleCounts.available}")
+                appendLine("Modules unavailable: ${snapshot.moduleCounts.unavailable}")
                 appendLine("Modules lab: ${snapshot.moduleCounts.lab}")
             }
         })
@@ -85,7 +57,7 @@ class DpcDiagnosticsActivity : Activity() {
             text = "Export dpc-diagnostics.json"
             setOnClickListener { export(snapshot.toJson()) }
         })
-        setContentView(DpcUiShell.scroll(this, body))
+        setContentView(ScrollView(this).apply { addView(body) })
     }
 
     private fun export(json: String) {

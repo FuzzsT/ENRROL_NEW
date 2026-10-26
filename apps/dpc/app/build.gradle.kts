@@ -27,8 +27,8 @@ android {
         applicationId = "io.dpcaio.app"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 27
-        versionName = "1.3.0"
+        versionCode = 25
+        versionName = "1.1.4"
         buildConfigField("String", "ENROLLMENT_SIGNING_PUBLIC_KEY", buildConfigString(enrollmentSigningPublicKey.get()))
         buildConfigField("String", "OFFLINE_SIGNING_PUBLIC_KEY", buildConfigString(offlineSigningPublicKey.get()))
     }
@@ -47,21 +47,17 @@ android {
     }
 
     sourceSets {
-        getByName("tst").assets.directories.add("src/lab/assets")
-        getByName("tst").java.directories.add("src/lab/java")
-        getByName("eng").assets.directories.add("src/lab/assets")
-        getByName("eng").java.directories.add("src/lab/java")
+        getByName("tst").assets.srcDir("src/lab/assets")
+        getByName("tst").java.srcDir("src/lab/java")
+        getByName("eng").assets.srcDir("src/lab/assets")
+        getByName("eng").java.srcDir("src/lab/java")
     }
 
     signingConfigs {
         create("enterpriseRelease") {
             val path = releaseKeystorePath.orNull
             if (!path.isNullOrBlank() && releaseStorePassword.isPresent && releaseKeyAlias.isPresent && releaseKeyPassword.isPresent) {
-                val keystoreFile = file(path)
-                require(keystoreFile.isFile && keystoreFile.length() > 0L) {
-                    "DPC-AIO release keystore does not exist or is empty: ${keystoreFile.absolutePath}"
-                }
-                storeFile = keystoreFile
+                storeFile = file(path)
                 storePassword = releaseStorePassword.get()
                 keyAlias = releaseKeyAlias.get()
                 keyPassword = releaseKeyPassword.get()
@@ -148,9 +144,6 @@ val provisioningPolicyProfile = providers.gradleProperty("dpcAioPolicyProfile")
 val provisioningMode = providers.gradleProperty("dpcAioProvisioningMode")
     .orElse(providers.environmentVariable("DPC_AIO_PROVISIONING_MODE"))
     .orElse("work-profile")
-val provisioningQrType = providers.gradleProperty("dpcAioQrType")
-    .orElse(providers.environmentVariable("DPC_AIO_QR_TYPE"))
-    .orElse("both")
 val provisioningOfflineMode = providers.gradleProperty("dpcAioOfflineMode")
     .orElse(providers.environmentVariable("DPC_AIO_ENROLLMENT_OFFLINE_MODE"))
     .orElse("ONLINE")
@@ -175,9 +168,8 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 val apk = apkDir.walkTopDown().firstOrNull { it.isFile && it.extension == "apk" }
                     ?: throw GradleException("No APK found under $apkDir; assemble $variant first")
 
-                val configuredUrlRaw = provisioningApkUrl.orNull?.trim()?.takeIf { it.isNotEmpty() }
-                val configuredUrl = configuredUrlRaw?.takeIf { it.startsWith("https://", ignoreCase = true) }
-                val repository = provisioningGithubRepository.orNull?.trim()?.takeIf { it.isNotEmpty() }
+                val configuredUrl = provisioningApkUrl.orNull
+                val repository = provisioningGithubRepository.orNull
                 val repositoryFallbackUrl = if (flavor == "enterprise" && buildType == "debug") {
                     repository?.let {
                         "https://github.com/$it/releases/download/${provisioningContinuousReleaseTag.get()}/DPC-AIO-enterprise-debug.apk"
@@ -185,13 +177,10 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 } else {
                     null
                 }
-                if (configuredUrlRaw != null && configuredUrl == null) {
-                    logger.warn("Ignoring invalid DPC_AIO_PROVISIONING_APK_URL for $variant: HTTPS is required")
-                }
                 val apkUrl = configuredUrl ?: repositoryFallbackUrl
                 if (apkUrl == null) {
                     logger.lifecycle(
-                        "Provisioning QR skipped for $variant: set an HTTPS DPC_AIO_PROVISIONING_APK_URL " +
+                        "Provisioning QR skipped for $variant: set DPC_AIO_PROVISIONING_APK_URL " +
                             "or DPC_AIO_GITHUB_REPOSITORY/GITHUB_REPOSITORY"
                     )
                     return@doLast
@@ -203,55 +192,9 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 if (configuredMode !in setOf("auto", "work-profile", "fully-managed")) {
                     throw GradleException("Unsupported DPC_AIO_PROVISIONING_MODE: $configuredMode")
                 }
-                val qrType = provisioningQrType.get().trim()
-                val selectedQrModes: Set<String> = when (qrType) {
-                    "both" -> linkedSetOf("work-profile", "fully-managed")
-                    "work-profile" -> linkedSetOf("work-profile")
-                    "fully-managed" -> linkedSetOf("fully-managed")
-                    else -> throw GradleException("Unsupported DPC_AIO_QR_TYPE: $qrType")
-                }
-
-                if ("work-profile" !in selectedQrModes) {
-                    listOf(
-                        "work-profile-provisioning.json",
-                        "work-profile-provisioning-payload.txt",
-                        "work-profile-provisioning-metadata.json",
-                        "work-profile-qr.png",
-                    ).forEach { outDir.resolve(it).delete() }
-                }
-                if ("fully-managed" !in selectedQrModes) {
-                    listOf(
-                        "device-owner-provisioning.json",
-                        "device-owner-provisioning-payload.txt",
-                        "device-owner-provisioning-metadata.json",
-                        "device-owner-qr.png",
-                        "fully-managed-qr.png",
-                    ).forEach { outDir.resolve(it).delete() }
-                }
 
                 fun generate(mode: String, targetDir: java.io.File) {
                     targetDir.mkdirs()
-
-                    val allowedOfflineModes = setOf("ONLINE", "ONLINE_PREFERRED", "FULL_OFFLINE", "OFFLINE_THEN_SYNC")
-                    val requestedOfflineMode = provisioningOfflineMode.get().trim().uppercase().replace('-', '_')
-                    var effectiveOfflineMode = if (requestedOfflineMode in allowedOfflineModes) {
-                        requestedOfflineMode
-                    } else {
-                        logger.warn(
-                            "Ignoring invalid DPC_AIO_ENROLLMENT_OFFLINE_MODE='$requestedOfflineMode' for $variant; " +
-                                "falling back to ONLINE"
-                        )
-                        "ONLINE"
-                    }
-                    val offlineBundleId = provisioningOfflineBundleId.get().trim()
-                    if (effectiveOfflineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC") && offlineBundleId.isBlank()) {
-                        logger.warn(
-                            "DPC_AIO_OFFLINE_BUNDLE_ID is empty for $effectiveOfflineMode; " +
-                                "falling back to ONLINE so provisioning QR generation can continue"
-                        )
-                        effectiveOfflineMode = "ONLINE"
-                    }
-
                     val args = mutableListOf(
                         "python3",
                         rootProject.file("tools/provisioning/generate_provisioning.py").absolutePath,
@@ -261,49 +204,22 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                         "--checksum-mode", "auto",
                         "--policy-profile", provisioningPolicyProfile.get(),
                         "--provisioning-mode", mode,
-                        "--offline-mode", effectiveOfflineMode,
+                        "--offline-mode", provisioningOfflineMode.get(),
                     )
-                    provisioningEnrollmentToken.orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    provisioningEnrollmentToken.orNull?.takeIf { it.isNotBlank() }?.let {
                         args += listOf("--enrollment-token", it)
                     }
-                    enrollmentEndpoint.orNull?.trim()?.takeIf { it.isNotEmpty() }?.let { endpoint ->
-                        if (endpoint.startsWith("https://", ignoreCase = true)) {
-                            args += listOf("--enrollment-endpoint", endpoint, "--enrollment-source", "qr")
-                        } else {
-                            logger.warn(
-                                "Ignoring invalid DPC_AIO_ENROLLMENT_ENDPOINT for $variant (HTTPS required); " +
-                                    "QR will use local/default enrollment routing"
-                            )
-                        }
+                    enrollmentEndpoint.orNull?.takeIf { it.isNotBlank() }?.let {
+                        args += listOf("--enrollment-endpoint", it, "--enrollment-source", "qr")
                     }
-                    offlineBundleId.takeIf { it.isNotEmpty() }?.let { args += listOf("--offline-bundle-id", it) }
-                    if (provisioningAllowOffline.get() || effectiveOfflineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC")) {
+                    provisioningOfflineBundleId.get().takeIf { it.isNotBlank() }?.let { args += listOf("--offline-bundle-id", it) }
+                    if (provisioningAllowOffline.get()) {
                         args += "--allow-offline"
                     }
-
-                    val execOutput = providers.exec {
-                        commandLine(args)
-                        isIgnoreExitValue = true
-                    }
-                    val result = execOutput.result.get()
-                    val stdout = execOutput.standardOutput.asText.get().trim()
-                    val stderr = execOutput.standardError.asText.get().trim()
-                    if (stdout.isNotEmpty()) logger.lifecycle(stdout)
-                    if (stderr.isNotEmpty()) logger.error(stderr)
-                    if (result.exitValue != 0) {
-                        throw GradleException(
-                            "Provisioning generator failed for $variant/$mode with exit code ${result.exitValue}. " +
-                                "See the Python diagnostic immediately above."
-                        )
-                    }
+                    providers.exec { commandLine(args) }.result.get().assertNormalExitValue()
                 }
 
-                val compatibilityMode = when (qrType) {
-                    "work-profile" -> "work-profile"
-                    "fully-managed" -> "fully-managed"
-                    else -> configuredMode
-                }
-                generate(compatibilityMode, outDir)
+                generate(configuredMode, outDir)
 
                 fun publishExplicitMode(
                     mode: String,
@@ -311,7 +227,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     modeQrName: String,
                     tempName: String,
                 ) {
-                    val sourceDir = if (compatibilityMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
+                    val sourceDir = if (configuredMode == mode) outDir else outDir.resolve(tempName).also { generate(mode, it) }
                     mapOf(
                         "provisioning.json" to "$prefix-provisioning.json",
                         "provisioning-payload.txt" to "$prefix-provisioning-payload.txt",
@@ -327,30 +243,18 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                     if (sourceDir != outDir) sourceDir.deleteRecursively()
                 }
 
-                if ("work-profile" in selectedQrModes) {
-                    publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
-                }
-                if ("fully-managed" in selectedQrModes) {
-                    publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
-                }
+                publishExplicitMode("work-profile", "work-profile", "work-profile-qr.png", "_work-profile")
+                publishExplicitMode("fully-managed", "device-owner", "device-owner-qr.png", "_device-owner")
 
                 val qr = outDir.resolve("provisioning-qr.png")
-                if (!qr.isFile) {
-                    throw GradleException("Provisioning generator did not create compatibility provisioning-qr.png")
-                }
-                if ("work-profile" in selectedQrModes && !outDir.resolve("work-profile-qr.png").isFile) {
-                    throw GradleException("Requested work-profile QR was not generated")
-                }
-                if ("fully-managed" in selectedQrModes && !outDir.resolve("device-owner-qr.png").isFile) {
-                    throw GradleException("Requested fully-managed QR was not generated")
-                }
+                val workProfileQr = outDir.resolve("work-profile-qr.png")
+                val deviceOwnerQr = outDir.resolve("device-owner-qr.png")
+                if (!qr.isFile) throw GradleException("Provisioning generator did not create $qr")
+                if (!workProfileQr.isFile) throw GradleException("Provisioning generator did not create $workProfileQr")
+                if (!deviceOwnerQr.isFile) throw GradleException("Provisioning generator did not create $deviceOwnerQr")
                 logger.lifecycle("Provisioning QR: ${qr.absolutePath}")
-                if ("work-profile" in selectedQrModes) {
-                    logger.lifecycle("Work-profile QR: ${outDir.resolve("work-profile-qr.png").absolutePath}")
-                }
-                if ("fully-managed" in selectedQrModes) {
-                    logger.lifecycle("Device-owner QR: ${outDir.resolve("device-owner-qr.png").absolutePath}")
-                }
+                logger.lifecycle("Work-profile QR: ${workProfileQr.absolutePath}")
+                logger.lifecycle("Device-owner QR: ${deviceOwnerQr.absolutePath}")
             }
         }
         tasks.matching { it.name == "assemble$variant" }.configureEach {

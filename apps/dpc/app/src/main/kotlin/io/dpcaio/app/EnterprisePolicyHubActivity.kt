@@ -34,7 +34,7 @@ class EnterprisePolicyHubActivity : Activity() {
         val management = ManagementContextFactory.create(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPaddingDp(24, 24, 24, 24)
+            setPadding(24, 24, 24, 24)
         }
         root.addView(TextView(this).apply {
             text = "Android API ${management.apiLevel} • ${management.ownership}" +
@@ -52,13 +52,13 @@ class EnterprisePolicyHubActivity : Activity() {
             })
             entries.forEach { (entry, resolution) -> addEntry(entry, resolution) }
         }
-        setContentView(DpcUiShell.scroll(this, root))
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
     private fun addEntry(entry: EnterprisePolicyDescriptor, resolution: CapabilityResolution) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPaddingDp(0, 14, 0, 14)
+            setPadding(0, 14, 0, 14)
         }
         box.addView(TextView(this).apply {
             text = entry.title

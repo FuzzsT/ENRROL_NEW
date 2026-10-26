@@ -21,7 +21,7 @@ class WorkProfileCopeActivity : Activity() {
     private lateinit var gateway:AndroidDevicePolicyGateway
     override fun onCreate(savedInstanceState: Bundle?){ super.onCreate(savedInstanceState); title="Work Profile / COPE"; gateway=AndroidDevicePolicyGateway(this,ComponentName(this,AioDeviceAdminReceiver::class.java)); render() }
     private fun render(){
-        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
+        val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,24,24,24) }
         val cap=CapabilityResolver.resolve(CapabilityRequirements(minApi=30,ownership=OwnershipRequirement.PROFILE_OWNER),ManagementContextFactory.create(this))
         root.addView(TextView(this).apply { text="Work Profile / COPE\n${cap.availability}"; textSize=20f })
         root.addView(TextView(this).apply { text="Current: ${gateway.getCopePolicySnapshot()}" })
@@ -44,7 +44,7 @@ class WorkProfileCopeActivity : Activity() {
         add(root,"Apply Organization identity",cap.executable){ show(gateway.setOrganizationIdentity(org.text.toString(),name.text.toString()).toString()) }
         val aff=EditText(this).apply { hint="Affiliation IDs, comma-separated" }; root.addView(aff)
         add(root,"Apply Affiliation IDs",cap.executable){ show(gateway.setAffiliationIdsPolicy(csv(aff.text.toString())).toString()) }
-        setContentView(DpcUiShell.scroll(this, root))
+        setContentView(ScrollView(this).apply { addView(root) })
     }
     private fun csv(s:String)=s.split(',').map(String::trim).filter(String::isNotEmpty).toSet()
     private fun add(root:LinearLayout,label:String,enabled:Boolean,action:()->Unit){ root.addView(Button(this).apply { text=label; isEnabled=enabled; setOnClickListener{action()} }) }

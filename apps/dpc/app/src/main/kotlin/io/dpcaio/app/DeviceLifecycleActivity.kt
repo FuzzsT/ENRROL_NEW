@@ -27,7 +27,7 @@ class DeviceLifecycleActivity : Activity() {
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
 
         section(root, "Kiosk / Lock Task")
         val kiosk = EditText(this).apply { hint = "Comma-separated allowed packages" }
@@ -52,40 +52,6 @@ class DeviceLifecycleActivity : Activity() {
                 confirm("Preview Lock Task", "Current: ${gateway.getLockTaskPolicySpec()}\nRequested: $spec") {
                     val apply = gateway.setLockTaskPolicySpec(spec)
                     show("Apply=${apply.status}\nReadback=${gateway.getLockTaskPolicySpec()}")
-                }
-            }
-        })
-
-        section(root, "Single-use / System UI")
-        root.addView(Button(this).apply {
-            text = "Disable status bar"
-            setOnClickListener {
-                confirm("Disable status bar", "Hide status/navigation access where DevicePolicyManager allows it?") {
-                    show(gateway.setStatusBarDisabledPolicy(true).toString())
-                }
-            }
-        })
-        root.addView(Button(this).apply {
-            text = "Enable status bar"
-            setOnClickListener { show(gateway.setStatusBarDisabledPolicy(false).toString()) }
-        })
-        root.addView(Button(this).apply {
-            text = "Disable keyguard"
-            setOnClickListener {
-                confirm("Disable keyguard", "This works only for supported owner/affiliation states and normally fails when a device credential is set.") {
-                    show(gateway.setKeyguardDisabledPolicy(true).toString())
-                }
-            }
-        })
-        root.addView(Button(this).apply {
-            text = "Enable keyguard"
-            setOnClickListener { show(gateway.setKeyguardDisabledPolicy(false).toString()) }
-        })
-        root.addView(Button(this).apply {
-            text = "Lock device now"
-            setOnClickListener {
-                confirm("Lock device now", "Immediately request a strong device lock using the official DevicePolicyManager API?") {
-                    show(gateway.lockDeviceNow().toString())
                 }
             }
         })
@@ -121,24 +87,6 @@ class DeviceLifecycleActivity : Activity() {
         root.addView(pkg)
         root.addView(Button(this).apply { text = "Block uninstall"; setOnClickListener { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), true).toString()) } })
         root.addView(Button(this).apply { text = "Allow uninstall"; setOnClickListener { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), false).toString()) } })
-        root.addView(Button(this).apply { text = "Hide app"; setOnClickListener { show(gateway.setApplicationHidden(pkg.text.toString().trim(), true).toString()) } })
-        root.addView(Button(this).apply { text = "Unhide app"; setOnClickListener { show(gateway.setApplicationHidden(pkg.text.toString().trim(), false).toString()) } })
-        root.addView(Button(this).apply { text = "Read hidden state"; setOnClickListener { show(gateway.isApplicationHidden(pkg.text.toString().trim()).toString()) } })
-        root.addView(Button(this).apply { text = "Suspend app"; setOnClickListener { show(gateway.setPackagesSuspended(setOf(pkg.text.toString().trim()), true).toString()) } })
-        root.addView(Button(this).apply { text = "Unsuspend app"; setOnClickListener { show(gateway.setPackagesSuspended(setOf(pkg.text.toString().trim()), false).toString()) } })
-        root.addView(Button(this).apply { text = "Read suspended state"; setOnClickListener { show(gateway.isPackageSuspended(pkg.text.toString().trim()).toString()) } })
-        root.addView(Button(this).apply { text = "Enable system app"; setOnClickListener { show(gateway.enableSystemAppPolicy(pkg.text.toString().trim()).toString()) } })
-
-        val delegatedScopes = EditText(this).apply { hint = "Delegated scopes, comma-separated" }
-        root.addView(delegatedScopes)
-        root.addView(Button(this).apply {
-            text = "Read delegated scopes"
-            setOnClickListener { show(gateway.getDelegatedScopes(pkg.text.toString().trim()).toString()) }
-        })
-        root.addView(Button(this).apply {
-            text = "Apply delegated scopes"
-            setOnClickListener { show(gateway.setDelegatedScopes(pkg.text.toString().trim(), csv(delegatedScopes.text.toString())).toString()) }
-        })
         val restrictions = EditText(this).apply { hint = "Restrictions: key=value;key2=value2" }
         root.addView(restrictions)
         root.addView(Button(this).apply {
@@ -190,7 +138,7 @@ class DeviceLifecycleActivity : Activity() {
             }
         })
 
-        setContentView(DpcUiShell.scroll(this, root))
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
     private fun feature(root: LinearLayout, label: String): CheckBox =

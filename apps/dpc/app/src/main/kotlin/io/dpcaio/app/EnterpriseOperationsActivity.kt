@@ -34,7 +34,7 @@ class EnterpriseOperationsActivity : Activity() {
 
     private fun render() {
         val management = ManagementContextFactory.create(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(24,24,24,24) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
         root.addView(TextView(this).apply { text = "Compliance & Logs / System Update Policy"; textSize = 20f })
 
         val logging = CapabilityResolver.resolve(
@@ -100,7 +100,7 @@ class EnterpriseOperationsActivity : Activity() {
             }
         }
         root.addView(TextView(this).apply { text = "Stored log batches: ${store.batches().size}. Manual redacted export only." })
-        setContentView(DpcUiShell.scroll(this, root))
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
     private fun addUpdateButton(root: LinearLayout, label: String, spec: SystemUpdatePolicySpec, freezeText: EditText) =

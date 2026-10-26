@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "project": "DPC-AIO",
-  "version": "1.2.0",
-  "targetRepository": "local-localhost-app-system/dpc_android",
+  "version": "1.1.4",
+  "targetRepository": "FuzzsT/ENRROL_NEW",
   "layout": "expanded-source-root",
   "applicationModule": ":app-dpc",
   "applicationId": "io.dpcaio.app",

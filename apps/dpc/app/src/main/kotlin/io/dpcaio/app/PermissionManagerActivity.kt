@@ -43,7 +43,7 @@ class PermissionManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Permission Manager 2.0"
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20, 20, 20, 20) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
         targetPackage = EditText(this).apply { hint = "target package, e.g. com.example.app" }
         targetUser = EditText(this).apply {
             hint = "Target user ID"
@@ -92,7 +92,7 @@ class PermissionManagerActivity : Activity() {
 
         output = TextView(this).apply { setTextIsSelectable(true) }
         body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(DpcUiShell.scroll(this, body))
+        setContentView(ScrollView(this).apply { addView(body) })
         shizuku.bind()
     }
 

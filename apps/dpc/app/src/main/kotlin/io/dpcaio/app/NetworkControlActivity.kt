@@ -18,7 +18,7 @@ class NetworkControlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Network / DNS / DoH"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingDp(20,20,20,20) }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
         host = EditText(this).apply { hint = "Private DNS DoT hostname" }
         endpoint = EditText(this).apply { hint = "DoH endpoint https://..." }
         queryHex = EditText(this).apply { hint = "DNS wire query hex" }
@@ -26,7 +26,6 @@ class NetworkControlActivity : Activity() {
         root.addView(host); root.addView(Button(this).apply { text = "Apply Device Owner Private DNS"; setOnClickListener { applyPrivateDns() } })
         root.addView(Button(this).apply { text = "Private DNS opportunistic"; setOnClickListener { opportunistic() } })
         root.addView(endpoint); root.addView(queryHex); root.addView(Button(this).apply { text = "DoH query"; setOnClickListener { doh() } }); root.addView(output)
-        DpcUiShell.install(this, root)
         setContentView(root)
     }
 

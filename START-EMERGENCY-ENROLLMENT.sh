@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-REPO="${1:-local-localhost-app-system/dpc_android}"
+REPO="${1:-FuzzsT/ENRROL_NEW}"
 command -v gh >/dev/null || { echo "GitHub CLI (gh) is required." >&2; exit 2; }
 gh auth status >/dev/null
 

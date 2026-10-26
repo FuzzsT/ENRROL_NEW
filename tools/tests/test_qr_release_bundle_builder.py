@@ -5,9 +5,8 @@ import hashlib, json, subprocess, tempfile, zipfile
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT/'tools/release/build_qr_release_bundle.py'
 
-APK_NAME = 'custom-enterprise-release.apk'
 PRIMARY = [
- APK_NAME,
+ 'DPC-AIO-enterprise-release.apk',
  'provisioning-qr.png','provisioning.json','provisioning-payload.txt','provisioning-metadata.json','provisioning-validation.json',
  'work-profile-qr.png','work-profile-provisioning.json','work-profile-provisioning-payload.txt','work-profile-provisioning-metadata.json','work-profile-validation.json',
  'device-owner-qr.png','device-owner-provisioning.json','device-owner-provisioning-payload.txt','device-owner-provisioning-metadata.json','device-owner-validation.json',
@@ -24,10 +23,10 @@ with tempfile.TemporaryDirectory() as td:
             p.write_text(json.dumps(payload), 'utf-8')
         else:
             p.write_bytes((name+'\n').encode())
-    proc=subprocess.run(['python3',str(SCRIPT),'--dist',str(dist),'--version','1.2.0','--apk-url','https://github.com/o/r/releases/download/v1.2.0/'+APK_NAME,'--apk-name',APK_NAME,'--qr-type','both'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    proc=subprocess.run(['python3',str(SCRIPT),'--dist',str(dist),'--version','1.1.4','--apk-url','https://github.com/o/r/releases/download/v1.1.4/DPC-AIO-enterprise-release.apk'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     assert proc.returncode==0, proc.stdout
-    bundle=dist/'DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip'
-    sidecar=dist/'DPC-AIO-1.2.0-QR-RELEASE-BUNDLE.zip.sha256'
+    bundle=dist/'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip'
+    sidecar=dist/'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip.sha256'
     assert bundle.is_file() and sidecar.is_file()
     assert (dist/'QR-README.md').is_file()
     assert (dist/'RELEASE-INDEX.json').is_file()
@@ -35,10 +34,8 @@ with tempfile.TemporaryDirectory() as td:
     observed=hashlib.sha256(bundle.read_bytes()).hexdigest()
     assert sidecar.read_text('utf-8').split()[0]==observed
     index=json.loads((dist/'RELEASE-INDEX.json').read_text('utf-8'))
-    assert index['version']=='1.2.0'
-    assert index['apkUrl'].endswith('/'+APK_NAME)
-    assert index['apk']==APK_NAME
-    assert index['qrType']=='both'
+    assert index['version']=='1.1.4'
+    assert index['apkUrl'].endswith('/DPC-AIO-enterprise-release.apk')
     assert index['bundle']['file']==bundle.name
     assert index['bundle']['sha256Sidecar']==sidecar.name
     with zipfile.ZipFile(bundle) as z:

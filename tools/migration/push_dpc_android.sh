@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-REMOTE="${1:-https://github.com/local-localhost-app-system/dpc_android.git}"
+REMOTE="${1:-https://github.com/FuzzsT/ENRROL_NEW.git}"
 BRANCH="${2:-main}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -24,7 +24,7 @@ if git diff --cached --quiet; then
 fi
 
 git -c user.name="DPC-AIO Migration" -c user.email="dpc-aio@users.noreply.github.com" \
-  commit -m "Migrate DPC-AIO 1.2.0 enrollment-ready source"
+  commit -m "Migrate DPC-AIO 1.1.4 enrollment-ready source"
 
 if [[ -n "$old_sha" ]]; then
   echo "Replacing $BRANCH with force-with-lease against $old_sha"
