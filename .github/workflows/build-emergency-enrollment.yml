@@ -194,6 +194,7 @@ jobs:
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
+          python3 tools/tests/test_app_dpc_compile_114_contract_v2.py
           python3 tools/tests/test_114_qr_release_bundle_contract.py
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
@@ -326,19 +327,25 @@ jobs:
 
       - name: Verify public APK byte identity
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-emergency-enrollment/DPC-AIO-enterprise-release.apk"
-          downloaded="$RUNNER_TEMP/DPC-AIO-enterprise-release.downloaded.apk"
-          matched=0
-          for attempt in 1 2 3 4 5 6; do
-            rm -f "$downloaded"
-            if curl -fL --connect-timeout 15 --max-time 180 "$url" -o "$downloaded" && cmp -s dist/DPC-AIO-enterprise-release.apk "$downloaded"; then
-              matched=1
-              break
+          tag="dpc-aio-emergency-enrollment"
+          expected="$(sha256sum dist/DPC-AIO-enterprise-release.apk | awk '{print $1}')"
+          matched="0"
+          for attempt in $(seq 1 12); do
+            cache_bust="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}"
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/DPC-AIO-enterprise-release.apk?cb=${cache_bust}"
+            if curl -fL --retry 2 --retry-delay 3 "$url" -o public.apk; then
+              observed="$(sha256sum public.apk | awk '{print $1}')"
+              if [[ "$observed" == "$expected" ]]; then
+                matched="1"
+                break
+              fi
+              echo "Attempt $attempt: public APK hash $observed, waiting for release asset propagation..."
             fi
-            echo "Release asset not public/matching yet (attempt $attempt/6)."
-            sleep 5
+            sleep 10
           done
           [[ "$matched" == "1" ]] || { echo "EMERGENCY_APK_PUBLIC_VERIFY_FAILED" >&2; exit 1; }
           echo "Emergency APK is public and byte-identical to the QR-bound build."
