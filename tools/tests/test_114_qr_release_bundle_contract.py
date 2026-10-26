@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import importlib.util
 import json
 import re
+import sys
+import types
 
 ROOT = Path(__file__).resolve().parents[2]
 errors=[]
@@ -54,9 +57,51 @@ try:
 except Exception as exc:
     errors.append(f'release report invalid JSON: {exc}')
 
+verifier_path=ROOT/'tools/provisioning/verify_provisioning_qr.py'
 verifier=read('tools/provisioning/verify_provisioning_qr.py')
 if "VALID_MODES = ('auto', 'work-profile', 'fully-managed')" not in verifier:
     errors.append('QR verifier must accept compatibility mode auto')
+for token in ['cv2.copyMakeBorder', 'QRCodeDetectorAruco', "('native', image)", "('padded'", 'QR image could not be decoded by OpenCV detectors']:
+    if token not in verifier:
+        errors.append(f'QR verifier resilience missing {token}')
+if 'print(rendered, file=sys.stderr)' not in verifier:
+    errors.append('QR verifier must echo failed validation report to stderr')
+
+# Behavior regression: native OpenCV decode fails, padded retry succeeds.
+try:
+    spec=importlib.util.spec_from_file_location('verify_provisioning_qr_contract', verifier_path)
+    if not spec or not spec.loader:
+        raise RuntimeError('could not import QR verifier')
+    module=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    payload={'contract':'padded-fallback'}
+    class FakeImage:
+        shape=(840,840,3)
+    image=FakeImage()
+    class Detector:
+        def detectAndDecode(self, candidate):
+            if isinstance(candidate, tuple) and candidate and candidate[0]=='padded':
+                return json.dumps(payload), object(), None
+            return '', None, None
+    fake_cv2=types.SimpleNamespace(
+        BORDER_CONSTANT=0,
+        imread=lambda _path:image,
+        copyMakeBorder=lambda original,*_args,**_kwargs:('padded', original),
+        QRCodeDetector=lambda:Detector(),
+    )
+    old_cv2=sys.modules.get('cv2')
+    sys.modules['cv2']=fake_cv2
+    try:
+        observed=module.decode_qr(Path('contract.png'))
+    finally:
+        if old_cv2 is None:
+            sys.modules.pop('cv2',None)
+        else:
+            sys.modules['cv2']=old_cv2
+    if observed != payload:
+        errors.append(f'QR padded fallback returned {observed!r}')
+except Exception as exc:
+    errors.append(f'QR padded fallback behavior failed: {exc}')
 
 runner=read('tools/run_host_tests.sh')
 if 'test_114_qr_release_bundle_contract.py' not in runner:
