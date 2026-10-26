@@ -8,6 +8,7 @@ android {
 dependencies {
     implementation(project(":platform-compat"))
     implementation(project(":knox-zt-core"))
+    implementation(project(":policy-core"))
     implementation(project(":installer-core"))
     implementation(project(":installer-android"))
     implementation(project(":activity-launcher"))

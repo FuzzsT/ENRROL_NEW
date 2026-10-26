@@ -2,6 +2,8 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[2]
 module=root/'apps/dpc/modules/knox/zero-trust/android'
 assert module.exists(), 'missing knox-zt-android'
+build=(module/'build.gradle.kts').read_text()
+assert 'implementation(project(":policy-core"))' in build, 'knox-zt-android directly consumes PolicyResult and must depend on policy-core'
 texts='\n'.join(p.read_text(errors='ignore') for base in [root/'apps/dpc/modules/knox/zero-trust/core', module, root/'apps/dpc/integrations/shizuku'] for p in base.rglob('*') if p.is_file())
 for required in [
     'com.samsung.android.knox.zt.framework',
