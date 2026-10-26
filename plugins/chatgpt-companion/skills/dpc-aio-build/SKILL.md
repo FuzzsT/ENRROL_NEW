@@ -15,7 +15,7 @@ Use it for repository-native DPC-AIO builds such as `enterpriseDebug`, `systemPr
 2. Normalize the requested variant to one supported script value: `EnterpriseDebug`, `EnterpriseRelease`, `SystemPrivilegedDebug`, `SystemPrivilegedRelease`, `LabDebug`, `LabRelease`, `TstDebug`, `TstRelease`, `EngDebug`, or `EngRelease`.
 3. Check prerequisites that the repository actually declares: executable-capable `gradlew`, wrapper JAR/properties, Java version, Android SDK platform/build-tools, and any Python provisioning requirements.
 4. Run `./scripts/build_variant.sh <repo-root> <Variant>`. Preserve its exit code and capture the first failing Gradle task/source location.
-5. On success, locate the APK under `apps/dpc/build/outputs/apk/<flavor>/<buildType>/`. When provisioning is configured, also inspect `apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/`.
+5. On success, locate the APK under `apps/dpc/app/build/outputs/apk/<flavor>/<buildType>/`. When provisioning is configured, also inspect `apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/`.
 6. Report one of these states explicitly: **APK build passed**, **APK build failed**, or **APK build not executed**. Static/contract checks passing never imply APK compilation passed.
 
 ## Boundaries

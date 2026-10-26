@@ -3,15 +3,15 @@
 DPC-AIO 0.6.7 always exposes two explicit Android Enterprise enrollment sets in addition to the compatibility `provisioning-*` outputs.
 
 ```text
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning-payload.txt
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning-metadata.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/work-profile-qr.png
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning-payload.txt
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning-metadata.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/work-profile-qr.png
 
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning-payload.txt
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning-metadata.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/device-owner-qr.png
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning-payload.txt
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/device-owner-provisioning-metadata.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/device-owner-qr.png
 ```
 
 The compatibility set remains:

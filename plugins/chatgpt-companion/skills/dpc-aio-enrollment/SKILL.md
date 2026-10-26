@@ -19,7 +19,7 @@ When v2 enrollment is configured, require an HTTPS `io.dpcaio.extra.ENROLLMENT_E
 
 ## Procedure
 
-1. Identify the built APK under `apps/dpc/build/outputs/apk/<flavor>/<buildType>/`.
+1. Identify the built APK under `apps/dpc/app/build/outputs/apk/<flavor>/<buildType>/`.
 2. Verify the Setup Wizard download URL is HTTPS and points to the same APK that will be distributed. Authenticated GitHub Actions artifact URLs are not suitable for unattended Setup Wizard download; use a public release asset or another reachable HTTPS endpoint.
 3. For company-owned work-profile provisioning, use `--provisioning-mode work-profile` or the build-produced `work-profile-*` artifacts. The payload must carry `io.dpcaio.extra.PROVISIONING_MODE=work-profile` inside `PROVISIONING_ADMIN_EXTRAS_BUNDLE`.
 4. Run `tools/provisioning/verify_work_profile_qr.py --json <work-profile-json> --qr <work-profile-png> --apk <apk>` before calling a work-profile QR structurally verified.

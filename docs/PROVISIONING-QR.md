@@ -29,7 +29,7 @@ export DPC_AIO_ALLOW_OFFLINE="false"
 The build finalizer creates:
 
 ```text
-apps/dpc/build/outputs/provisioning/enterprise/debug/
+apps/dpc/app/build/outputs/provisioning/enterprise/debug/
 ├── provisioning.json
 ├── provisioning-payload.txt
 ├── provisioning-metadata.json

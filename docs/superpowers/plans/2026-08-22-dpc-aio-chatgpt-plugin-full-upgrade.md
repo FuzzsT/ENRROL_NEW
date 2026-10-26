@@ -356,7 +356,7 @@ git commit -m "feat(plugin): add DPC build and CI repair skills"
 - Modify: `tools/plugin/test_plugin_scripts.py`
 
 **Interfaces:**
-- Consumes: `tools/provisioning/generate_provisioning.py`, `apps/dpc/build/outputs/provisioning/...`, `tools/verify_project.py`, `tools/verify_android_contracts.py`, `tools/release_gate.py`, `tools/release/verify-before-push.sh` when present.
+- Consumes: `tools/provisioning/generate_provisioning.py`, `apps/dpc/app/build/outputs/provisioning/...`, `tools/verify_project.py`, `tools/verify_android_contracts.py`, `tools/release_gate.py`, `tools/release/verify-before-push.sh` when present.
 - Produces: bounded verifier script and exact provisioning artifact contract.
 
 - [ ] **Step 1: Add failing verifier-script tests**
@@ -416,10 +416,10 @@ description: Generate or verify DPC-AIO Android Enterprise Device Owner provisio
 Reference must preserve current repository paths:
 
 ```text
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/provisioning.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/provisioning-payload.txt
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/provisioning-metadata.json
-apps/dpc/build/outputs/provisioning/<flavor>/<buildType>/provisioning-qr.png
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/provisioning.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/provisioning-payload.txt
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/provisioning-metadata.json
+apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/provisioning-qr.png
 ```
 
 It must state that a QR is not verified unless the referenced APK exists and checksum/signature data was produced from that APK.
