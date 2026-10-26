@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+HELPER = ROOT / "tools/release/extract_apksigner_sha256.py"
+WORKFLOW = ROOT / ".github/workflows/build-emergency-enrollment.yml"
+
+spec = importlib.util.spec_from_file_location("extract_apksigner_sha256", HELPER)
+assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+cases = {
+    "Signer #1 certificate SHA-256 digest: AA:BB:CC": "AABBCC",
+    "Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: 11:22:aa:ff": "1122AAFF",
+    "Signer arbitrary-label certificate SHA-256 digest: deadbeef": "DEADBEEF",
+}
+for output, expected in cases.items():
+    observed = module.extract_signer_sha256(output)
+    assert observed == expected, (output, expected, observed)
+
+try:
+    module.extract_signer_sha256("Verified using v3 scheme (APK Signature Scheme v3): true")
+except ValueError:
+    pass
+else:
+    raise AssertionError("parser must fail closed when no signer SHA-256 digest is present")
+
+workflow = WORKFLOW.read_text(encoding="utf-8")
+assert "extract_apksigner_sha256.py" in workflow
+assert "sed -n 's/^Signer #1 certificate SHA-256 digest: //p'" not in workflow
+assert "cert_output=" in workflow
+assert "APKSIGNER_CERT_PARSE_FAILED" in (HELPER.read_text(encoding="utf-8"))
+
+print("APKSIGNER_CERT_PARSER_114_CONTRACT: PASS")

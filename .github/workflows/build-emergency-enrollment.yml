@@ -195,6 +195,7 @@ jobs:
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
           python3 tools/tests/test_build_output_paths_114_contract.py
+          python3 tools/tests/test_apksigner_cert_parser_114_contract.py
           python3 tools/tests/test_app_dpc_compile_114_contract_v2.py
           python3 tools/tests/test_114_qr_release_bundle_contract.py
           python3 tools/tests/test_non_sdk_api_scan.py
@@ -222,7 +223,9 @@ jobs:
           test -n "$apk"
           apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
           test -x "$apksigner_bin"
-          observed="$($apksigner_bin verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          cert_output="$("$apksigner_bin" verify --print-certs "$apk" 2>&1)"
+          printf '%s\n' "$cert_output"
+          observed="$(printf '%s\n' "$cert_output" | python3 tools/release/extract_apksigner_sha256.py)"
           expected="$(printf '%s' "$DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           [[ -n "$observed" && "$observed" == "$expected" ]] || { echo "SIGNING_CERT_MISMATCH expected=$expected observed=$observed" >&2; exit 1; }
 
