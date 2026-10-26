@@ -6,8 +6,14 @@ from __future__ import annotations
 import re
 import sys
 
+# Build Tools have emitted multiple signer labels over time, including:
+#   Signer #1 certificate SHA-256 digest: ...
+#   Signer (minSdkVersion=...) certificate SHA-256 digest: ...
+#   V2 Signer: certificate SHA-256 digest: ...
+# Keep the accepted prefix narrow while normalizing the digest itself.
 _SIGNER_SHA256 = re.compile(
-    r"^Signer .+ certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$"
+    r"^(?:(?:V\d+\s+)?Signer(?::|\s+.+?))\s*"
+    r"certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$"
 )
 
 
