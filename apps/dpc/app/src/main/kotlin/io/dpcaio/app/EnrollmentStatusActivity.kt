@@ -3,10 +3,6 @@ package io.dpcaio.app
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 
 class EnrollmentStatusActivity : Activity() {
     private var pendingJson: String? = null
@@ -20,38 +16,59 @@ class EnrollmentStatusActivity : Activity() {
     private fun render() {
         val session = EnrollmentSessionStore(this).read()
         val snapshot = EnrollmentDiagnosticsSnapshot.capture(this)
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(28, 28, 28, 28)
+        val body = ModernUi.page(this)
+
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "Enrollment Status",
+                subtitle = "Session state, retry information and exportable diagnostics.",
+                eyebrow = "ENROLLMENT DIAGNOSTICS",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Current session"))
+        val sessionCard = ModernUi.card(this, emphasized = session != null)
+        if (session == null) {
+            sessionCard.addView(ModernUi.title(this, "No enrollment session"))
+            sessionCard.addView(ModernUi.body(this, "Start enrollment from the Enrollment Engine to create a session."))
+            sessionCard.addView(ModernUi.chip(this, "IDLE", ModernUi.Tone.NEUTRAL))
+        } else {
+            sessionCard.addView(ModernUi.title(this, "Session ${session.sessionId.take(8)}…"))
+            sessionCard.addView(
+                ModernUi.body(
+                    this,
+                    buildString {
+                        appendLine("Source: ${session.source}")
+                        appendLine("Mode: ${session.requestedMode}")
+                        appendLine("Policy: ${session.policyProfile}")
+                        appendLine("Server: ${session.serverUri ?: "local-only"}")
+                        appendLine("Token fingerprint: ${session.tokenFingerprint ?: "none"}")
+                        appendLine("Retries: ${session.retryCount} / 4")
+                        append("Last error: ${session.lastError ?: "none"}")
+                    },
+                )
+            )
+            val tone = if (session.lastError == null) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING
+            sessionCard.addView(ModernUi.chip(this, session.stage.toString(), tone))
         }
-        body.addView(TextView(this).apply {
-            text = if (session == null) {
-                "No enrollment session"
-            } else buildString {
-                appendLine("Session: ${session.sessionId.take(8)}…")
-                appendLine("Source: ${session.source}")
-                appendLine("Stage: ${session.stage}")
-                appendLine("Mode: ${session.requestedMode}")
-                appendLine("Policy: ${session.policyProfile}")
-                appendLine("Server: ${session.serverUri ?: "local-only"}")
-                appendLine("Token fingerprint: ${session.tokenFingerprint ?: "none"}")
-                appendLine("Retries: ${session.retryCount} / 4")
-                appendLine("Last error: ${session.lastError ?: "none"}")
-            }
-        })
-        body.addView(Button(this).apply {
-            text = "Retry"
-            isEnabled = session != null
-            setOnClickListener {
+        body.addView(sessionCard)
+
+        body.addView(ModernUi.section(this, "Actions"))
+        body.addView(
+            ModernUi.action(this, "Retry", primary = true) {
                 EnrollmentCoordinator.scheduleResume(this@EnrollmentStatusActivity, "MANUAL_RETRY")
                 render()
+            }.apply { isEnabled = session != null }
+        )
+        body.addView(ModernUi.spacer(this, 8))
+        body.addView(
+            ModernUi.action(this, "Export enrollment-diagnostics.json") {
+                export(snapshot.toJson())
             }
-        })
-        body.addView(Button(this).apply {
-            text = "Export enrollment-diagnostics.json"
-            setOnClickListener { export(snapshot.toJson()) }
-        })
-        setContentView(ScrollView(this).apply { addView(body) })
+        )
+
+        setContentView(ModernUi.scrollPage(this, body))
     }
 
     private fun export(json: String) {
