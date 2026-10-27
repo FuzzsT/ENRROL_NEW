@@ -10,14 +10,17 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.LruCache
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.shizuku.AndroidShizukuRuntime
+import java.util.concurrent.Executors
 
 class ActivityLauncherHubActivity : Activity() {
     private enum class AppTab { SYSTEM, USER, FAVORITES, RECENT }
@@ -29,7 +32,6 @@ class ActivityLauncherHubActivity : Activity() {
         val versionName: String,
         val system: Boolean,
         val enabled: Boolean,
-        val icon: Drawable?,
     )
 
     private lateinit var search: EditText
@@ -41,7 +43,10 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentTab = AppTab.USER
     private var currentSort = AppSort.NAME
     private var installedApps: List<AppEntry> = emptyList()
+    private var renderGeneration = 0L
     private val runtime = AndroidShizukuRuntime()
+    private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
+    private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -70,6 +75,18 @@ class ActivityLauncherHubActivity : Activity() {
             renderTabs()
             renderApps()
         }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) iconCache.evictAll()
+    }
+
+    override fun onDestroy() {
+        renderGeneration++
+        iconExecutor.shutdownNow()
+        iconCache.evictAll()
+        super.onDestroy()
     }
 
     private fun renderShell() {
@@ -227,6 +244,7 @@ class ActivityLauncherHubActivity : Activity() {
                 .distinctBy { it.packageName }
 
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 installedApps = mapped
                 status.text = "Installed app inventory loaded: ${mapped.size} packages"
                 renderTabs()
@@ -250,9 +268,58 @@ class ActivityLauncherHubActivity : Activity() {
             versionName = packageInfo.versionName ?: "unknown",
             system = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = info.enabled,
-            icon = runCatching { packageManager.getApplicationIcon(info) }.getOrNull(),
         )
     }.getOrNull()
+
+    private fun loadAppIcon(packageName: String): Drawable? {
+        iconCache.get(packageName)?.let { return it }
+        val loaded = runCatching { packageManager.getApplicationIcon(packageName) }.getOrNull() ?: return null
+        iconCache.put(packageName, loaded)
+        return loaded
+    }
+
+    private fun appIconView(app: AppEntry, icon: Drawable): ImageView =
+        ImageView(this).apply {
+            setImageDrawable(icon)
+            contentDescription = "${app.label} icon"
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(
+                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
+                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
+                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
+                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
+            )
+            layoutParams = FrameLayout.LayoutParams(
+                ModernUi.dp(this@ActivityLauncherHubActivity, 54),
+                ModernUi.dp(this@ActivityLauncherHubActivity, 54),
+            )
+        }
+
+    private fun bindAppIcon(slot: FrameLayout, app: AppEntry, tone: ModernUi.Tone, generation: Long) {
+        slot.tag = app.packageName
+        slot.removeAllViews()
+        val cached = iconCache.get(app.packageName)
+        if (cached != null) {
+            slot.addView(appIconView(app, cached))
+            return
+        }
+
+        slot.addView(ModernUi.monogramTile(this, app.label, tone))
+        if (generation != renderGeneration || iconExecutor.isShutdown) return
+        runCatching {
+            iconExecutor.submit {
+                if (generation != renderGeneration || Thread.currentThread().isInterrupted) return@submit
+                val loaded = loadAppIcon(app.packageName) ?: return@submit
+                if (generation != renderGeneration || Thread.currentThread().isInterrupted) return@submit
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (generation != renderGeneration || slot.tag != app.packageName) return@runOnUiThread
+                    slot.removeAllViews()
+                    slot.addView(appIconView(app, loaded))
+                }
+            }
+        }
+    }
 
     private fun filteredApps(): List<AppEntry> {
         val query = if (::search.isInitialized) search.text.toString().trim().lowercase() else ""
@@ -275,7 +342,8 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     private fun renderApps() {
-        if (!::appList.isInitialized) return
+        if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        val generation = ++renderGeneration
         val shown = filteredApps()
         appList.removeAllViews()
         renderStats(shown)
@@ -290,7 +358,7 @@ class ActivityLauncherHubActivity : Activity() {
             )
             return
         }
-        shown.forEach { app -> appList.addView(renderApp(app)) }
+        shown.forEach { app -> appList.addView(renderApp(app, generation)) }
     }
 
     private fun renderStats(shown: List<AppEntry>) {
@@ -320,7 +388,7 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
-    private fun renderApp(app: AppEntry): LinearLayout {
+    private fun renderApp(app: AppEntry, generation: Long): LinearLayout {
         val favorite = app.packageName in favoritePackages
         val tone = when {
             !app.enabled -> ModernUi.Tone.WARNING
@@ -331,27 +399,16 @@ class ActivityLauncherHubActivity : Activity() {
             val identity = LinearLayout(this@ActivityLauncherHubActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
-                if (app.icon != null) {
-                    addView(
-                        ImageView(this@ActivityLauncherHubActivity).apply {
-                            setImageDrawable(app.icon)
-                            contentDescription = "${app.label} icon"
-                            scaleType = ImageView.ScaleType.CENTER_INSIDE
-                            setPadding(
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 4),
-                            )
-                            layoutParams = LinearLayout.LayoutParams(
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 54),
-                                ModernUi.dp(this@ActivityLauncherHubActivity, 54),
-                            ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 12) }
-                        }
-                    )
-                } else {
-                    addView(ModernUi.monogramTile(this@ActivityLauncherHubActivity, app.label, tone))
+
+                val iconSlot = FrameLayout(this@ActivityLauncherHubActivity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ModernUi.dp(this@ActivityLauncherHubActivity, 54),
+                        ModernUi.dp(this@ActivityLauncherHubActivity, 54),
+                    ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 12) }
                 }
+                bindAppIcon(iconSlot, app, tone, generation)
+                addView(iconSlot)
+
                 addView(
                     LinearLayout(this@ActivityLauncherHubActivity).apply {
                         orientation = LinearLayout.VERTICAL
@@ -437,5 +494,7 @@ class ActivityLauncherHubActivity : Activity() {
         private const val KEY_FAVORITES = "favoritePackages"
         private const val KEY_RECENTS = "recentPackages"
         private const val MAX_RECENT = 24
+        private const val ICON_CACHE_SIZE = 48
+        private const val ICON_WORKER_COUNT = 2
     }
 }
