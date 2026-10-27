@@ -18,6 +18,11 @@ Android Enterprise DPC workspace with production QR enrollment, protected enterp
 - Hardened APK+ importer treats archives as data only and rejects traversal, symlinks, duplicates, decompression abuse and package/version/signer mismatch.
 - Work Profile Lifecycle 2.0, encrypted Credential Recovery 2.0, Application Restrictions readback, whole-app state and Device-Owner location policy.
 
+## Modern UI work
+
+The current UI modernization is tracked in PR #34 (`ui/safe-area-motion-refresh`). It adds a shared classic-View design system (`ModernUi`), global safe-area handling for modern Android edge-to-edge behavior, lightweight Activity entrance motion, and refreshed Dashboard, Permission Manager, Enterprise Policy Hub, and Module Center surfaces.
+
+Production signing recovery remains tracked separately in Issue #33.
 
 ## Enrollment quick start
 

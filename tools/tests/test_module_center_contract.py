@@ -48,5 +48,7 @@ assert 'ModuleCenterActivity' in dashboard, 'dashboard must expose Module Center
 assert '.ModuleCenterActivity' in manifest, 'Module Center must be declared in manifest'
 for marker in ['Integrated', 'UI', 'Core', 'Integration', 'Lab']:
     assert marker in center or marker in registry, marker
+for token in ['ModernUi.page','ModernUi.hero','ModernUi.section','ModernUi.card','ModernUi.chip','ModernUi.action']:
+    assert token in center, token
 
 print(f'MODULE_CENTER: PASS ({len(module_ids)} modules represented; {len(project_ids)} Gradle projects reachable)')

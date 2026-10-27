@@ -17,3 +17,34 @@ scenario_pos=dashboard.index('Scenario Recorder / Replay')
 nfc_pos=dashboard.index('NFC Lab')
 guard_pos=dashboard.index('developerMode')
 assert guard_pos < scenario_pos < nfc_pos, 'lab surfaces must be after developerMode guard'
+
+application=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcAioApplication.kt').read_text()
+ui=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/UiSurfaceController.kt').read_text()
+design=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ModernUi.kt').read_text()
+for token in ['UiSurfaceController.install(this)']:
+    assert token in application, token
+for token in [
+    'ActivityLifecycleCallbacks',
+    'setOnApplyWindowInsetsListener',
+    'WindowInsets.Type.systemBars()',
+    'requestApplyInsets()',
+    'WeakHashMap',
+    'translationY',
+    'DecelerateInterpolator',
+]:
+    assert token in ui, token
+for token in [
+    'addSection(body, "Setup & enrollment")',
+    'addSection(body, "Management")',
+    'addSection(body, "Tools")',
+    'ModernUi.hero',
+    'ModernUi.page',
+    'ModernUi.card',
+    'ModernUi.action',
+]:
+    assert token in dashboard, token
+for token in [
+    'data class Palette','fun hero','fun section','fun card','fun chip','fun field','fun action','fun outputCard',
+    'RippleDrawable','GradientDrawable','isFillViewport = true'
+]:
+    assert token in design, token

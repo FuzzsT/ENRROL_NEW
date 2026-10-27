@@ -8,11 +8,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import io.dpcaio.core.model.CapabilityRequirements
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.OwnershipRequirement
@@ -39,7 +36,7 @@ class CredentialCenterActivity : Activity() {
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
+        val root = ModernUi.page(this)
         val cap = CapabilityResolver.resolve(
             CapabilityRequirements(
                 minApi = 21,
@@ -48,67 +45,103 @@ class CredentialCenterActivity : Activity() {
             ),
             ManagementContextFactory.create(this),
         )
-        root.addView(TextView(this).apply { text = "Certificate & Credential Center\n${cap.availability}"; textSize = 20f })
         val certs = gateway.getInstalledCaCertificates()
-        root.addView(TextView(this).apply { text = "CA Certificates • INSTALLED_USER_CA count=${certs.value?.size ?: 0}" })
-        root.addView(TextView(this).apply { text = "Private key export: NOT PERMITTED" })
 
-        root.addView(Button(this).apply {
-            text = "Import CA PEM/DER"
-            isEnabled = cap.executable
-            setOnClickListener { openCaDocument() }
-        })
-        root.addView(Button(this).apply {
-            text = "Import PKCS#12"
-            isEnabled = cap.executable
-            setOnClickListener { openPkcs12Document() }
-        })
+        root.addView(
+            ModernUi.hero(
+                this,
+                title = "Certificate & Credential Center",
+                subtitle = "Managed CA, KeyChain and delegation controls",
+                eyebrow = "${cap.availability}",
+            )
+        )
 
-        val alias = EditText(this).apply { hint = "Key-pair alias" }
-        val pkg = EditText(this).apply { hint = "Target package" }
-        root.addView(alias)
-        root.addView(pkg)
-        root.addView(Button(this).apply {
-            text = "Key-pair grant inventory"
-            isEnabled = cap.executable
-            setOnClickListener { show(gateway.getManagedKeyPairGrants(alias.text.toString()).toString()) }
-        })
-        root.addView(Button(this).apply {
-            text = "Grant key pair to app"
-            isEnabled = cap.executable
-            setOnClickListener { show(gateway.grantManagedKeyPairToApp(alias.text.toString(), pkg.text.toString()).toString()) }
-        })
-
-        val delegate = EditText(this).apply { hint = "Certificate delegate package" }
-        root.addView(delegate)
-        root.addView(Button(this).apply {
-            text = "Set certificate delegation"
-            isEnabled = cap.executable
-            setOnClickListener {
-                val scopes = setOf(DevicePolicyManager.DELEGATION_CERT_INSTALL, DevicePolicyManager.DELEGATION_CERT_SELECTION)
-                show(gateway.setDelegatedScopes(delegate.text.toString(), scopes).toString())
+        root.addView(ModernUi.section(this, "Certificate inventory"))
+        root.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(ModernUi.title(this@CredentialCenterActivity, "Managed certificate state"))
+                addView(ModernUi.body(this@CredentialCenterActivity, "CA Certificates • INSTALLED_USER_CA count=${certs.value?.size ?: 0}"))
+                addView(ModernUi.chip(this@CredentialCenterActivity, "Private key export: NOT PERMITTED", ModernUi.Tone.WARNING))
             }
-        })
+        )
 
-        root.addView(TextView(this).apply {
-            text = "Imports use Android Storage Access Framework. PEM/DER is normalized as X.509; PKCS#12 is parsed in memory and only installed into the managed KeyChain. This UI never exposes private-key export."
-        })
-        root.addView(Button(this).apply {
-            text = "Remove all shown CA certificates"
-            isEnabled = cap.executable && !certs.value.isNullOrEmpty()
-            setOnClickListener {
-                AlertDialog.Builder(this@CredentialCenterActivity)
-                    .setTitle("Confirm CA removal")
-                    .setMessage("Remove all listed user CA certificates managed/visible to this admin?")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Remove") { _, _ ->
-                        certs.value.orEmpty().forEach(gateway::uninstallCaCertificate)
-                        render()
-                    }
-                    .show()
+        root.addView(ModernUi.section(this, "Import"))
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(
+                    ModernUi.body(
+                        this@CredentialCenterActivity,
+                        "Imports use Android Storage Access Framework. PEM/DER is normalized as X.509; PKCS#12 is parsed in memory and installed into the managed KeyChain.",
+                    )
+                )
+                addView(ModernUi.spacer(this@CredentialCenterActivity, 8))
+                addView(
+                    ModernUi.actionRow(
+                        this@CredentialCenterActivity,
+                        ModernUi.action(this@CredentialCenterActivity, "Import CA PEM/DER", primary = true) { openCaDocument() }.apply { isEnabled = cap.executable },
+                        ModernUi.action(this@CredentialCenterActivity, "Import PKCS#12") { openPkcs12Document() }.apply { isEnabled = cap.executable },
+                    )
+                )
             }
-        })
-        setContentView(ScrollView(this).apply { addView(root) })
+        )
+
+        root.addView(ModernUi.section(this, "Managed key-pair grants"))
+        val alias = ModernUi.field(this, "Key-pair alias")
+        val pkg = ModernUi.field(this, "Target package")
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(alias)
+                addView(pkg)
+                addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Key-pair grant inventory") {
+                        show(gateway.getManagedKeyPairGrants(alias.text.toString()).toString())
+                    }.apply { isEnabled = cap.executable }
+                )
+                addView(ModernUi.spacer(this@CredentialCenterActivity, 7))
+                addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Grant key pair to app", primary = true) {
+                        show(gateway.grantManagedKeyPairToApp(alias.text.toString(), pkg.text.toString()).toString())
+                    }.apply { isEnabled = cap.executable }
+                )
+            }
+        )
+
+        root.addView(ModernUi.section(this, "Certificate delegation"))
+        val delegate = ModernUi.field(this, "Certificate delegate package")
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(delegate)
+                addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Set certificate delegation") {
+                        val scopes = setOf(DevicePolicyManager.DELEGATION_CERT_INSTALL, DevicePolicyManager.DELEGATION_CERT_SELECTION)
+                        show(gateway.setDelegatedScopes(delegate.text.toString(), scopes).toString())
+                    }.apply { isEnabled = cap.executable }
+                )
+            }
+        )
+
+        root.addView(ModernUi.section(this, "Destructive actions"))
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.body(this@CredentialCenterActivity, "Removes all listed user CA certificates visible to this administrator. Confirmation is always required."))
+                addView(ModernUi.spacer(this@CredentialCenterActivity, 8))
+                addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Remove all shown CA certificates", destructive = true) {
+                        AlertDialog.Builder(this@CredentialCenterActivity)
+                            .setTitle("Confirm CA removal")
+                            .setMessage("Remove all listed user CA certificates managed/visible to this admin?")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Remove") { _, _ ->
+                                certs.value.orEmpty().forEach(gateway::uninstallCaCertificate)
+                                render()
+                            }
+                            .show()
+                    }.apply { isEnabled = cap.executable && !certs.value.isNullOrEmpty() }
+                )
+            }
+        )
+
+        setContentView(ModernUi.scrollPage(this, root))
     }
 
     private fun openCaDocument() {

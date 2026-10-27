@@ -5,11 +5,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
-import android.view.ViewGroup
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import io.dpcaio.platform.AndroidUserId
@@ -32,16 +29,59 @@ class SamsungSettingsEditorActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = if (Build.MANUFACTURER.equals("samsung", true)) "Samsung Settings Editor" else "Settings Editor"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
-        namespace = Spinner(this).apply { adapter = ArrayAdapter(this@SamsungSettingsEditorActivity, android.R.layout.simple_spinner_dropdown_item, listOf("SYSTEM","SECURE","GLOBAL")) }
-        key = EditText(this).apply { hint = "setting key" }
-        value = EditText(this).apply { hint = "value" }
-        status = TextView(this).apply { setTextIsSelectable(true) }
-        val read = Button(this).apply { text = "Read"; setOnClickListener { readValue() } }
-        val write = Button(this).apply { text = "Write + verify stability"; setOnClickListener { writeValue() } }
-        root.addView(namespace); root.addView(key); root.addView(value); root.addView(read); root.addView(write)
-        root.addView(status, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(root)
+
+        val body = ModernUi.page(this)
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = title.toString(),
+                subtitle = "Read a setting, submit an allowed write route, then verify observed stability",
+                eyebrow = "SETTINGS",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Setting"))
+        body.addView(
+            ModernUi.card(this).apply {
+                namespace = Spinner(this@SamsungSettingsEditorActivity).apply {
+                    adapter = ArrayAdapter(
+                        this@SamsungSettingsEditorActivity,
+                        android.R.layout.simple_spinner_dropdown_item,
+                        listOf("SYSTEM", "SECURE", "GLOBAL"),
+                    )
+                }
+                key = ModernUi.field(this@SamsungSettingsEditorActivity, "setting key")
+                value = ModernUi.field(this@SamsungSettingsEditorActivity, "value")
+                addView(namespace)
+                addView(key)
+                addView(value)
+                addView(
+                    ModernUi.actionRow(
+                        this@SamsungSettingsEditorActivity,
+                        ModernUi.action(this@SamsungSettingsEditorActivity, "Read") { readValue() },
+                        ModernUi.action(this@SamsungSettingsEditorActivity, "Write + verify stability", primary = true) { writeValue() },
+                    )
+                )
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Result"))
+        status = TextView(this).apply { text = "Ready"; setTextIsSelectable(true) }
+        body.addView(ModernUi.outputCard(this, status))
+
+        body.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(ModernUi.title(this@SamsungSettingsEditorActivity, "Verification boundary"))
+                addView(
+                    ModernUi.body(
+                        this@SamsungSettingsEditorActivity,
+                        "The editor tries only declared routes and reports before/after plus the verified route. A later observer change is surfaced instead of being hidden.",
+                    )
+                )
+            }
+        )
+
+        setContentView(ModernUi.scrollPage(this, body))
         shizuku.bind()
     }
 
@@ -68,7 +108,11 @@ class SamsungSettingsEditorActivity : Activity() {
                 SettingNamespace.GLOBAL -> Settings.Global.getUriFor(k)
                 else -> null
             }
-            val monitor = uri?.let { AndroidSettingStabilityMonitor(contentResolver).observe(it) { runOnUiThread { status.append("\nChanged again after write") } } }
+            val monitor = uri?.let {
+                AndroidSettingStabilityMonitor(contentResolver).observe(it) {
+                    runOnUiThread { status.append("\nChanged again after write") }
+                }
+            }
             runOnUiThread {
                 status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
                 status.postDelayed({ monitor?.close() }, 5000)

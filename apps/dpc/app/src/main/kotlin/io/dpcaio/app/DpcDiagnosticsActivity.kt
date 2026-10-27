@@ -2,10 +2,9 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Bundle
-import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 class DpcDiagnosticsActivity : Activity() {
@@ -19,46 +18,106 @@ class DpcDiagnosticsActivity : Activity() {
 
     private fun render() {
         val snapshot = DpcDiagnosticsSnapshot.capture(this)
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+        val body = ModernUi.page(this)
+
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "Diagnostics",
+                subtitle = "Runtime capability, ownership and module health at a glance",
+                eyebrow = "SYSTEM HEALTH",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "System health"))
+        val health = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(
+                ModernUi.chip(
+                    this@DpcDiagnosticsActivity,
+                    "API ${snapshot.apiLevel}",
+                    ModernUi.Tone.NEUTRAL,
+                ),
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            addView(
+                ModernUi.chip(
+                    this@DpcDiagnosticsActivity,
+                    if (snapshot.samsungDevice) "Samsung" else "Android",
+                    if (snapshot.samsungDevice) ModernUi.Tone.SUCCESS else ModernUi.Tone.NEUTRAL,
+                ),
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            addView(
+                ModernUi.chip(
+                    this@DpcDiagnosticsActivity,
+                    if (snapshot.shizukuPermissionGranted) "Shizuku ready" else "Shizuku limited",
+                    if (snapshot.shizukuPermissionGranted) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
+                ),
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+            )
         }
-        body.addView(TextView(this).apply {
-            text = buildString {
-                appendLine("Android API: ${snapshot.apiLevel}")
-                appendLine("Device: ${snapshot.manufacturer} ${snapshot.model}")
-                appendLine("DPC: ${snapshot.dpcVersion}")
-                appendLine("Device Owner: ${snapshot.deviceOwner}")
-                appendLine("Profile Owner: ${snapshot.profileOwner}")
-                appendLine("Organization-owned: ${snapshot.organizationOwnedProfile}")
-                appendLine("Samsung: ${snapshot.samsungDevice}")
-                appendLine("Knox runtime: ${snapshot.knoxAvailable}")
-                appendLine("Knox license active: ${snapshot.knoxLicenseActive}")
-                appendLine("Shizuku binder: ${snapshot.shizukuBinderAlive}")
-                appendLine("Shizuku permission: ${snapshot.shizukuPermissionGranted}")
-                appendLine("Dhizuku compiled: ${snapshot.dhizukuCompiled}")
-                appendLine("Offline bundle: ${snapshot.offlineBundleId ?: "none"}")
-                appendLine("Offline stage: ${snapshot.offlineStage ?: "none"}")
-                appendLine("Offline sync pending: ${snapshot.offlineSyncPending}")
-                snapshot.offlineLastError?.let { appendLine("Offline last error: $it") }
-                appendLine("Modules integrated: ${snapshot.moduleCounts.integrated}")
-                appendLine("Modules visible: ${snapshot.moduleCounts.visible}")
-                appendLine("Modules hidden: ${snapshot.moduleCounts.hidden}")
-                appendLine("Modules available: ${snapshot.moduleCounts.available}")
-                appendLine("Modules unavailable: ${snapshot.moduleCounts.unavailable}")
-                appendLine("Modules lab: ${snapshot.moduleCounts.lab}")
+        body.addView(health)
+
+        body.addView(ModernUi.section(this, "Management state"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(info("Device", "${snapshot.manufacturer} ${snapshot.model}"))
+                addView(info("DPC version", snapshot.dpcVersion))
+                addView(info("Device Owner", snapshot.deviceOwner.toString()))
+                addView(info("Profile Owner", snapshot.profileOwner.toString()))
+                addView(info("Organization-owned", snapshot.organizationOwnedProfile.toString()))
+                addView(info("Knox runtime", snapshot.knoxAvailable.toString()))
+                addView(info("Knox license", snapshot.knoxLicenseActive.toString()))
+                addView(info("Dhizuku compiled", snapshot.dhizukuCompiled.toString()))
             }
-        })
-        body.addView(Button(this).apply {
-            text = "Enrollment diagnostics"
-            setOnClickListener { startActivity(Intent(this@DpcDiagnosticsActivity, EnrollmentStatusActivity::class.java)) }
-        })
-        body.addView(Button(this).apply {
-            text = "Export dpc-diagnostics.json"
-            setOnClickListener { export(snapshot.toJson()) }
-        })
-        setContentView(ScrollView(this).apply { addView(body) })
+        )
+
+        body.addView(ModernUi.section(this, "Offline state"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(info("Bundle", snapshot.offlineBundleId ?: "none"))
+                addView(info("Stage", snapshot.offlineStage ?: "none"))
+                addView(info("Sync pending", snapshot.offlineSyncPending.toString()))
+                snapshot.offlineLastError?.let { addView(info("Last error", it, danger = true)) }
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Module availability"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(info("Integrated", snapshot.moduleCounts.integrated.toString()))
+                addView(info("Visible", snapshot.moduleCounts.visible.toString()))
+                addView(info("Hidden", snapshot.moduleCounts.hidden.toString()))
+                addView(info("Available", snapshot.moduleCounts.available.toString()))
+                addView(info("Unavailable", snapshot.moduleCounts.unavailable.toString()))
+                addView(info("Lab", snapshot.moduleCounts.lab.toString()))
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Actions"))
+        body.addView(
+            ModernUi.action(this, "Enrollment diagnostics", primary = true) {
+                startActivity(Intent(this@DpcDiagnosticsActivity, EnrollmentStatusActivity::class.java))
+            }
+        )
+        body.addView(
+            ModernUi.action(this, "Export dpc-diagnostics.json") {
+                export(snapshot.toJson())
+            }
+        )
+
+        setContentView(ModernUi.scrollPage(this, body))
     }
+
+    private fun info(label: String, value: String, danger: Boolean = false): TextView =
+        TextView(this).apply {
+            text = "$label\n$value"
+            setTextColor(if (danger) ModernUi.palette(this@DpcDiagnosticsActivity).danger else ModernUi.palette(this@DpcDiagnosticsActivity).text)
+            textSize = 14f
+            setTypeface(typeface, Typeface.NORMAL)
+            setPadding(0, ModernUi.dp(this@DpcDiagnosticsActivity, 7), 0, ModernUi.dp(this@DpcDiagnosticsActivity, 7))
+        }
 
     private fun export(json: String) {
         pendingJson = json

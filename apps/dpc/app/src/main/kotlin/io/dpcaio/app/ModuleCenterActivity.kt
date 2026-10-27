@@ -2,17 +2,12 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Typeface
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Spinner
-import android.widget.TextView
-import io.dpcaio.core.model.CapabilityAvailability
 import io.dpcaio.core.model.CapabilityResolution
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.VisibilityClass
@@ -31,69 +26,73 @@ class ModuleCenterActivity : Activity() {
         val state = DpcUiPreferences.read(this)
         val management = ManagementContextFactory.create(this)
         val resolved = DpcModuleRegistry.modules.map { it to CapabilityResolver.resolve(it.requirements, management) }
-
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-        }
+        val body = LinearLayout(this)
         val visibleCount = resolved.count { shouldShow(it.first, it.second, state.selectedFilter) }
-        body.addView(TextView(this).apply {
-            text = "${DpcModuleRegistry.modules.size}/${DpcModuleRegistry.modules.size} modules integrated into :app-dpc\n" +
-                "$visibleCount visible for current context • API ${management.apiLevel} • ${management.ownership}"
-        })
 
-        body.addView(CheckBox(this).apply {
-            text = "Show hidden"
-            isChecked = state.showHidden
-            setOnCheckedChangeListener { _, checked ->
-                DpcUiPreferences.setShowHidden(this@ModuleCenterActivity, checked)
-                render()
-            }
-        })
-        body.addView(CheckBox(this).apply {
-            text = "Developer / Lab"
-            isChecked = state.developerMode
-            setOnCheckedChangeListener { _, checked ->
-                DpcUiPreferences.setDeveloperMode(this@ModuleCenterActivity, checked)
-                render()
-            }
-        })
-        body.addView(CheckBox(this).apply {
-            text = "Show experimental"
-            isChecked = state.showExperimental
-            setOnCheckedChangeListener { _, checked ->
-                DpcUiPreferences.setShowExperimental(this@ModuleCenterActivity, checked)
-                render()
-            }
-        })
+        body.addView(ModernUi.hero(
+            this,
+            title = "Module Center",
+            subtitle = "$visibleCount visible • API ${management.apiLevel} • ${management.ownership}",
+            eyebrow = "${DpcModuleRegistry.modules.size} integrated modules",
+        ))
 
-        val spinner = Spinner(this)
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filterLabels)
-        val selected = filterIds.indexOf(state.selectedFilter).takeIf { it >= 0 } ?: 0
-        spinner.setSelection(selected, false)
-        spinner.setOnItemSelectedListener(SimpleItemSelectedListener { position ->
-            val selectedFilter = filterIds[position]
-            if (selectedFilter != DpcUiPreferences.read(this).selectedFilter) {
-                DpcUiPreferences.setSelectedFilter(this, selectedFilter)
-                render()
-            }
+        body.addView(ModernUi.section(this, "Visibility & filters"))
+        body.addView(ModernUi.card(this, emphasized = true).apply {
+            addView(ModernUi.title(this@ModuleCenterActivity, "Module visibility"))
+            addView(ModernUi.body(
+                this@ModuleCenterActivity,
+                "Filter operational, unavailable, Samsung/Knox and Lab surfaces without leaving the module registry.",
+            ))
+            addView(ModernUi.spacer(this@ModuleCenterActivity, 8))
+            addView(CheckBox(this@ModuleCenterActivity).apply {
+                text = "Show hidden"
+                isChecked = state.showHidden
+                setOnCheckedChangeListener { _, checked ->
+                    DpcUiPreferences.setShowHidden(this@ModuleCenterActivity, checked)
+                    render()
+                }
+            })
+            addView(CheckBox(this@ModuleCenterActivity).apply {
+                text = "Developer / Lab"
+                isChecked = state.developerMode
+                setOnCheckedChangeListener { _, checked ->
+                    DpcUiPreferences.setDeveloperMode(this@ModuleCenterActivity, checked)
+                    render()
+                }
+            })
+            addView(CheckBox(this@ModuleCenterActivity).apply {
+                text = "Show experimental"
+                isChecked = state.showExperimental
+                setOnCheckedChangeListener { _, checked ->
+                    DpcUiPreferences.setShowExperimental(this@ModuleCenterActivity, checked)
+                    render()
+                }
+            })
+
+            val spinner = Spinner(this@ModuleCenterActivity)
+            spinner.adapter = ArrayAdapter(this@ModuleCenterActivity, android.R.layout.simple_spinner_dropdown_item, filterLabels)
+            val selected = filterIds.indexOf(state.selectedFilter).takeIf { it >= 0 } ?: 0
+            spinner.setSelection(selected, false)
+            spinner.setOnItemSelectedListener(SimpleItemSelectedListener { position ->
+                val selectedFilter = filterIds[position]
+                if (selectedFilter != DpcUiPreferences.read(this@ModuleCenterActivity).selectedFilter) {
+                    DpcUiPreferences.setSelectedFilter(this@ModuleCenterActivity, selectedFilter)
+                    render()
+                }
+            })
+            addView(spinner)
         })
-        body.addView(spinner)
 
         DpcModuleGroup.entries.forEach { group ->
             val grouped = resolved.filter { (module, resolution) ->
                 module.group == group && shouldShow(module, resolution, DpcUiPreferences.read(this).selectedFilter)
             }
             if (grouped.isEmpty()) return@forEach
-            body.addView(TextView(this).apply {
-                text = "\n${group.label} (${grouped.size})"
-                setTypeface(typeface, Typeface.BOLD)
-                textSize = 18f
-            })
+            body.addView(ModernUi.section(this, "${group.label} (${grouped.size})"))
             grouped.forEach { (module, resolution) -> addModule(body, module, resolution) }
         }
 
-        setContentView(ScrollView(this).apply { addView(body) })
+        setContentView(ModernUi.page(this, body))
     }
 
     private fun shouldShow(
@@ -113,33 +112,26 @@ class ModuleCenterActivity : Activity() {
     }
 
     private fun addModule(root: LinearLayout, module: DpcModuleDescriptor, resolution: CapabilityResolution) {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 12, 0, 12)
+        val tone = if (resolution.executable) "success" else "warning"
+        val card = ModernUi.card(this, emphasized = resolution.executable).apply {
+            addView(ModernUi.title(this@ModuleCenterActivity, module.title))
+            addView(ModernUi.body(
+                this@ModuleCenterActivity,
+                "${module.id} • ${module.surface} • API ${module.requirements.minApi}+ • ${module.requirements.ownership} • ${module.requirements.risk}",
+            ))
+            addView(ModernUi.chip(this@ModuleCenterActivity, resolution.availability.name, tone))
+            resolution.reason?.let { reason ->
+                addView(ModernUi.spacer(this@ModuleCenterActivity, 8))
+                addView(ModernUi.body(this@ModuleCenterActivity, reason))
+            }
+            module.entryActivity?.let { target ->
+                addView(ModernUi.spacer(this@ModuleCenterActivity, 10))
+                addView(ModernUi.action(this@ModuleCenterActivity, "Open UI") {
+                    if (resolution.executable) startActivity(Intent(this@ModuleCenterActivity, target))
+                }.apply { isEnabled = resolution.executable })
+            }
         }
-        row.addView(TextView(this).apply {
-            text = "${module.title}  [${module.id}]"
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        row.addView(TextView(this).apply {
-            text = "${resolution.availability.name} • ${module.surface} • API ${module.requirements.minApi}+ • " +
-                "${module.requirements.ownership} • ${module.requirements.risk}"
-        })
-        resolution.reason?.let { reason ->
-            row.addView(TextView(this).apply { text = reason })
-        }
-        module.entryActivity?.let { target ->
-            row.addView(Button(this).apply {
-                text = "Open UI"
-                isEnabled = resolution.executable
-                setOnClickListener { startActivity(Intent(this@ModuleCenterActivity, target)) }
-            })
-        }
-        root.addView(row)
-        root.addView(View(this).apply {
-            minimumHeight = 1
-            setBackgroundColor(0x22000000)
-        })
+        root.addView(card)
     }
 }
 
