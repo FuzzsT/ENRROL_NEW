@@ -1,5 +1,6 @@
 package io.dpcaio.app
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.Application
 import android.graphics.Color
@@ -78,6 +79,11 @@ object UiSurfaceController : Application.ActivityLifecycleCallbacks {
 
     private fun animateEntranceOnce(activity: Activity, content: View) {
         if (!animatedActivities.add(activity)) return
+        if (!ValueAnimator.areAnimatorsEnabled()) {
+            content.alpha = 1f
+            content.translationY = 0f
+            return
+        }
         val distance = content.resources.displayMetrics.density * 8f
         content.alpha = 0f
         content.translationY = distance
