@@ -75,3 +75,4 @@ except ValueError as e:
 else:
     raise AssertionError('expected version mismatch')
 print('RUNTIME_SMOKE_PARSER_112: PASS')
+# v14: keep CI26 shell-quoting regression tied to a real workflow run.
