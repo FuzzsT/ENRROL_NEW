@@ -5,12 +5,9 @@ import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.os.Bundle
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import io.dpcaio.policy.DeviceSecurityPolicySpec
 import io.dpcaio.policy.FrpPolicySpec
 import io.dpcaio.policy.LockTaskPolicySpec
@@ -27,122 +24,157 @@ class DeviceLifecycleActivity : Activity() {
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
+        val root = ModernUi.page(this)
+        root.addView(
+            ModernUi.hero(
+                this,
+                title = "Device Lifecycle Center",
+                subtitle = "Kiosk, security, application lifecycle and Factory Reset Protection",
+                eyebrow = "HIGH-IMPACT DEVICE POLICY",
+            )
+        )
 
-        section(root, "Kiosk / Lock Task")
-        val kiosk = EditText(this).apply { hint = "Comma-separated allowed packages" }
-        root.addView(kiosk)
-        val systemInfo = feature(root, "System info")
-        val notifications = feature(root, "Notifications")
-        val home = feature(root, "Home")
-        val overview = feature(root, "Overview")
-        val globalActions = feature(root, "Global actions")
-        val keyguard = feature(root, "Keyguard")
-        root.addView(Button(this).apply {
-            text = "Preview Lock Task"
-            setOnClickListener {
-                var mask = 0
-                if (systemInfo.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
-                if (home.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
-                if (notifications.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
-                if (overview.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
-                if (globalActions.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
-                if (keyguard.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
-                val spec = LockTaskPolicySpec(csv(kiosk.text.toString()), mask)
-                confirm("Preview Lock Task", "Current: ${gateway.getLockTaskPolicySpec()}\nRequested: $spec") {
-                    val apply = gateway.setLockTaskPolicySpec(spec)
-                    show("Apply=${apply.status}\nReadback=${gateway.getLockTaskPolicySpec()}")
-                }
+        root.addView(ModernUi.section(this, "Kiosk / Lock Task"))
+        val kiosk = ModernUi.field(this, "Comma-separated allowed packages")
+        val systemInfo = CheckBox(this).apply { text = "System info" }
+        val notifications = CheckBox(this).apply { text = "Notifications" }
+        val home = CheckBox(this).apply { text = "Home" }
+        val overview = CheckBox(this).apply { text = "Overview" }
+        val globalActions = CheckBox(this).apply { text = "Global actions" }
+        val keyguard = CheckBox(this).apply { text = "Keyguard" }
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(kiosk)
+                addView(systemInfo)
+                addView(notifications)
+                addView(home)
+                addView(overview)
+                addView(globalActions)
+                addView(keyguard)
+                addView(ModernUi.spacer(this@DeviceLifecycleActivity, 8))
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Preview Lock Task", primary = true) {
+                        var mask = 0
+                        if (systemInfo.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                        if (home.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        if (notifications.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        if (overview.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        if (globalActions.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
+                        if (keyguard.isChecked) mask = mask or DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
+                        val spec = LockTaskPolicySpec(csv(kiosk.text.toString()), mask)
+                        confirm("Preview Lock Task", "Current: ${gateway.getLockTaskPolicySpec()}\nRequested: $spec") {
+                            val apply = gateway.setLockTaskPolicySpec(spec)
+                            show("Apply=${apply.status}\nReadback=${gateway.getLockTaskPolicySpec()}")
+                        }
+                    }
+                )
             }
-        })
+        )
 
-        section(root, "Device Security")
-        root.addView(TextView(this).apply { text = "Password complexity" })
-        val wipe = EditText(this).apply { hint = "Failed-password wipe threshold (0 disables)"; setText("0") }
-        root.addView(wipe)
+        root.addView(ModernUi.section(this, "Device Security"))
+        val wipe = ModernUi.field(this, "Failed-password wipe threshold (0 disables)").apply { setText("0") }
         val disableCamera = CheckBox(this).apply { text = "Disable camera" }
         val disableScreenCapture = CheckBox(this).apply { text = "Disable screen capture" }
         val disableBiometrics = CheckBox(this).apply { text = "Disable keyguard biometrics" }
-        root.addView(disableCamera); root.addView(disableScreenCapture); root.addView(disableBiometrics)
-        root.addView(Button(this).apply {
-            text = "Preview / Confirm security policy"
-            setOnClickListener {
-                val keyguardMask = if (disableBiometrics.isChecked) DevicePolicyManager.KEYGUARD_DISABLE_BIOMETRICS else DevicePolicyManager.KEYGUARD_DISABLE_FEATURES_NONE
-                val spec = DeviceSecurityPolicySpec(
-                    passwordComplexity = DevicePolicyManager.PASSWORD_COMPLEXITY_HIGH,
-                    maxFailedPasswordsForWipe = wipe.text.toString().toIntOrNull() ?: 0,
-                    keyguardDisabledFeatures = keyguardMask,
-                    cameraDisabled = disableCamera.isChecked,
-                    screenCaptureDisabled = disableScreenCapture.isChecked,
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.body(this@DeviceLifecycleActivity, "Password complexity: HIGH"))
+                addView(wipe)
+                addView(disableCamera)
+                addView(disableScreenCapture)
+                addView(disableBiometrics)
+                addView(ModernUi.spacer(this@DeviceLifecycleActivity, 8))
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Preview / Confirm security policy", destructive = true) {
+                        val keyguardMask = if (disableBiometrics.isChecked) DevicePolicyManager.KEYGUARD_DISABLE_BIOMETRICS else DevicePolicyManager.KEYGUARD_DISABLE_FEATURES_NONE
+                        val spec = DeviceSecurityPolicySpec(
+                            passwordComplexity = DevicePolicyManager.PASSWORD_COMPLEXITY_HIGH,
+                            maxFailedPasswordsForWipe = wipe.text.toString().toIntOrNull() ?: 0,
+                            keyguardDisabledFeatures = keyguardMask,
+                            cameraDisabled = disableCamera.isChecked,
+                            screenCaptureDisabled = disableScreenCapture.isChecked,
+                        )
+                        confirm(
+                            "Confirm CRITICAL policy",
+                            "Password complexity=HIGH\nFailed-attempt wipe threshold=${spec.maxFailedPasswordsForWipe}\nCamera disabled=${spec.cameraDisabled}\nScreen capture disabled=${spec.screenCaptureDisabled}\n\nAndroid may wipe after the configured number of failed attempts.",
+                        ) { show(gateway.setDeviceSecurityPolicySpec(spec).toString()) }
+                    }
                 )
-                confirm(
-                    "Confirm CRITICAL policy",
-                    "Password complexity=HIGH\nFailed-attempt wipe threshold=${spec.maxFailedPasswordsForWipe}\nCamera disabled=${spec.cameraDisabled}\nScreen capture disabled=${spec.screenCaptureDisabled}\n\nAndroid may wipe after the configured number of failed attempts.",
-                ) { show(gateway.setDeviceSecurityPolicySpec(spec).toString()) }
             }
-        })
+        )
 
-        section(root, "Application Control")
-        val pkg = EditText(this).apply { hint = "Target package" }
-        root.addView(pkg)
-        root.addView(Button(this).apply { text = "Block uninstall"; setOnClickListener { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), true).toString()) } })
-        root.addView(Button(this).apply { text = "Allow uninstall"; setOnClickListener { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), false).toString()) } })
-        val restrictions = EditText(this).apply { hint = "Restrictions: key=value;key2=value2" }
-        root.addView(restrictions)
-        root.addView(Button(this).apply {
-            text = "Apply application restrictions"
-            setOnClickListener {
-                val parsed = parseKeyValues(restrictions.text.toString())
-                if (parsed == null) show("Invalid restrictions. Use key=value;key2=value2")
-                else show(gateway.setManagedApplicationRestrictions(pkg.text.toString(), parsed).toString())
+        root.addView(ModernUi.section(this, "Application Control"))
+        val pkg = ModernUi.field(this, "Target package")
+        val restrictions = ModernUi.field(this, "Restrictions: key=value;key2=value2")
+        val userControl = ModernUi.field(this, "User-control-disabled packages, comma-separated")
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(pkg)
+                addView(
+                    ModernUi.actionRow(
+                        this@DeviceLifecycleActivity,
+                        ModernUi.action(this@DeviceLifecycleActivity, "Block uninstall") { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), true).toString()) },
+                        ModernUi.action(this@DeviceLifecycleActivity, "Allow uninstall") { show(gateway.setUninstallBlockedPolicy(pkg.text.toString(), false).toString()) },
+                    )
+                )
+                addView(restrictions)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Apply application restrictions") {
+                        val parsed = parseKeyValues(restrictions.text.toString())
+                        if (parsed == null) show("Invalid restrictions. Use key=value;key2=value2")
+                        else show(gateway.setManagedApplicationRestrictions(pkg.text.toString(), parsed).toString())
+                    }
+                )
+                addView(ModernUi.spacer(this@DeviceLifecycleActivity, 7))
+                addView(userControl)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Apply user-control-disabled packages") {
+                        show(gateway.setUserControlDisabledPackagesPolicy(csv(userControl.text.toString())).toString())
+                    }
+                )
+                addView(ModernUi.spacer(this@DeviceLifecycleActivity, 7))
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Confirm Clear app data", destructive = true) {
+                        confirm("Confirm clear data", "This removes application data for ${pkg.text}") {
+                            show(gateway.clearManagedApplicationData(pkg.text.toString()).toString())
+                        }
+                    }
+                )
             }
-        })
-        val userControl = EditText(this).apply { hint = "User-control-disabled packages, comma-separated" }
-        root.addView(userControl)
-        root.addView(Button(this).apply {
-            text = "Apply user-control-disabled packages"
-            setOnClickListener { show(gateway.setUserControlDisabledPackagesPolicy(csv(userControl.text.toString())).toString()) }
-        })
-        root.addView(Button(this).apply {
-            text = "Confirm Clear app data"
-            setOnClickListener {
-                confirm("Confirm clear data", "This removes application data for ${pkg.text}") {
-                    show(gateway.clearManagedApplicationData(pkg.text.toString()).toString())
-                }
-            }
-        })
+        )
 
-        section(root, "Factory Reset Protection")
-        val accounts = EditText(this).apply { hint = "FRP account IDs, comma-separated" }
-        root.addView(accounts)
-        root.addView(Button(this).apply {
-            text = "Preview / Confirm FRP"
-            setOnClickListener {
-                val spec = FrpPolicySpec(true, csv(accounts.text.toString()).toList())
-                confirm(
-                    "Preview Factory Reset Protection",
-                    "Current: ${gateway.getFrpPolicySpec()}\nRequested: $spec\nNo factory reset is triggered by this action.",
-                ) {
-                    val apply = gateway.setFrpPolicySpec(spec)
-                    val readback = gateway.getFrpPolicySpec()
-                    show("Apply=${apply.status}\nReadback=$readback")
-                }
+        root.addView(ModernUi.section(this, "Factory Reset Protection"))
+        val accounts = ModernUi.field(this, "FRP account IDs, comma-separated")
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.body(this@DeviceLifecycleActivity, "These actions change FRP policy only; they do not trigger a factory reset."))
+                addView(accounts)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Preview / Confirm FRP", primary = true) {
+                        val spec = FrpPolicySpec(true, csv(accounts.text.toString()).toList())
+                        confirm(
+                            "Preview Factory Reset Protection",
+                            "Current: ${gateway.getFrpPolicySpec()}\nRequested: $spec\nNo factory reset is triggered by this action.",
+                        ) {
+                            val apply = gateway.setFrpPolicySpec(spec)
+                            val readback = gateway.getFrpPolicySpec()
+                            show("Apply=${apply.status}\nReadback=$readback")
+                        }
+                    }
+                )
+                addView(ModernUi.spacer(this@DeviceLifecycleActivity, 7))
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Clear custom FRP policy", destructive = true) {
+                        confirm("Clear custom FRP policy", "This changes only the FRP policy; it does not factory-reset the device.") {
+                            show(gateway.setFrpPolicySpec(FrpPolicySpec(enabled = true, accountIds = emptyList())).toString())
+                        }
+                    }
+                )
             }
-        })
-        root.addView(Button(this).apply {
-            text = "Clear custom FRP policy"
-            setOnClickListener {
-                confirm("Clear custom FRP policy", "This changes only the FRP policy; it does not factory-reset the device.") {
-                    show(gateway.setFrpPolicySpec(FrpPolicySpec(enabled = true, accountIds = emptyList())).toString())
-                }
-            }
-        })
+        )
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(ModernUi.scrollPage(this, root))
     }
-
-    private fun feature(root: LinearLayout, label: String): CheckBox =
-        CheckBox(this).apply { text = label; root.addView(this) }
 
     private fun csv(value: String): Set<String> = value.split(',').map(String::trim).filter(String::isNotEmpty).toSet()
 
@@ -160,7 +192,11 @@ class DeviceLifecycleActivity : Activity() {
         return out
     }
 
-    private fun section(root: LinearLayout, title: String) { root.addView(TextView(this).apply { text = "\n$title"; textSize = 18f }) }
-    private fun confirm(title: String, msg: String, action: () -> Unit) { AlertDialog.Builder(this).setTitle(title).setMessage(msg).setNegativeButton("Cancel", null).setPositiveButton("Confirm") { _, _ -> action() }.show() }
-    private fun show(msg: String) { AlertDialog.Builder(this).setMessage(msg).setPositiveButton("OK", null).show() }
+    private fun confirm(title: String, msg: String, action: () -> Unit) {
+        AlertDialog.Builder(this).setTitle(title).setMessage(msg).setNegativeButton("Cancel", null).setPositiveButton("Confirm") { _, _ -> action() }.show()
+    }
+
+    private fun show(msg: String) {
+        AlertDialog.Builder(this).setMessage(msg).setPositiveButton("OK", null).show()
+    }
 }
