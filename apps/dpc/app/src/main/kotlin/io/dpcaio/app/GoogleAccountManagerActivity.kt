@@ -6,12 +6,9 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import io.dpcaio.account.AccountPriorityPlanner
 import io.dpcaio.account.AccountPriorityStatus
@@ -32,6 +29,7 @@ class GoogleAccountManagerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        title = "Google Account Priority"
         repository = AndroidGoogleAccountRepository(this)
         selectionStore = AioAccountSelectionStore(this)
         reorderGateway = AndroidAccountReorderGateway(this, AioDeviceAdminReceiver.componentName(this))
@@ -46,41 +44,58 @@ class GoogleAccountManagerActivity : Activity() {
     }
 
     private fun buildUi(): View {
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
-        }
-        content.addView(TextView(this).apply {
-            text = "Google Account Priority"
-            textSize = 24f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        status = TextView(this).apply { setPadding(0, 20, 0, 20) }
+        val body = ModernUi.page(this)
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "Google Account Priority",
+                subtitle = "Choose the DPC account and verify the observable AccountManager order",
+                eyebrow = "ACCOUNT MANAGEMENT",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Observed state"))
+        status = TextView(this).apply { setTextIsSelectable(true) }
+        body.addView(ModernUi.outputCard(this, status))
+
+        body.addView(ModernUi.section(this, "Visible Google accounts"))
         accounts = TextView(this).apply { setTextIsSelectable(true) }
-        content.addView(status)
-        content.addView(accounts)
-        content.addView(Button(this).apply {
-            text = "Wybierz konto dla DPC"
-            setOnClickListener { startActivityForResult(GoogleAccountIntentFactory.chooseAccount(), REQ_CHOOSE) }
-        })
-        content.addView(Button(this).apply {
-            text = "Ustaw wybrane jako pierwsze (workflow)"
-            setOnClickListener { prepareObservedOrderReorder() }
-        })
-        content.addView(Button(this).apply {
-            text = "Dodaj konto Google"
-            setOnClickListener { startActivity(GoogleAccountIntentFactory.addGoogleAccount()) }
-        })
-        content.addView(Button(this).apply {
-            text = "Otwórz ustawienia synchronizacji/kont"
-            setOnClickListener { startActivity(GoogleAccountIntentFactory.syncSettings()) }
-        })
-        addPendingButton = Button(this).apply {
-            visibility = View.GONE
-            setOnClickListener { startActivity(GoogleAccountIntentFactory.addGoogleAccount()) }
-        }
-        content.addView(addPendingButton)
-        return ScrollView(this).apply { addView(content) }
+        body.addView(ModernUi.outputCard(this, accounts))
+
+        body.addView(ModernUi.section(this, "Actions"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.action(this@GoogleAccountManagerActivity, "Wybierz konto dla DPC", primary = true) {
+                    startActivityForResult(GoogleAccountIntentFactory.chooseAccount(), REQ_CHOOSE)
+                })
+                addView(ModernUi.action(this@GoogleAccountManagerActivity, "Ustaw wybrane jako pierwsze (workflow)") {
+                    prepareObservedOrderReorder()
+                })
+                addView(ModernUi.action(this@GoogleAccountManagerActivity, "Dodaj konto Google") {
+                    startActivity(GoogleAccountIntentFactory.addGoogleAccount())
+                })
+                addView(ModernUi.action(this@GoogleAccountManagerActivity, "Otwórz ustawienia synchronizacji/kont") {
+                    startActivity(GoogleAccountIntentFactory.syncSettings())
+                })
+                addPendingButton = ModernUi.action(this@GoogleAccountManagerActivity, "Dodaj ponownie oczekujące konto", primary = true) {
+                    startActivity(GoogleAccountIntentFactory.addGoogleAccount())
+                }.apply { visibility = View.GONE }
+                addView(addPendingButton)
+            }
+        )
+
+        body.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(ModernUi.title(this@GoogleAccountManagerActivity, "Read-back boundary"))
+                addView(
+                    ModernUi.body(
+                        this@GoogleAccountManagerActivity,
+                        "Android nie udostępnia publicznego setPrimaryGoogleAccount(). AIO weryfikuje tylko kolejność widoczną dla AccountManager i nie zapisuje haseł ani tokenów.",
+                    )
+                )
+            }
+        )
+        return ModernUi.scrollPage(this, body)
     }
 
     private fun ensureAccountPermission() {
