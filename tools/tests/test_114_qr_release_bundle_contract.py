@@ -39,6 +39,28 @@ for token in [
 ]:
     if token not in workflow: errors.append(f'workflow missing {token}')
 
+# Production workflow must stay aligned with the verified 1.1.4 app layout and
+# runtime-smoke behavior. These guards intentionally reject the older pre-app
+# output paths and Google APIs emulator image that can contain accounts and
+# prevent Device Owner provisioning.
+for token in [
+    'STABLE_SIGNING_KEY_REQUIRED',
+    'DPC_AIO_RELEASE_KEYSTORE_B64',
+    'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256',
+    'apps/dpc/app/build/outputs/apk/enterprise/release',
+    'apps/dpc/app/build/outputs/provisioning/enterprise/release',
+    'tools/release/extract_apksigner_sha256.py',
+    'target: default',
+]:
+    if token not in workflow: errors.append(f'production workflow parity missing {token}')
+for forbidden in [
+    'apps/dpc/build/outputs/',
+    'target: google_apis',
+    'DPC_AIO_SIGNING_MODE=ephemeral',
+    'keytool -genkeypair',
+]:
+    if forbidden in workflow: errors.append(f'production workflow contains forbidden/stale marker {forbidden}')
+
 script=read('tools/release/build_qr_release_bundle.py')
 for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
     if token not in script: errors.append(f'bundle builder missing {token}')
