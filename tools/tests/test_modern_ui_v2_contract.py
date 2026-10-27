@@ -40,6 +40,14 @@ for token in [
 ]:
     assert token in design, f'ModernUi compatibility API missing: {token}'
 
+# Password transformations are installed by inputType. setSingleLine() must happen first,
+# otherwise Android can replace PasswordTransformationMethod with SingleLineTransformationMethod.
+field_start = design.index('fun field(activity: Activity')
+field_end = design.index('\n    fun action(', field_start)
+field_body = design[field_start:field_end]
+assert field_body.index('setSingleLine(true)') < field_body.index('this.inputType = inputType'), \
+    'ModernUi.field must configure single-line before inputType to preserve password masking'
+
 network = (APP / 'NetworkControlActivity.kt').read_text(encoding='utf-8')
 for token in ['Private DNS', 'DNS over HTTPS', 'ModernUi.hero', 'ModernUi.outputCard', 'ModernUi.scrollPage']:
     assert token in network, token
@@ -59,6 +67,11 @@ for token in ['ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.actio
 knox = (APP / 'KnoxEnterpriseCenterActivity.kt').read_text(encoding='utf-8')
 for token in ['Capability Matrix', 'ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.scrollPage']:
     assert token in knox, token
+unsupported_check = 'state.contains("UNSUPPORTED") -> ModernUi.Tone.DANGER'
+supported_check = 'state.contains("ACTIVE") || state.contains("AVAILABLE") || state.contains("SUPPORTED") -> ModernUi.Tone.SUCCESS'
+assert unsupported_check in knox and supported_check in knox, 'Knox tone mapping contract missing'
+assert knox.index(unsupported_check) < knox.index(supported_check), \
+    'Knox unsupported states must be matched before SUPPORTED success substring'
 
 explorer = (APP / 'ActivityExplorerActivity.kt').read_text(encoding='utf-8')
 for token in [
