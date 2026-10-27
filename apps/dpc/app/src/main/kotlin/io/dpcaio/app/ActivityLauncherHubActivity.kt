@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.LruCache
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.EditText
@@ -29,7 +30,6 @@ class ActivityLauncherHubActivity : Activity() {
         val versionName: String,
         val system: Boolean,
         val enabled: Boolean,
-        val icon: Drawable?,
     )
 
     private lateinit var search: EditText
@@ -42,6 +42,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentSort = AppSort.NAME
     private var installedApps: List<AppEntry> = emptyList()
     private val runtime = AndroidShizukuRuntime()
+    private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -70,6 +71,11 @@ class ActivityLauncherHubActivity : Activity() {
             renderTabs()
             renderApps()
         }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) iconCache.evictAll()
     }
 
     private fun renderShell() {
@@ -250,9 +256,15 @@ class ActivityLauncherHubActivity : Activity() {
             versionName = packageInfo.versionName ?: "unknown",
             system = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = info.enabled,
-            icon = runCatching { packageManager.getApplicationIcon(info) }.getOrNull(),
         )
     }.getOrNull()
+
+    private fun loadAppIcon(packageName: String): Drawable? {
+        iconCache.get(packageName)?.let { return it }
+        val loaded = runCatching { packageManager.getApplicationIcon(packageName) }.getOrNull() ?: return null
+        iconCache.put(packageName, loaded)
+        return loaded
+    }
 
     private fun filteredApps(): List<AppEntry> {
         val query = if (::search.isInitialized) search.text.toString().trim().lowercase() else ""
@@ -327,14 +339,15 @@ class ActivityLauncherHubActivity : Activity() {
             app.system -> ModernUi.Tone.NEUTRAL
             else -> ModernUi.Tone.SUCCESS
         }
+        val icon = loadAppIcon(app.packageName)
         return ModernUi.compactCard(this, tone).apply {
             val identity = LinearLayout(this@ActivityLauncherHubActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
-                if (app.icon != null) {
+                if (icon != null) {
                     addView(
                         ImageView(this@ActivityLauncherHubActivity).apply {
-                            setImageDrawable(app.icon)
+                            setImageDrawable(icon)
                             contentDescription = "${app.label} icon"
                             scaleType = ImageView.ScaleType.CENTER_INSIDE
                             setPadding(
@@ -437,5 +450,6 @@ class ActivityLauncherHubActivity : Activity() {
         private const val KEY_FAVORITES = "favoritePackages"
         private const val KEY_RECENTS = "recentPackages"
         private const val MAX_RECENT = 24
+        private const val ICON_CACHE_SIZE = 48
     }
 }
