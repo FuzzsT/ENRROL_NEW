@@ -43,6 +43,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentTab = AppTab.USER
     private var currentSort = AppSort.NAME
     private var installedApps: List<AppEntry> = emptyList()
+    private var renderGeneration = 0L
     private val runtime = AndroidShizukuRuntime()
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
@@ -82,6 +83,7 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     override fun onDestroy() {
+        renderGeneration++
         iconExecutor.shutdownNow()
         iconCache.evictAll()
         super.onDestroy()
@@ -242,6 +244,7 @@ class ActivityLauncherHubActivity : Activity() {
                 .distinctBy { it.packageName }
 
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 installedApps = mapped
                 status.text = "Installed app inventory loaded: ${mapped.size} packages"
                 renderTabs()
@@ -292,7 +295,7 @@ class ActivityLauncherHubActivity : Activity() {
             )
         }
 
-    private fun bindAppIcon(slot: FrameLayout, app: AppEntry, tone: ModernUi.Tone) {
+    private fun bindAppIcon(slot: FrameLayout, app: AppEntry, tone: ModernUi.Tone, generation: Long) {
         slot.tag = app.packageName
         slot.removeAllViews()
         val cached = iconCache.get(app.packageName)
@@ -302,12 +305,18 @@ class ActivityLauncherHubActivity : Activity() {
         }
 
         slot.addView(ModernUi.monogramTile(this, app.label, tone))
-        iconExecutor.submit {
-            val loaded = loadAppIcon(app.packageName) ?: return@submit
-            runOnUiThread {
-                if (isFinishing || isDestroyed || slot.tag != app.packageName) return@runOnUiThread
-                slot.removeAllViews()
-                slot.addView(appIconView(app, loaded))
+        if (generation != renderGeneration || iconExecutor.isShutdown) return
+        runCatching {
+            iconExecutor.submit {
+                if (generation != renderGeneration || Thread.currentThread().isInterrupted) return@submit
+                val loaded = loadAppIcon(app.packageName) ?: return@submit
+                if (generation != renderGeneration || Thread.currentThread().isInterrupted) return@submit
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (generation != renderGeneration || slot.tag != app.packageName) return@runOnUiThread
+                    slot.removeAllViews()
+                    slot.addView(appIconView(app, loaded))
+                }
             }
         }
     }
@@ -333,7 +342,8 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     private fun renderApps() {
-        if (!::appList.isInitialized) return
+        if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        val generation = ++renderGeneration
         val shown = filteredApps()
         appList.removeAllViews()
         renderStats(shown)
@@ -348,7 +358,7 @@ class ActivityLauncherHubActivity : Activity() {
             )
             return
         }
-        shown.forEach { app -> appList.addView(renderApp(app)) }
+        shown.forEach { app -> appList.addView(renderApp(app, generation)) }
     }
 
     private fun renderStats(shown: List<AppEntry>) {
@@ -378,7 +388,7 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
-    private fun renderApp(app: AppEntry): LinearLayout {
+    private fun renderApp(app: AppEntry, generation: Long): LinearLayout {
         val favorite = app.packageName in favoritePackages
         val tone = when {
             !app.enabled -> ModernUi.Tone.WARNING
@@ -396,7 +406,7 @@ class ActivityLauncherHubActivity : Activity() {
                         ModernUi.dp(this@ActivityLauncherHubActivity, 54),
                     ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 12) }
                 }
-                bindAppIcon(iconSlot, app, tone)
+                bindAppIcon(iconSlot, app, tone, generation)
                 addView(iconSlot)
 
                 addView(
