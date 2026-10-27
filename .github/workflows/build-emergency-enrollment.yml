@@ -198,6 +198,7 @@ jobs:
           python3 tools/tests/test_apksigner_cert_parser_114_contract.py
           python3 tools/tests/test_app_dpc_compile_114_contract_v2.py
           python3 tools/tests/test_114_qr_release_bundle_contract.py
+          python3 tools/tests/test_112_runtime_smoke_parser.py
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
 
@@ -273,7 +274,7 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_7_pro
           disable-animations: true
