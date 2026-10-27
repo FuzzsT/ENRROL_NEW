@@ -14,6 +14,7 @@ for name in [
     'EnrollmentStatusActivity.kt',
     'KnoxEnterpriseCenterActivity.kt',
     'ActivityExplorerActivity.kt',
+    'OfflineSetupActivity.kt',
 ]:
     text = (APP / name).read_text(encoding='utf-8')
     assert 'ModernUi.' in text, f'{name}: modern design system not applied'
@@ -56,5 +57,13 @@ for token in [
     'ModernUi.actionRow', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in explorer, token
+
+offline = (APP / 'OfflineSetupActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'FULL OFFLINE', 'OFFLINE THEN SYNC', 'Preview deployment', 'Apply supported',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.action',
+    'ModernUi.actionRow', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in offline, token
 
 print('MODERN_UI_V2_CONTRACT: PASS')
