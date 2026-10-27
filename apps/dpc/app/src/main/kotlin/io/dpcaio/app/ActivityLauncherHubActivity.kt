@@ -43,10 +43,10 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentTab = AppTab.USER
     private var currentSort = AppSort.NAME
     private var installedApps: List<AppEntry> = emptyList()
-    private var renderGeneration = 0L
     private val runtime = AndroidShizukuRuntime()
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
+    private var renderGeneration = 0L
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -146,13 +146,16 @@ class ActivityLauncherHubActivity : Activity() {
         setContentView(ModernUi.scrollPage(this, body))
     }
 
+    private fun installedPackageNames(): Set<String> =
+        installedApps.asSequence().map { it.packageName }.toSet()
+
     private fun tabLabel(tab: AppTab): String {
-        val installed = installedApps.map { it.packageName }.toSet()
+        val installedPackages = installedPackageNames()
         val count = when (tab) {
             AppTab.SYSTEM -> installedApps.count { it.system }
             AppTab.USER -> installedApps.count { !it.system }
-            AppTab.FAVORITES -> favoritePackages.count { it in installed }
-            AppTab.RECENT -> recentPackages.count { it in installed }
+            AppTab.FAVORITES -> favoritePackages.count { it in installedPackages }
+            AppTab.RECENT -> recentPackages.count { it in installedPackages }
         }
         return "${tab.name} ($count)"
     }
@@ -364,6 +367,7 @@ class ActivityLauncherHubActivity : Activity() {
     private fun renderStats(shown: List<AppEntry>) {
         if (!::stats.isInitialized) return
         stats.removeAllViews()
+        val installedPackages = installedPackageNames()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -378,8 +382,8 @@ class ActivityLauncherHubActivity : Activity() {
         }
         add(installedApps.size.toString(), "TOTAL", ModernUi.Tone.NEUTRAL)
         add(shown.size.toString(), "VISIBLE", ModernUi.Tone.SUCCESS)
-        add(favoritePackages.size.toString(), "FAVORITES", ModernUi.Tone.NEUTRAL)
-        add(recentPackages.size.toString(), "RECENT", ModernUi.Tone.NEUTRAL)
+        add(favoritePackages.count { it in installedPackages }.toString(), "FAVORITES", ModernUi.Tone.NEUTRAL)
+        add(recentPackages.count { it in installedPackages }.toString(), "RECENT", ModernUi.Tone.NEUTRAL)
         stats.addView(
             HorizontalScrollView(this).apply {
                 isHorizontalScrollBarEnabled = false
@@ -446,16 +450,8 @@ class ActivityLauncherHubActivity : Activity() {
                     ModernUi.action(this@ActivityLauncherHubActivity, if (favorite) "Remove favorite" else "Add favorite") {
                         toggleFavorite(app.packageName)
                     },
-                    ModernUi.action(this@ActivityLauncherHubActivity, "Open app") {
-                        val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
-                        if (launchIntent != null) {
-                            startActivity(launchIntent)
-                            recordRecent(app.packageName)
-                            status.text = "Opened ${app.packageName}"
-                            renderTabs()
-                        } else {
-                            status.text = "No launcher intent for ${app.packageName}"
-                        }
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Package details") {
+                        showPackageDetails(app)
                     },
                 )
             )
@@ -468,31 +464,36 @@ class ActivityLauncherHubActivity : Activity() {
         preferences.edit().putStringSet(KEY_FAVORITES, next).apply()
         renderTabs()
         renderApps()
-        status.text = if (packageName in next) "Added to favorites: $packageName" else "Removed from favorites: $packageName"
     }
 
-    private fun recordRecent(packageName: String) {
+    private fun rememberRecent(packageName: String) {
         val next = buildList {
             add(packageName)
             addAll(recentPackages.filterNot { it == packageName })
         }.take(MAX_RECENT)
         preferences.edit().putString(KEY_RECENTS, next.joinToString("\n")).apply()
+        renderTabs()
     }
 
     private fun openActivities(app: AppEntry) {
-        recordRecent(app.packageName)
-        renderTabs()
-        status.text = "Opening guarded activity inventory for ${app.packageName}"
-        startActivity(
-            Intent(this, ActivityExplorerActivity::class.java)
-                .putExtra("package", app.packageName)
-        )
+        rememberRecent(app.packageName)
+        startActivity(Intent(this, ActivityExplorerActivity::class.java).putExtra("package", app.packageName))
+    }
+
+    private fun showPackageDetails(app: AppEntry) {
+        status.text = buildString {
+            append(app.label).append('\n')
+            append(app.packageName).append('\n')
+            append("Version: ").append(app.versionName).append('\n')
+            append("Type: ").append(if (app.system) "SYSTEM" else "USER").append('\n')
+            append("Enabled: ").append(app.enabled)
+        }
     }
 
     companion object {
         private const val PREFS_NAME = "activity_launcher_hub"
-        private const val KEY_FAVORITES = "favoritePackages"
-        private const val KEY_RECENTS = "recentPackages"
+        private const val KEY_FAVORITES = "favorite_packages"
+        private const val KEY_RECENTS = "recent_packages"
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
         private const val ICON_WORKER_COUNT = 2
