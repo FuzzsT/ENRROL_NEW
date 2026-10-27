@@ -234,8 +234,8 @@ object ModernUi {
             textSize = 12f
             setTypeface(typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
             gravity = Gravity.CENTER
-            minHeight = dp(activity, 44)
-            minimumHeight = dp(activity, 44)
+            minHeight = dp(activity, 48)
+            minimumHeight = dp(activity, 48)
             setPadding(dp(activity, 14), 0, dp(activity, 14), 0)
             background = RippleDrawable(
                 ColorStateList.valueOf(withAlpha(accent, 38)),
