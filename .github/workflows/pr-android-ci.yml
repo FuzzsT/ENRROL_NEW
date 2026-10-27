@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a0ac95 # v5.1.0
 
       - name: Set up Java 21
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
@@ -128,6 +128,7 @@ jobs:
           python3 tools/tests/test_activity_explorer_launcher_ui_contract.py
           python3 tools/tests/test_activity_explorer_visual_polish_contract.py
           python3 tools/tests/test_control_center_shizuku_launcher_contract.py
+          python3 tools/tests/test_shizuku_reactive_launcher_icons_contract.py
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
