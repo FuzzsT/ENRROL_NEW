@@ -32,6 +32,19 @@ code3,data3=mod.parse_broadcast_result(sample_unquoted)
 assert code3==0, code3
 assert data3['deviceOwner'] is True
 
+# Android 35 / emulator 37 can render result data with an extra shell-escape
+# layer around every JSON quote. This is the quoting shape observed in CI run #23.
+real_adb_data = r'"{\\"apiLevel\\":35,\\"manufacturer\\":\\"Google\\",\\"model\\":\\"sdk_gphone64_x86_64\\",\\"dpcVersion\\":\\"1.1.4\\",\\"deviceOwner\\":true,\\"profileOwner\\":false,\\"moduleCounts\\":{\\"integrated\\":41},\\"status\\":\\"VERIFIED\\"}"'
+sample_real = f'Broadcast completed: result=0, data={real_adb_data}\n'
+code4,data4=mod.parse_broadcast_result(sample_real)
+assert code4==0, code4
+assert data4['apiLevel']==35
+assert data4['dpcVersion']=='1.1.4'
+assert data4['deviceOwner'] is True
+assert data4['moduleCounts']['integrated']==41
+assert data4['status']=='VERIFIED'
+mod.validate_diagnostics(data4,'1.1.4')
+
 bad='''Broadcast completed: result=0, data={"status":"VERIFIED"} trailing-junk
 '''
 try:
