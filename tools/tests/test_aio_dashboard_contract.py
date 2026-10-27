@@ -17,3 +17,29 @@ scenario_pos=dashboard.index('Scenario Recorder / Replay')
 nfc_pos=dashboard.index('NFC Lab')
 guard_pos=dashboard.index('developerMode')
 assert guard_pos < scenario_pos < nfc_pos, 'lab surfaces must be after developerMode guard'
+
+# UI regression contract: Android 15+ edge-to-edge must not hide app content behind
+# status/navigation bars, and motion must remain lightweight and centralized.
+application=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcAioApplication.kt').read_text()
+ui=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/UiSurfaceController.kt').read_text()
+for token in ['UiSurfaceController.install(this)']:
+    assert token in application, token
+for token in [
+    'ActivityLifecycleCallbacks',
+    'setOnApplyWindowInsetsListener',
+    'WindowInsets.Type.systemBars()',
+    'requestApplyInsets()',
+    'WeakHashMap',
+    'translationY',
+    'DecelerateInterpolator',
+]:
+    assert token in ui, token
+for token in [
+    'addSection(body, "Setup & enrollment")',
+    'addSection(body, "Management")',
+    'addSection(body, "Tools")',
+    'RippleDrawable',
+    'GradientDrawable',
+    'isFillViewport = true',
+]:
+    assert token in dashboard, token
