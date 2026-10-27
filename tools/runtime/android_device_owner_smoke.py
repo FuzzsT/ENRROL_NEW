@@ -48,55 +48,72 @@ def wait_for_boot(timeout_seconds: int = 240) -> None:
     raise RuntimeError("Android emulator did not reach sys.boot_completed=1")
 
 
-def _decode_json_value_with_broadcast_metadata(raw: str) -> Any:
-    """Decode one JSON value and allow only known trailing `am broadcast` metadata."""
+def _decode_result_data(raw: str) -> dict[str, Any]:
     raw = raw.strip()
     if not raw:
         raise ValueError("diagnostics broadcast returned no result data")
 
+    # Android may append Bundle metadata after result data. Strip only that
+    # explicitly-known suffix; anything else remains part of the payload and
+    # will fail closed below.
     payload_text = raw
     extras_match = re.fullmatch(r"(.*)(,\s*extras\s*[:=].*)", raw)
     if extras_match:
         payload_text = extras_match.group(1).strip()
 
-    candidates: list[str] = []
+    decoder = json.JSONDecoder()
+    current: Any = payload_text
 
-    # Android 35 / emulator 37 may print resultData as an outer quoted object
-    # with an additional shell-escape layer before each JSON quote, e.g.
-    # data="{\\\"apiLevel\\\":35,...}". Normalize only this bounded,
-    # object-shaped form; arbitrary trailing data remains fail-closed.
-    if payload_text.startswith('"{') and payload_text.endswith('}"'):
-        inner = payload_text[1:-1]
-        normalized = re.sub(r'\\+"', '"', inner)
-        if normalized != inner:
-            candidates.append(normalized)
+    for _ in range(4):
+        if isinstance(current, dict):
+            return current
+        if not isinstance(current, str):
+            break
 
-    if payload_text.startswith('{') and payload_text.endswith('}') and '\\"' in payload_text:
-        normalized = re.sub(r'\\+"', '"', payload_text)
-        if normalized != payload_text:
-            candidates.append(normalized)
+        text = current.strip()
+        if not text:
+            break
 
-    candidates.append(payload_text)
-
-    last_error: Exception | None = None
-    for candidate in candidates:
+        # Normal JSON object or a JSON string containing the object.
         try:
-            value, end = json.JSONDecoder().raw_decode(candidate)
-        except json.JSONDecodeError as exc:
-            last_error = exc
+            current = json.loads(text)
             continue
+        except json.JSONDecodeError:
+            pass
 
-        trailing = candidate[end:].strip()
-        if trailing.startswith(","):
-            trailing = trailing[1:].lstrip()
-        if trailing:
-            last_error = ValueError(f"unexpected trailing broadcast metadata: {trailing!r}")
-            continue
-        return value
+        # Android 35 `am broadcast` can render result data as an outer quoted
+        # object with one or more shell-escape backslashes before every JSON
+        # quote, e.g. data="{\\\"apiLevel\\\":35,...}". Normalize only
+        # that bounded object-shaped form.
+        if text.startswith('"{') and text.endswith('}"'):
+            inner = text[1:-1]
+            normalized = re.sub(r'\\+"', '"', inner)
+            if normalized != inner:
+                current = normalized
+                continue
 
-    if isinstance(last_error, ValueError):
-        raise last_error
-    raise ValueError("diagnostics payload is not valid JSON")
+        # The outer JSON-string decode can also leave an object-shaped string
+        # whose JSON quotes remain shell-escaped once.
+        if text.startswith('{') and text.endswith('}') and '\\"' in text:
+            normalized = re.sub(r'\\+"', '"', text)
+            if normalized != text:
+                current = normalized
+                continue
+
+        # Preserve a precise fail-closed error for otherwise parseable prefixes
+        # followed by unexpected metadata.
+        try:
+            _, end = decoder.raw_decode(text)
+        except json.JSONDecodeError:
+            raise
+        suffix = text[end:].strip()
+        if suffix:
+            raise ValueError(f"unexpected trailing broadcast metadata: {suffix!r}")
+        break
+
+    if not isinstance(current, dict):
+        raise ValueError("diagnostics payload is not a JSON object")
+    return current
 
 
 def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
@@ -108,18 +125,7 @@ def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
     if not m:
         raise ValueError(f"cannot parse broadcast completion: {line!r}")
     code = int(m.group(1))
-    raw = (m.group(2) or "").strip()
-    if not raw:
-        raise ValueError("diagnostics broadcast returned no result data")
-
-    decoded = _decode_json_value_with_broadcast_metadata(raw)
-    if isinstance(decoded, str):
-        decoded = _decode_json_value_with_broadcast_metadata(decoded)
-    data = decoded
-
-    if not isinstance(data, dict):
-        raise ValueError("diagnostics payload is not a JSON object")
-    return code, data
+    return code, _decode_result_data(m.group(2) or "")
 
 
 def validate_diagnostics(data: dict[str, Any], expected_version: str) -> None:
@@ -192,6 +198,7 @@ def main() -> int:
         report["diagnostics"] = diagnostics
         validate_diagnostics(diagnostics, args.expected_version)
 
+        # Independent shell-side evidence that the installed package is resolvable.
         package_path = adb("shell", "pm", "path", PACKAGE, timeout=30)
         if "package:" not in package_path.stdout:
             raise RuntimeError("pm path did not resolve the DPC package")
