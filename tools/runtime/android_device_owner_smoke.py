@@ -54,61 +54,58 @@ def _decode_result_data(raw: str) -> dict[str, Any]:
         raise ValueError("diagnostics broadcast returned no result data")
 
     # Android may append Bundle metadata after result data. Strip only that
-    # explicitly-known suffix; anything else remains part of the payload and
-    # will fail closed below.
+    # explicitly-known suffix; anything else remains fail-closed.
     payload_text = raw
     extras_match = re.fullmatch(r"(.*)(,\s*extras\s*[:=].*)", raw)
     if extras_match:
         payload_text = extras_match.group(1).strip()
 
-    decoder = json.JSONDecoder()
-    current: Any = payload_text
+    # Android 35 + emulator 37.x may render BroadcastReceiver resultData with
+    # a shell quoting layer that is not itself valid JSON. Bound the recovery
+    # to one object only: everything before/after {..} may contain quote and
+    # backslash wrapper characters only. Arbitrary prefixes/suffixes fail.
+    object_start = payload_text.find("{")
+    object_end = payload_text.rfind("}")
+    if object_start >= 0 and object_end >= object_start:
+        prefix = payload_text[:object_start].strip()
+        suffix = payload_text[object_end + 1 :].strip()
+        if prefix and not re.fullmatch(r'[\\"]*', prefix):
+            raise ValueError(f"unexpected leading broadcast metadata: {prefix!r}")
+        if suffix and not re.fullmatch(r'[\\"]*', suffix):
+            raise ValueError(f"unexpected trailing broadcast metadata: {suffix!r}")
 
+        object_text = payload_text[object_start : object_end + 1]
+        normalized = re.sub(r'\\+"', '"', object_text)
+        try:
+            decoded = json.loads(normalized)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, dict):
+            return decoded
+
+    # Fallback for standards-compliant JSON or nested JSON strings.
+    current: Any = payload_text
+    decoder = json.JSONDecoder()
     for _ in range(4):
         if isinstance(current, dict):
             return current
         if not isinstance(current, str):
             break
-
         text = current.strip()
         if not text:
             break
-
-        # Normal JSON object or a JSON string containing the object.
         try:
             current = json.loads(text)
             continue
         except json.JSONDecodeError:
             pass
-
-        # Android 35 `am broadcast` can render result data as an outer quoted
-        # object with one or more shell-escape backslashes before every JSON
-        # quote, e.g. data="{\\\"apiLevel\\\":35,...}". Normalize only
-        # that bounded object-shaped form.
-        if text.startswith('"{') and text.endswith('}"'):
-            inner = text[1:-1]
-            normalized = re.sub(r'\\+"', '"', inner)
-            if normalized != inner:
-                current = normalized
-                continue
-
-        # The outer JSON-string decode can also leave an object-shaped string
-        # whose JSON quotes remain shell-escaped once.
-        if text.startswith('{') and text.endswith('}') and '\\"' in text:
-            normalized = re.sub(r'\\+"', '"', text)
-            if normalized != text:
-                current = normalized
-                continue
-
-        # Preserve a precise fail-closed error for otherwise parseable prefixes
-        # followed by unexpected metadata.
         try:
             _, end = decoder.raw_decode(text)
         except json.JSONDecodeError:
             raise
-        suffix = text[end:].strip()
-        if suffix:
-            raise ValueError(f"unexpected trailing broadcast metadata: {suffix!r}")
+        trailing = text[end:].strip()
+        if trailing:
+            raise ValueError(f"unexpected trailing broadcast metadata: {trailing!r}")
         break
 
     if not isinstance(current, dict):
