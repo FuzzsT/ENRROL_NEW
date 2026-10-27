@@ -15,6 +15,10 @@ for name in [
     'KnoxEnterpriseCenterActivity.kt',
     'ActivityExplorerActivity.kt',
     'OfflineSetupActivity.kt',
+    'CredentialCenterActivity.kt',
+    'DeviceLifecycleActivity.kt',
+    'WorkProfileCopeActivity.kt',
+    'EnterpriseOperationsActivity.kt',
 ]:
     text = (APP / name).read_text(encoding='utf-8')
     assert 'ModernUi.' in text, f'{name}: modern design system not applied'
@@ -65,5 +69,33 @@ for token in [
     'ModernUi.actionRow', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in offline, token
+
+credential = (APP / 'CredentialCenterActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Certificate & Credential Center', 'Private key export: NOT PERMITTED',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
+]:
+    assert token in credential, token
+
+lifecycle = (APP / 'DeviceLifecycleActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Kiosk / Lock Task', 'Device Security', 'Application Control', 'Factory Reset Protection',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
+]:
+    assert token in lifecycle, token
+
+cope = (APP / 'WorkProfileCopeActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Work Profile / COPE', 'Cross-profile packages', 'Contacts access', 'Caller ID access',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
+]:
+    assert token in cope, token
+
+ops = (APP / 'EnterpriseOperationsActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Security Logging', 'Network Logging', 'System Update Policy', 'Stored log batches',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
+]:
+    assert token in ops, token
 
 print('MODERN_UI_V2_CONTRACT: PASS')
