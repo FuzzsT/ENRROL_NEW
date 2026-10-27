@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
-import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,16 +57,17 @@ assert "DPC_AIO_RELEASE_KEYSTORE_B64" in source
 
 keytool = require("keytool")
 openssl = require("openssl")
-apksigner = require("apksigner")
 python = sys.executable
 
 with tempfile.TemporaryDirectory(prefix="dpc-aio-recovery-contract-") as td_raw:
     td = Path(td_raw)
     original = td / "original.p12"
     encrypted = td / "signer.enc"
-    unsigned_apk = td / "historical-unsigned.apk"
     historical_apk = td / "historical.apk"
     recovered_dir = td / "recovered"
+    fake_bin = td / "bin"
+    fake_bin.mkdir()
+    fake_apksigner = fake_bin / "apksigner"
 
     env = os.environ.copy()
     env["DPC_AIO_TEST_PASSWORD"] = PASSWORD
@@ -98,23 +100,31 @@ with tempfile.TemporaryDirectory(prefix="dpc-aio-recovery-contract-") as td_raw:
         "-pass", "env:DPC_AIO_TEST_PASSWORD",
     ], env=env)
 
-    with zipfile.ZipFile(unsigned_apk, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("AndroidManifest.xml", b"contract-placeholder")
-        zf.writestr("classes.dex", b"dex\n035\x00contract")
-    shutil.copyfile(unsigned_apk, historical_apk)
+    cert = td / "original-cert.der"
     run([
-        apksigner,
-        "sign",
-        "--ks", str(original),
-        "--ks-type", "PKCS12",
-        "--ks-key-alias", ALIAS,
-        "--ks-pass", "env:DPC_AIO_TEST_PASSWORD",
-        "--key-pass", "env:DPC_AIO_TEST_PASSWORD",
-        str(historical_apk),
+        keytool,
+        "-exportcert",
+        "-keystore", str(original),
+        "-storetype", "PKCS12",
+        "-storepass:env", "DPC_AIO_TEST_PASSWORD",
+        "-alias", ALIAS,
+        "-file", str(cert),
     ], env=env)
+    expected_fingerprint = hashlib.sha256(cert.read_bytes()).hexdigest().upper()
+
+    historical_apk.write_bytes(b"contract historical apk placeholder\n")
+    fake_apksigner.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os\n"
+        "print('Signer #1 certificate SHA-256 digest: ' + os.environ['DPC_AIO_TEST_APK_SHA'])\n",
+        encoding="utf-8",
+    )
+    fake_apksigner.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
     recover_env = os.environ.copy()
     recover_env["DPC_AIO_RECOVERY_PASSWORD"] = PASSWORD
+    recover_env["DPC_AIO_TEST_APK_SHA"] = expected_fingerprint
+    recover_env["PATH"] = str(fake_bin) + os.pathsep + recover_env.get("PATH", "")
     cp = run([
         python,
         str(HELPER),
@@ -129,11 +139,11 @@ with tempfile.TemporaryDirectory(prefix="dpc-aio-recovery-contract-") as td_raw:
     metadata = (recovered_dir / "metadata.json").read_text(encoding="utf-8")
     assert '"iterations": 600000' in metadata
     assert '"historicalApkSignerVerified": true' in metadata
-    assert '"historicalApkCertificateSha256"' in metadata
+    assert f'"historicalApkCertificateSha256": "{expected_fingerprint}"' in metadata
     assert PASSWORD not in metadata
 
     wrong_dir = td / "wrong"
-    wrong_env = os.environ.copy()
+    wrong_env = recover_env.copy()
     wrong_env["DPC_AIO_RECOVERY_PASSWORD"] = "WrongRecoveryPassword-999!"
     cp = run([
         python,
@@ -146,45 +156,16 @@ with tempfile.TemporaryDirectory(prefix="dpc-aio-recovery-contract-") as td_raw:
     assert "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH" in cp.stderr
     assert wrong_env["DPC_AIO_RECOVERY_PASSWORD"] not in cp.stdout + cp.stderr
 
-    other_p12 = td / "other.p12"
-    other_apk = td / "other.apk"
-    other_env = os.environ.copy()
-    other_env["DPC_AIO_TEST_PASSWORD"] = PASSWORD
-    run([
-        keytool,
-        "-genkeypair",
-        "-noprompt",
-        "-keystore", str(other_p12),
-        "-storetype", "PKCS12",
-        "-storepass:env", "DPC_AIO_TEST_PASSWORD",
-        "-keypass:env", "DPC_AIO_TEST_PASSWORD",
-        "-alias", ALIAS,
-        "-keyalg", "RSA",
-        "-keysize", "2048",
-        "-sigalg", "SHA256withRSA",
-        "-validity", "30",
-        "-dname", "CN=DPC-AIO Recovery Contract Mismatch",
-    ], env=other_env)
-    shutil.copyfile(unsigned_apk, other_apk)
-    run([
-        apksigner,
-        "sign",
-        "--ks", str(other_p12),
-        "--ks-type", "PKCS12",
-        "--ks-key-alias", ALIAS,
-        "--ks-pass", "env:DPC_AIO_TEST_PASSWORD",
-        "--key-pass", "env:DPC_AIO_TEST_PASSWORD",
-        str(other_apk),
-    ], env=other_env)
-
     mismatch_dir = td / "mismatch"
+    mismatch_env = recover_env.copy()
+    mismatch_env["DPC_AIO_TEST_APK_SHA"] = "0" * 64
     cp = run([
         python,
         str(HELPER),
         "--encrypted-file", str(encrypted),
-        "--historical-apk-file", str(other_apk),
+        "--historical-apk-file", str(historical_apk),
         "--backup-dir", str(mismatch_dir),
-    ], env=recover_env, check=False)
+    ], env=mismatch_env, check=False)
     assert cp.returncode != 0
     assert "HISTORICAL_APK_SIGNER_MISMATCH" in cp.stderr
     assert PASSWORD not in cp.stdout + cp.stderr
