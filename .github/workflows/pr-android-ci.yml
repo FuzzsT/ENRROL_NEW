@@ -1,6 +1,18 @@
 name: Android PR compile gate
 
 on:
+  push:
+    branches:
+      - ui/safe-area-motion-refresh
+    paths:
+      - 'apps/dpc/**'
+      - 'tools/tests/**'
+      - 'tools/provisioning/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle.kts'
+      - 'build.gradle.kts'
+      - '.github/workflows/pr-android-ci.yml'
   pull_request:
     branches:
       - main
