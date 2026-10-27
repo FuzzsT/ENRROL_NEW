@@ -125,6 +125,7 @@ jobs:
           set -euo pipefail
           python3 tools/tests/test_modern_ui_v2_contract.py
           python3 tools/tests/test_ui_accessibility_responsive_contract.py
+          python3 tools/tests/test_activity_explorer_launcher_ui_contract.py
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py

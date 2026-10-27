@@ -75,7 +75,7 @@ assert knox.index(unsupported_check) < knox.index(supported_check), \
 
 explorer = (APP / 'ActivityExplorerActivity.kt').read_text(encoding='utf-8')
 for token in [
-    'Activity Manager 2.0', 'Batch Preview', 'Restore snapshot',
+    'Activity Launcher', 'Batch Preview', 'Restore snapshot',
     'ModernUi.hero', 'ModernUi.field', 'ModernUi.card', 'ModernUi.action',
     'ModernUi.actionRow', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
