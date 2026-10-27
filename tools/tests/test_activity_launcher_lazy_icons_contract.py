@@ -9,6 +9,10 @@ assert "private fun loadAppIcon(packageName: String): Drawable?" in launcher
 assert "packageManager.getApplicationIcon(packageName)" in launcher
 assert "iconCache.get(packageName)" in launcher
 assert "iconCache.put(packageName, loaded)" in launcher
-assert "loadAppIcon(app.packageName)" in launcher
+assert "Executors.newFixedThreadPool" in launcher, "cache misses must not load icons on the UI thread"
+assert "iconExecutor.submit" in launcher
+assert "private fun bindAppIcon" in launcher
+assert "runOnUiThread" in launcher
+assert "val icon = loadAppIcon(app.packageName)" not in launcher, "renderApp must not synchronously load a cache miss"
 assert "ICON_CACHE_SIZE" in launcher
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")
