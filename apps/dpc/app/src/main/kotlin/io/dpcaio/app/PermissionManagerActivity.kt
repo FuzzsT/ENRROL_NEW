@@ -6,11 +6,9 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Process
 import android.text.InputType
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import io.dpcaio.permission.PermissionBatchChange
 import io.dpcaio.permission.PermissionBatchPlan2
@@ -43,65 +41,91 @@ class PermissionManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Permission Manager 2.0"
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
-        targetPackage = EditText(this).apply { hint = "target package, e.g. com.example.app" }
-        targetUser = EditText(this).apply {
-            hint = "Target user ID"
-            inputType = InputType.TYPE_CLASS_NUMBER
+
+        val body = LinearLayout(this)
+        body.addView(ModernUi.hero(
+            this,
+            title = "Permission Manager 2.0",
+            subtitle = "Inspect actual state, DPC policy, AppOps and execution route from one surface.",
+            eyebrow = "Security control",
+        ))
+
+        body.addView(ModernUi.section(this, "Target"))
+        val targetCard = ModernUi.card(this, emphasized = true)
+        targetPackage = ModernUi.field(this, "Target package, e.g. com.example.app")
+        targetUser = ModernUi.field(this, "Target user ID", InputType.TYPE_CLASS_NUMBER).apply {
             setText(AndroidUserId.fromUid(Process.myUid()).toString())
         }
-        query = EditText(this).apply {
-            hint = "permission / group / filter"
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        body.addView(targetPackage)
-        body.addView(targetUser)
-        body.addView(query)
-
-        body.addView(row(
+        query = ModernUi.field(this, "Permission / group / filter", InputType.TYPE_CLASS_TEXT)
+        targetCard.addView(targetPackage)
+        targetCard.addView(targetUser)
+        targetCard.addView(query)
+        targetCard.addView(row(
             action("Scan app permissions") { scanAppPermissions(false) },
-            action("Show only anomalies") { scanAppPermissions(true) }
+            action("Show only anomalies") { scanAppPermissions(true) },
         ))
-        body.addView(row(
-            action("Grant") { mutateSelected(ManagedPermissionState.GRANTED) },
-            action("Deny") { mutateSelected(ManagedPermissionState.DENIED) },
-            action("Default") { mutateSelected(ManagedPermissionState.DEFAULT) }
-        ))
-        body.addView(TextView(this).apply { text = "Global policy for future runtime requests" })
-        body.addView(row(
-            action("Prompt") { setGlobalPolicy(GlobalRuntimePermissionPolicy.PROMPT) },
-            action("Auto Grant") { setGlobalPolicy(GlobalRuntimePermissionPolicy.AUTO_GRANT) },
-            action("Auto Deny") { setGlobalPolicy(GlobalRuntimePermissionPolicy.AUTO_DENY) }
-        ))
-        body.addView(TextView(this).apply { text = "Batch Preview" })
-        body.addView(row(
-            action("Batch Grant") { batchPreview(ManagedPermissionState.GRANTED) },
-            action("Batch Deny") { batchPreview(ManagedPermissionState.DENIED) },
-            action("Batch Default") { batchPreview(ManagedPermissionState.DEFAULT) }
-        ))
-        body.addView(row(
-            action("Apply supported") { applyPendingBatch() },
-            action("Restore previous DPC states") { restorePreviousDpcStates() }
-        ))
+        body.addView(targetCard)
 
-        // Keep the original device-wide research/index tools.
-        body.addView(action("Scan device permissions") { scanCatalog() })
-        body.addView(action("Extended scan via Shizuku") { scanShizuku() })
-        body.addView(action("AUTO: requested permissions") { autoRequestedPermissions() })
-        body.addView(action("System permission/sysconfig XML index") { scanSystemConfigs() })
+        body.addView(ModernUi.section(this, "Permission state"))
+        body.addView(ModernUi.card(this).apply {
+            addView(ModernUi.body(this@PermissionManagerActivity, "Apply an exact permission state using the best supported route."))
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 8))
+            addView(row(
+                action("Grant") { mutateSelected(ManagedPermissionState.GRANTED) },
+                action("Deny", destructive = true) { mutateSelected(ManagedPermissionState.DENIED) },
+                action("Default") { mutateSelected(ManagedPermissionState.DEFAULT) },
+            ))
+        })
 
-        output = TextView(this).apply { setTextIsSelectable(true) }
-        body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(ScrollView(this).apply { addView(body) })
+        body.addView(ModernUi.section(this, "Global runtime policy"))
+        body.addView(ModernUi.card(this).apply {
+            addView(ModernUi.body(this@PermissionManagerActivity, "Global policy for future runtime requests"))
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 8))
+            addView(row(
+                action("Prompt") { setGlobalPolicy(GlobalRuntimePermissionPolicy.PROMPT) },
+                action("Auto Grant") { setGlobalPolicy(GlobalRuntimePermissionPolicy.AUTO_GRANT) },
+                action("Auto Deny", destructive = true) { setGlobalPolicy(GlobalRuntimePermissionPolicy.AUTO_DENY) },
+            ))
+        })
+
+        body.addView(ModernUi.section(this, "Batch Preview"))
+        body.addView(ModernUi.card(this).apply {
+            addView(ModernUi.body(this@PermissionManagerActivity, "Preview supported and skipped changes before applying them."))
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 8))
+            addView(row(
+                action("Batch Grant") { batchPreview(ManagedPermissionState.GRANTED) },
+                action("Batch Deny", destructive = true) { batchPreview(ManagedPermissionState.DENIED) },
+                action("Batch Default") { batchPreview(ManagedPermissionState.DEFAULT) },
+            ))
+            addView(row(
+                action("Apply supported") { applyPendingBatch() },
+                action("Restore previous DPC states") { restorePreviousDpcStates() },
+            ))
+        })
+
+        body.addView(ModernUi.section(this, "Research tools"))
+        body.addView(ModernUi.card(this).apply {
+            addView(action("Scan device permissions") { scanCatalog() })
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 7))
+            addView(action("Extended scan via Shizuku") { scanShizuku() })
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 7))
+            addView(action("AUTO: requested permissions") { autoRequestedPermissions() })
+            addView(ModernUi.spacer(this@PermissionManagerActivity, 7))
+            addView(action("System permission/sysconfig XML index") { scanSystemConfigs() })
+        })
+
+        body.addView(ModernUi.section(this, "Live result"))
+        output = TextView(this).apply { text = "Ready." }
+        body.addView(ModernUi.outputCard(this, output))
+
+        setContentView(ModernUi.page(this, body))
         shizuku.bind()
     }
 
-    private fun row(vararg buttons: Button): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        buttons.forEach { addView(it, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) }
-    }
+    private fun row(vararg buttons: Button): LinearLayout = ModernUi.actionRow(this, *buttons)
 
-    private fun action(label: String, action: () -> Unit): Button = Button(this).apply { text = label; setOnClickListener { action() } }
+    private fun action(label: String, destructive: Boolean = false, action: () -> Unit): Button =
+        ModernUi.action(this, label, destructive, action)
 
     private fun targetUserId(): Int = targetUser.text.toString().trim().toIntOrNull() ?: AndroidUserId.fromUid(Process.myUid())
 
