@@ -2,9 +2,6 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.os.Bundle
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import io.dpcaio.core.model.OwnershipMode
 import io.dpcaio.knox.license.KnoxPublicCapability
 
@@ -18,17 +15,38 @@ class KnoxEnterpriseCenterActivity : Activity() {
     private fun render() {
         val management = ManagementContextFactory.create(this)
         val ownerSatisfied = management.ownership != OwnershipMode.NONE
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-        }
-        root.addView(TextView(this).apply {
-            text = "Capability Matrix"
-            textSize = 22f
-        })
-        root.addView(TextView(this).apply {
-            text = "Samsung=${management.samsungDevice} • Knox=${management.knoxAvailable} • License=${management.knoxLicenseActive}"
-        })
+        val root = ModernUi.page(this)
+
+        root.addView(
+            ModernUi.hero(
+                this,
+                title = "Samsung Enterprise Center",
+                subtitle = "Capability Matrix across Android Enterprise, Knox, SEM and bounded OEM research surfaces.",
+                eyebrow = "SAMSUNG / KNOX",
+            )
+        )
+
+        root.addView(ModernUi.section(this, "Runtime state"))
+        root.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(ModernUi.title(this@KnoxEnterpriseCenterActivity, "Capability Matrix"))
+                addView(
+                    ModernUi.body(
+                        this@KnoxEnterpriseCenterActivity,
+                        "Samsung=${management.samsungDevice} • Knox=${management.knoxAvailable} • License=${management.knoxLicenseActive}",
+                    )
+                )
+                addView(
+                    ModernUi.chip(
+                        this@KnoxEnterpriseCenterActivity,
+                        if (management.knoxLicenseActive) "KNOX ACTIVE" else "KNOX LIMITED",
+                        if (management.knoxLicenseActive) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
+                    )
+                )
+            }
+        )
+
+        root.addView(ModernUi.section(this, "Capabilities"))
 
         fun row(
             name: String,
@@ -39,17 +57,24 @@ class KnoxEnterpriseCenterActivity : Activity() {
             readback: String,
             state: String,
         ) {
-            root.addView(TextView(this).apply {
-                text = buildString {
-                    append(name).append('\n')
-                    append("Route=").append(route)
-                    append(" • Owner=").append(owner)
-                    append(" • License=").append(license)
-                    append(" • Permission=").append(permission)
-                    append(" • Readback=").append(readback)
-                    append('\n').append(state).append('\n')
+            val tone = when {
+                state.contains("ACTIVE") || state.contains("AVAILABLE") || state.contains("SUPPORTED") -> ModernUi.Tone.SUCCESS
+                state.contains("REQUIRED") || state.contains("LIMITED") || state.contains("DEPRECATED") -> ModernUi.Tone.WARNING
+                state.contains("UNSUPPORTED") -> ModernUi.Tone.DANGER
+                else -> ModernUi.Tone.NEUTRAL
+            }
+            root.addView(
+                ModernUi.card(this@KnoxEnterpriseCenterActivity).apply {
+                    addView(ModernUi.title(this@KnoxEnterpriseCenterActivity, name))
+                    addView(
+                        ModernUi.body(
+                            this@KnoxEnterpriseCenterActivity,
+                            "Route=$route\nOwner=$owner • License=$license\nPermission=$permission • Readback=$readback",
+                        )
+                    )
+                    addView(ModernUi.chip(this@KnoxEnterpriseCenterActivity, state, tone))
                 }
-            })
+            )
         }
 
         row(
@@ -121,12 +146,26 @@ class KnoxEnterpriseCenterActivity : Activity() {
             state = "LAB_ONLY • Firmware-specific",
         )
 
-        root.addView(TextView(this).apply {
-            text = "High-impact mutation flow: Preview → ALLOW_WITH_CONFIRMATION → Apply → Readback → Commit/Rollback"
-        })
-        root.addView(TextView(this).apply {
-            text = "No hidden-API exemptions, guessed Binder transactions, signature-permission bypass, root/su fallback, forged Knox state, or private KPE material."
-        })
-        setContentView(ScrollView(this).apply { addView(root) })
+        root.addView(ModernUi.section(this, "Mutation policy"))
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.title(this@KnoxEnterpriseCenterActivity, "High-impact mutation flow"))
+                addView(
+                    ModernUi.body(
+                        this@KnoxEnterpriseCenterActivity,
+                        "Preview → ALLOW_WITH_CONFIRMATION → Apply → Readback → Commit/Rollback",
+                    )
+                )
+                addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
+                addView(
+                    ModernUi.body(
+                        this@KnoxEnterpriseCenterActivity,
+                        "No hidden-API exemptions, guessed Binder transactions, signature-permission bypass, root/su fallback, forged Knox state, or private KPE material.",
+                    )
+                )
+            }
+        )
+
+        setContentView(ModernUi.scrollPage(this, root))
     }
 }
