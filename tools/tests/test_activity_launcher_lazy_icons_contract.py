@@ -14,5 +14,9 @@ assert "iconExecutor.submit" in launcher
 assert "private fun bindAppIcon" in launcher
 assert "runOnUiThread" in launcher
 assert "val icon = loadAppIcon(app.packageName)" not in launcher, "renderApp must not synchronously load a cache miss"
+assert "renderGeneration" in launcher, "icon requests must be scoped to the current render generation"
+assert "generation != renderGeneration" in launcher
+assert "if (isFinishing || isDestroyed) return@runOnUiThread" in launcher, "inventory completion must be discarded after destruction"
+assert "iconExecutor.isShutdown" in launcher, "icon submission must be guarded after executor shutdown"
 assert "ICON_CACHE_SIZE" in launcher
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")
