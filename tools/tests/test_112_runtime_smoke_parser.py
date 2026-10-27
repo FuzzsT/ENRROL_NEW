@@ -45,6 +45,20 @@ assert data4['moduleCounts']['integrated']==41
 assert data4['status']=='VERIFIED'
 mod.validate_diagnostics(data4,'1.1.4')
 
+# CI run #26 / emulator 37.2 emitted a partially shell-quoted data wrapper:
+# the first object quote is literal while subsequent JSON quotes are escaped,
+# and the wrapper itself ends as backslash+quote after the closing brace.
+sample_ci26 = r'''Broadcast completed: result=0, data="{"apiLevel\":35,\"manufacturer\":\"Google\",\"model\":\"sdk_gphone64_x86_64\",\"dpcVersion\":\"1.1.4\",\"deviceOwner\":true,\"profileOwner\":false,\"moduleCounts\":{\"integrated\":41},\"status\":\"VERIFIED\"}\"'''
+code5,data5=mod.parse_broadcast_result(sample_ci26)
+assert code5==0, code5
+assert data5['apiLevel']==35
+assert data5['manufacturer']=='Google'
+assert data5['dpcVersion']=='1.1.4'
+assert data5['deviceOwner'] is True
+assert data5['moduleCounts']['integrated']==41
+assert data5['status']=='VERIFIED'
+mod.validate_diagnostics(data5,'1.1.4')
+
 bad='''Broadcast completed: result=0, data={"status":"VERIFIED"} trailing-junk
 '''
 try:
