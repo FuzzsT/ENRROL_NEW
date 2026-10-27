@@ -19,6 +19,12 @@ for name in [
     'DeviceLifecycleActivity.kt',
     'WorkProfileCopeActivity.kt',
     'EnterpriseOperationsActivity.kt',
+    'GoogleAccountManagerActivity.kt',
+    'KnoxZtManagerActivity.kt',
+    'NfcLabActivity.kt',
+    'PolicyComplianceActivity.kt',
+    'SamsungSettingsEditorActivity.kt',
+    'ScenarioLabActivity.kt',
 ]:
     text = (APP / name).read_text(encoding='utf-8')
     assert 'ModernUi.' in text, f'{name}: modern design system not applied'
@@ -97,5 +103,47 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
 ]:
     assert token in ops, token
+
+google = (APP / 'GoogleAccountManagerActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Google Account Priority', 'Wybierz konto dla DPC', 'Ustaw wybrane jako pierwsze',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in google, token
+
+knoxzt = (APP / 'KnoxZtManagerActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'KnoxZT Framework', 'Trusted HTTPS APK URL', 'Save trusted source',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in knoxzt, token
+
+nfc = (APP / 'NfcLabActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'NFC Lab', 'Enable reader', 'Install replay trace', 'Clear replay',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in nfc, token
+
+policy = (APP / 'PolicyComplianceActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Checking enterprise enrollment', 'Enrollment diagnostics',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.action', 'ModernUi.scrollPage',
+]:
+    assert token in policy, token
+
+settings = (APP / 'SamsungSettingsEditorActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Settings Editor', 'Write + verify stability',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in settings, token
+
+scenario = (APP / 'ScenarioLabActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Scenario Recorder / Replay', 'Grant overlay access', 'Start REC overlay', 'Stop overlay',
+    'ModernUi.hero', 'ModernUi.card', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in scenario, token
 
 print('MODERN_UI_V2_CONTRACT: PASS')
