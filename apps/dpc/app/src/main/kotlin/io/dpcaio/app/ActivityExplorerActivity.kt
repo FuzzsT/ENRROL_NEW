@@ -8,6 +8,7 @@ import android.os.UserHandle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.HorizontalScrollView
@@ -51,6 +52,7 @@ class ActivityExplorerActivity : Activity() {
     private lateinit var targetUserInput: EditText
     private lateinit var filterInput: EditText
     private lateinit var filterBar: LinearLayout
+    private lateinit var statsStrip: LinearLayout
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
@@ -71,7 +73,7 @@ class ActivityExplorerActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = "Activity Launcher",
-                subtitle = "Browse, filter and launch activities quickly. Privileged component controls remain explicitly routed and safeguarded.",
+                subtitle = "Browse components like an app catalog, then launch through the safest available route. Privileged controls stay explicit and guarded.",
                 eyebrow = "ACTIVITY EXPLORER",
             )
         )
@@ -99,7 +101,7 @@ class ActivityExplorerActivity : Activity() {
 
         body.addView(ModernUi.section(this, "Find activities"))
         body.addView(
-            ModernUi.card(this).apply {
+            ModernUi.compactCard(this).apply {
                 filterInput = ModernUi.field(
                     this@ActivityExplorerActivity,
                     "Search class, package or permission",
@@ -120,17 +122,22 @@ class ActivityExplorerActivity : Activity() {
             }
         )
 
-        body.addView(ModernUi.section(this, "Live result"))
-        status = ModernUi.outputCard(this, "Ready. Scan a package to inspect its activities.")
-        body.addView(status)
+        body.addView(ModernUi.section(this, "Overview"))
+        statsStrip = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(statsStrip)
+        renderStatsStrip(emptyList(), emptyList())
 
         body.addView(ModernUi.section(this, "Activities"))
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         body.addView(list)
 
+        body.addView(ModernUi.section(this, "Latest action"))
+        status = ModernUi.outputCard(this, "Ready. Scan a package to inspect its activities.")
+        body.addView(status)
+
         body.addView(ModernUi.section(this, "Batch Preview"))
         body.addView(
-            ModernUi.card(this).apply {
+            ModernUi.compactCard(this).apply {
                 addView(
                     ModernUi.body(
                         this@ActivityExplorerActivity,
@@ -197,24 +204,30 @@ class ActivityExplorerActivity : Activity() {
         filterBar.removeAllViews()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
         ActivityQuickFilter.entries.forEach { filter ->
-            val button = ModernUi.action(
+            val pill = ModernUi.pill(
                 this,
                 filter.name,
-                primary = filter == currentQuickFilter,
+                selected = filter == currentQuickFilter,
+                tone = when (filter) {
+                    ActivityQuickFilter.ENABLED -> ModernUi.Tone.SUCCESS
+                    ActivityQuickFilter.DISABLED -> ModernUi.Tone.WARNING
+                    ActivityQuickFilter.EXPORTED -> ModernUi.Tone.NEUTRAL
+                    ActivityQuickFilter.PRIVATE -> ModernUi.Tone.WARNING
+                    ActivityQuickFilter.ALL -> ModernUi.Tone.NEUTRAL
+                },
             ) {
                 currentQuickFilter = filter
                 renderFilterBar()
                 renderActivities(currentActivities)
             }
-            button.layoutParams = LinearLayout.LayoutParams(
+            pill.layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 8)
-            }
-            row.addView(button)
+            ).apply { marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 8) }
+            row.addView(pill)
         }
         filterBar.addView(
             HorizontalScrollView(this).apply {
@@ -247,9 +260,42 @@ class ActivityExplorerActivity : Activity() {
         }
     }
 
+    private fun renderStatsStrip(activities: List<DiscoveredActivity>, shown: List<DiscoveredActivity>) {
+        if (!::statsStrip.isInitialized) return
+        statsStrip.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fun addMetric(value: Int, label: String, tone: ModernUi.Tone) {
+            val tile = ModernUi.metricTile(this, value.toString(), label, tone)
+            tile.layoutParams = LinearLayout.LayoutParams(
+                ModernUi.dp(this@ActivityExplorerActivity, 116),
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 8) }
+            row.addView(tile)
+        }
+        addMetric(activities.size, "TOTAL", ModernUi.Tone.NEUTRAL)
+        addMetric(shown.size, "VISIBLE", ModernUi.Tone.SUCCESS)
+        addMetric(activities.count { it.exported }, "EXPORTED", ModernUi.Tone.NEUTRAL)
+        addMetric(activities.count { !it.effectiveEnabled }, "DISABLED", ModernUi.Tone.WARNING)
+        statsStrip.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                clipToPadding = false
+                addView(row)
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+    }
+
     private fun renderActivities(activities: List<DiscoveredActivity>) {
         list.removeAllViews()
         val shown = applyActivityFilter(activities)
+        renderStatsStrip(activities, shown)
         status.text = buildString {
             appendLine("Activity Launcher")
             appendLine("TOTAL=${activities.size} FILTERED=${shown.size} FILTER=${currentQuickFilter.name}")
@@ -258,7 +304,9 @@ class ActivityExplorerActivity : Activity() {
 
         if (shown.isEmpty()) {
             list.addView(
-                ModernUi.card(this).apply {
+                ModernUi.compactCard(this).apply {
+                    addView(ModernUi.title(this@ActivityExplorerActivity, "Nothing here"))
+                    addView(ModernUi.spacer(this@ActivityExplorerActivity, 4))
                     addView(ModernUi.body(this@ActivityExplorerActivity, "No activities match the current search and quick filter."))
                 }
             )
@@ -268,17 +316,32 @@ class ActivityExplorerActivity : Activity() {
         shown.forEach { activity -> list.addView(renderActivityRow(activity)) }
     }
 
+    private fun renderActivityIdentity(activity: DiscoveredActivity): LinearLayout {
+        val tone = if (activity.effectiveEnabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            addView(ModernUi.monogramTile(this@ActivityExplorerActivity, shortActivityName(activity), tone))
+            addView(
+                LinearLayout(this@ActivityExplorerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(ModernUi.title(this@ActivityExplorerActivity, shortActivityName(activity)))
+                    addView(
+                        ModernUi.body(this@ActivityExplorerActivity, activity.className).apply {
+                            setPadding(0, ModernUi.dp(this@ActivityExplorerActivity, 2), 0, 0)
+                        }
+                    )
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+        }
+    }
+
     private fun renderActivityRow(activity: DiscoveredActivity): LinearLayout {
         val effectiveTone = if (activity.effectiveEnabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING
         val exposureTone = if (activity.exported) ModernUi.Tone.NEUTRAL else ModernUi.Tone.WARNING
-        return ModernUi.card(this, emphasized = false).apply {
-            addView(ModernUi.title(this@ActivityExplorerActivity, shortActivityName(activity)))
-            addView(
-                ModernUi.body(
-                    this@ActivityExplorerActivity,
-                    activity.className,
-                )
-            )
+        return ModernUi.compactCard(this, effectiveTone).apply {
+            addView(renderActivityIdentity(activity))
 
             val badges = LinearLayout(this@ActivityExplorerActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -290,30 +353,37 @@ class ActivityExplorerActivity : Activity() {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 7)
-                    topMargin = ModernUi.dp(this@ActivityExplorerActivity, 7)
+                    topMargin = ModernUi.dp(this@ActivityExplorerActivity, 8)
                 }
                 badges.addView(badge)
             }
             addBadge(if (activity.effectiveEnabled) "ENABLED" else "DISABLED", effectiveTone)
             addBadge(if (activity.exported) "EXPORTED" else "PRIVATE", exposureTone)
             if (activity.requiredPermission != null) addBadge("PERMISSION", ModernUi.Tone.NEUTRAL)
-            addView(badges)
+            addView(
+                HorizontalScrollView(this@ActivityExplorerActivity).apply {
+                    isHorizontalScrollBarEnabled = false
+                    clipToPadding = false
+                    addView(badges)
+                }
+            )
 
             addView(
                 ModernUi.body(
                     this@ActivityExplorerActivity,
-                    "Manifest=${if (activity.manifestEnabled) "enabled" else "disabled"} • Override=${activity.overrideState} • Permission=${activity.requiredPermission ?: "none"}",
-                ).apply { setPadding(0, ModernUi.dp(this@ActivityExplorerActivity, 8), 0, 0) }
+                    "Manifest ${if (activity.manifestEnabled) "enabled" else "disabled"}  •  Override ${activity.overrideState}  •  ${activity.requiredPermission ?: "No required permission"}",
+                ).apply { setPadding(0, ModernUi.dp(this@ActivityExplorerActivity, 9), 0, 0) }
             )
-            addView(ModernUi.spacer(this@ActivityExplorerActivity, 10))
+            addView(ModernUi.spacer(this@ActivityExplorerActivity, 11))
             addView(
                 ModernUi.action(this@ActivityExplorerActivity, "Launch", primary = true) { launch(activity) }
             )
-            addView(ModernUi.spacer(this@ActivityExplorerActivity, 8))
+            addView(ModernUi.divider(this@ActivityExplorerActivity))
             addView(
-                ModernUi.body(this@ActivityExplorerActivity, "Advanced component controls")
+                ModernUi.body(this@ActivityExplorerActivity, "Advanced controls").apply {
+                    setPadding(ModernUi.dp(this@ActivityExplorerActivity, 2), 0, 0, ModernUi.dp(this@ActivityExplorerActivity, 5))
+                }
             )
-            addView(ModernUi.spacer(this@ActivityExplorerActivity, 6))
             addView(
                 ModernUi.actionRow(
                     this@ActivityExplorerActivity,
