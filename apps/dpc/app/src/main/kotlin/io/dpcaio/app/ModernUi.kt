@@ -155,6 +155,26 @@ object ModernUi {
         }
     }
 
+    fun compactCard(activity: Activity, tone: Tone = Tone.NEUTRAL): LinearLayout {
+        val colors = palette(activity)
+        val accent = toneColor(colors, tone)
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(activity, 14), dp(activity, 13), dp(activity, 14), dp(activity, 13))
+            background = rounded(
+                colors.surface,
+                if (tone == Tone.NEUTRAL) colors.border else withAlpha(accent, 105),
+                dp(activity, 20),
+                dp(activity, 1),
+            )
+            elevation = dp(activity, 1).toFloat()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(activity, 9) }
+        }
+    }
+
     fun title(activity: Activity, text: String): TextView {
         val colors = palette(activity)
         return TextView(activity).apply {
@@ -193,6 +213,93 @@ object ModernUi {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = dp(activity, 9) }
+        }
+    }
+
+    fun pill(
+        activity: Activity,
+        text: String,
+        selected: Boolean = false,
+        tone: Tone = Tone.NEUTRAL,
+        onClick: () -> Unit,
+    ): TextView {
+        val colors = palette(activity)
+        val accent = if (tone == Tone.NEUTRAL) colors.accent else toneColor(colors, tone)
+        val fill = if (selected) withAlpha(accent, 42) else colors.surfaceRaised
+        val stroke = if (selected) withAlpha(accent, 175) else colors.border
+        return TextView(activity).apply {
+            this.text = text
+            setTextColor(if (selected) accent else colors.secondaryText)
+            textSize = 12f
+            setTypeface(typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            minHeight = dp(activity, 44)
+            minimumHeight = dp(activity, 44)
+            setPadding(dp(activity, 14), 0, dp(activity, 14), 0)
+            background = RippleDrawable(
+                ColorStateList.valueOf(withAlpha(accent, 38)),
+                rounded(fill, stroke, dp(activity, 999), dp(activity, 1)),
+                null,
+            )
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
+    }
+
+    fun monogramTile(activity: Activity, text: String, tone: Tone = Tone.NEUTRAL): TextView {
+        val colors = palette(activity)
+        val accent = toneColor(colors, tone)
+        val glyph = text.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "•"
+        return TextView(activity).apply {
+            this.text = glyph
+            setTextColor(accent)
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = rounded(withAlpha(accent, 28), withAlpha(accent, 90), dp(activity, 14), dp(activity, 1))
+            layoutParams = LinearLayout.LayoutParams(dp(activity, 48), dp(activity, 48)).apply {
+                marginEnd = dp(activity, 12)
+            }
+        }
+    }
+
+    fun metricTile(activity: Activity, value: String, label: String, tone: Tone = Tone.NEUTRAL): LinearLayout {
+        val colors = palette(activity)
+        val accent = toneColor(colors, tone)
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(activity, 12), dp(activity, 10), dp(activity, 12), dp(activity, 10))
+            background = rounded(colors.surfaceRaised, withAlpha(accent, 72), dp(activity, 15), dp(activity, 1))
+            addView(TextView(activity).apply {
+                text = value
+                setTextColor(colors.text)
+                textSize = 18f
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(activity).apply {
+                text = label.uppercase()
+                setTextColor(accent)
+                textSize = 10.5f
+                letterSpacing = 0.06f
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, dp(activity, 2), 0, 0)
+            })
+        }
+    }
+
+    fun divider(activity: Activity): View {
+        val colors = palette(activity)
+        return View(activity).apply {
+            setBackgroundColor(withAlpha(colors.border, 180))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(activity, 1),
+            ).apply {
+                topMargin = dp(activity, 11)
+                bottomMargin = dp(activity, 11)
+            }
         }
     }
 
