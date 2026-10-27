@@ -12,5 +12,7 @@ for token in ['minApi = 31','minApi = 35','minApi = 36','minApi = 37','RiskClass
     assert token in c, token
 for token in ['CapabilityResolver.resolve','ManagementContextFactory.create','AndroidDevicePolicyGateway','AlertDialog.Builder','ACCESS_LOCAL_NETWORK','PolicyResult']:
     assert token in h, token
+for token in ['ModernUi.page','ModernUi.hero','ModernUi.section','ModernUi.card','ModernUi.chip','ModernUi.action']:
+    assert token in h, token
 assert '.EnterprisePolicyHubActivity' in manifest
 print('test_enterprise_policy_hub_contract: PASS')
