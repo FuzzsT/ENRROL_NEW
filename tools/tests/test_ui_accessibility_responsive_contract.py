@@ -35,4 +35,13 @@ assert 'if (!ValueAnimator.areAnimatorsEnabled())' in action, \
 assert 'onClick()' in action, \
     'reduced-motion action path must execute the click immediately'
 
+# Interactive filter/tab pills need a full 48dp minimum touch target.
+pill_start = design.index('fun pill(')
+pill_end = design.index('\n    fun monogramTile(', pill_start)
+pill = design[pill_start:pill_end]
+assert 'minHeight = dp(activity, 48)' in pill, \
+    'ModernUi.pill must expose at least a 48dp touch target'
+assert 'minimumHeight = dp(activity, 48)' in pill, \
+    'ModernUi.pill minimumHeight must stay at 48dp'
+
 print('UI_ACCESSIBILITY_RESPONSIVE_CONTRACT: PASS')
