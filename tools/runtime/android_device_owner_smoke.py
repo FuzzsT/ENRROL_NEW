@@ -48,6 +48,17 @@ def wait_for_boot(timeout_seconds: int = 240) -> None:
     raise RuntimeError("Android emulator did not reach sys.boot_completed=1")
 
 
+def _decode_json_value_with_broadcast_metadata(raw: str) -> Any:
+    """Decode one JSON value and allow only known trailing `am broadcast` metadata."""
+    value, end = json.JSONDecoder().raw_decode(raw)
+    trailing = raw[end:].strip()
+    if trailing.startswith(","):
+        trailing = trailing[1:].lstrip()
+    if trailing and not (trailing.startswith("extras:") or trailing.startswith("extras=")):
+        raise ValueError(f"unexpected trailing broadcast metadata: {trailing!r}")
+    return value
+
+
 def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
     lines = [line.strip() for line in text.splitlines() if "Broadcast completed:" in line]
     if not lines:
@@ -60,12 +71,12 @@ def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
     raw = (m.group(2) or "").strip()
     if not raw:
         raise ValueError("diagnostics broadcast returned no result data")
-    payload: str
-    if raw.startswith('"'):
-        payload = json.loads(raw)
-    else:
-        payload = raw
-    data = json.loads(payload)
+
+    decoded = _decode_json_value_with_broadcast_metadata(raw)
+    if isinstance(decoded, str):
+        decoded = _decode_json_value_with_broadcast_metadata(decoded)
+    data = decoded
+
     if not isinstance(data, dict):
         raise ValueError("diagnostics payload is not a JSON object")
     return code, data
@@ -141,7 +152,6 @@ def main() -> int:
         report["diagnostics"] = diagnostics
         validate_diagnostics(diagnostics, args.expected_version)
 
-        # Independent shell-side evidence that the installed package is resolvable.
         package_path = adb("shell", "pm", "path", PACKAGE, timeout=30)
         if "package:" not in package_path.stdout:
             raise RuntimeError("pm path did not resolve the DPC package")
