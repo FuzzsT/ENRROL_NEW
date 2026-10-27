@@ -5,23 +5,21 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.ViewGroup
-import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import io.dpcaio.offline.OfflineMode
-import io.dpcaio.offline.OfflineReadinessStatus
-import io.dpcaio.offline.android.AndroidOfflineBundleStore
-import io.dpcaio.offline.android.AndroidOfflineBundleReader
-import io.dpcaio.offline.android.AndroidOfflinePackageInstaller
 import io.dpcaio.offline.OfflineReadinessInput
 import io.dpcaio.offline.OfflineReadinessPlanner
+import io.dpcaio.offline.OfflineReadinessStatus
+import io.dpcaio.offline.android.AndroidOfflineBundleReader
+import io.dpcaio.offline.android.AndroidOfflineBundleStore
+import io.dpcaio.offline.android.AndroidOfflinePackageInstaller
 import java.io.File
 import java.security.MessageDigest
 
 class OfflineSetupActivity : Activity() {
     private lateinit var output: TextView
+    private lateinit var modeChip: TextView
     private var mode: OfflineMode = OfflineMode.FULL_OFFLINE
     private var importedBundle: File? = null
     private var bundleInspection: io.dpcaio.offline.android.AndroidOfflineBundleInspection? = null
@@ -34,17 +32,86 @@ class OfflineSetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Full Offline Setup"
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
-        body.addView(TextView(this).apply { text = "FULL OFFLINE / OFFLINE THEN SYNC\nFinal state: OFFLINE_VERIFIED only after package/policy readback" })
-        body.addView(Button(this).apply { text = "FULL OFFLINE"; setOnClickListener { mode = OfflineMode.FULL_OFFLINE; renderState("Mode: FULL OFFLINE") } })
-        body.addView(Button(this).apply { text = "OFFLINE THEN SYNC"; setOnClickListener { mode = OfflineMode.OFFLINE_THEN_SYNC; renderState("Mode: OFFLINE THEN SYNC") } })
-        body.addView(Button(this).apply { text = "Import offline bundle"; setOnClickListener { startActivityForResult(bundleStore.createImportIntent(), REQ_IMPORT) } })
-        body.addView(Button(this).apply { text = "Preview deployment"; setOnClickListener { preview() } })
-        body.addView(Button(this).apply { text = "Apply supported"; setOnClickListener { applySupported() } })
-        body.addView(Button(this).apply { text = "Refresh state"; setOnClickListener { showPersistedState() } })
-        output = TextView(this).apply { setTextIsSelectable(true) }
-        body.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(ScrollView(this).apply { addView(body) })
+
+        val body = ModernUi.page(this)
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "Full Offline Setup",
+                subtitle = "Import a signed deployment bundle, preview readiness, then apply only supported operations.",
+                eyebrow = "OFFLINE PROVISIONING",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Deployment mode"))
+        body.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(
+                    ModernUi.body(
+                        this@OfflineSetupActivity,
+                        "Final state becomes OFFLINE_VERIFIED only after package and policy readback succeeds.",
+                    )
+                )
+                modeChip = ModernUi.chip(this@OfflineSetupActivity, "FULL OFFLINE", ModernUi.Tone.SUCCESS)
+                addView(modeChip)
+                addView(ModernUi.spacer(this@OfflineSetupActivity, 10))
+                addView(
+                    ModernUi.actionRow(
+                        this@OfflineSetupActivity,
+                        ModernUi.action(this@OfflineSetupActivity, "FULL OFFLINE", primary = true) {
+                            mode = OfflineMode.FULL_OFFLINE
+                            modeChip.text = "FULL OFFLINE"
+                            renderState("Mode: FULL OFFLINE")
+                        },
+                        ModernUi.action(this@OfflineSetupActivity, "OFFLINE THEN SYNC") {
+                            mode = OfflineMode.OFFLINE_THEN_SYNC
+                            modeChip.text = "OFFLINE THEN SYNC"
+                            renderState("Mode: OFFLINE THEN SYNC")
+                        },
+                    )
+                )
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Bundle"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(
+                    ModernUi.body(
+                        this@OfflineSetupActivity,
+                        "Bundle signatures, package files and signer identity are verified before deployment can proceed.",
+                    )
+                )
+                addView(ModernUi.spacer(this@OfflineSetupActivity, 8))
+                addView(
+                    ModernUi.action(this@OfflineSetupActivity, "Import offline bundle", primary = true) {
+                        startActivityForResult(bundleStore.createImportIntent(), REQ_IMPORT)
+                    }
+                )
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Deployment"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(
+                    ModernUi.actionRow(
+                        this@OfflineSetupActivity,
+                        ModernUi.action(this@OfflineSetupActivity, "Preview deployment") { preview() },
+                        ModernUi.action(this@OfflineSetupActivity, "Apply supported", primary = true) { applySupported() },
+                    )
+                )
+                addView(
+                    ModernUi.action(this@OfflineSetupActivity, "Refresh state") { showPersistedState() }
+                )
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Live result"))
+        output = ModernUi.outputCard(this, "Loading offline deployment state...")
+        body.addView(output)
+
+        setContentView(ModernUi.scrollPage(this, body))
         showPersistedState()
     }
 
@@ -100,7 +167,7 @@ class OfflineSetupActivity : Activity() {
                 provisioningMode = provisioningMode,
                 currentDpcVersion = BuildConfig.VERSION_NAME,
                 availablePackageFiles = inspected.packagePlan.verifiedFiles.toSet(),
-                availableCapabilities = capabilities
+                availableCapabilities = capabilities,
             )
         )
         renderState(buildString {
@@ -130,23 +197,35 @@ class OfflineSetupActivity : Activity() {
                 bundleId = manifest.bundleId,
                 stage = io.dpcaio.offline.OfflineStage.BUNDLE_VERIFIED,
                 syncPending = mode == OfflineMode.OFFLINE_THEN_SYNC,
-                bundlePath = file.absolutePath
+                bundlePath = file.absolutePath,
             )
         )
         if (manifest.packages.isEmpty()) {
-            deploymentStore.save(deploymentStore.load()!!.copy(stage = io.dpcaio.offline.OfflineStage.PACKAGES_INSTALLED))
-            sendBroadcast(Intent(this, OfflineRecoveryReceiver::class.java).setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE))
+            deploymentStore.save(
+                deploymentStore.load()!!.copy(stage = io.dpcaio.offline.OfflineStage.PACKAGES_INSTALLED)
+            )
+            sendBroadcast(
+                Intent(this, OfflineRecoveryReceiver::class.java)
+                    .setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE)
+            )
             renderState("PACKAGES_INSTALLED\nNo package payload; policy application scheduled")
             return
         }
         runCatching {
             val plan = packageInstaller.stageBundle(file, manifest)
-            deploymentStore.save(deploymentStore.load()!!.copy(stage = io.dpcaio.offline.OfflineStage.PACKAGES_STAGED, parentSessionId = plan.parentSessionId, bundlePath = file.absolutePath))
+            deploymentStore.save(
+                deploymentStore.load()!!.copy(
+                    stage = io.dpcaio.offline.OfflineStage.PACKAGES_STAGED,
+                    parentSessionId = plan.parentSessionId,
+                    bundlePath = file.absolutePath,
+                )
+            )
             val callback = PendingIntent.getBroadcast(
                 this,
                 4101,
-                Intent(this, OfflineInstallStatusReceiver::class.java).setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                Intent(this, OfflineInstallStatusReceiver::class.java)
+                    .setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             packageInstaller.commit(plan, callback.intentSender)
             renderState(buildString {
@@ -158,21 +237,40 @@ class OfflineSetupActivity : Activity() {
                 appendLine("Waiting for PackageInstaller readback callback")
             })
         }.onFailure { error ->
-            deploymentStore.save(deploymentStore.load()!!.copy(stage = io.dpcaio.offline.OfflineStage.FAILED, lastError = error.message))
+            deploymentStore.save(
+                deploymentStore.load()!!.copy(
+                    stage = io.dpcaio.offline.OfflineStage.FAILED,
+                    lastError = error.message,
+                )
+            )
             renderState("OFFLINE_POLICY_PARTIAL\nPACKAGE_STAGE_FAILED: ${error.javaClass.simpleName}: ${error.message}")
         }
     }
 
-    private fun shizukuAvailable(): Boolean = runCatching { io.dpcaio.shizuku.AndroidShizukuRuntime().probe().let { it.binderAlive && it.permissionGranted } }.getOrDefault(false)
+    private fun shizukuAvailable(): Boolean = runCatching {
+        io.dpcaio.shizuku.AndroidShizukuRuntime().probe().let { it.binderAlive && it.permissionGranted }
+    }.getOrDefault(false)
 
     private fun showPersistedState() {
         val state = deploymentStore.load()
-        renderState(if (state == null) "No offline deployment\nFULL_OFFLINE_READY requires a verified bundle" else "bundle=${state.bundleId}\nstage=${state.stage}\nsyncPending=${state.syncPending}")
+        renderState(
+            if (state == null) {
+                "No offline deployment\nFULL_OFFLINE_READY requires a verified bundle"
+            } else {
+                "bundle=${state.bundleId}\nstage=${state.stage}\nsyncPending=${state.syncPending}"
+            }
+        )
     }
 
-    private fun renderState(text: String) { output.text = text }
+    private fun renderState(text: String) {
+        output.text = text
+    }
 
-    private fun sha256(file: File): String = MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+    private fun sha256(file: File): String = MessageDigest.getInstance("SHA-256")
+        .digest(file.readBytes())
+        .joinToString("") { "%02x".format(it) }
 
-    companion object { private const val REQ_IMPORT = 4100 }
+    companion object {
+        private const val REQ_IMPORT = 4100
+    }
 }
