@@ -50,13 +50,53 @@ def wait_for_boot(timeout_seconds: int = 240) -> None:
 
 def _decode_json_value_with_broadcast_metadata(raw: str) -> Any:
     """Decode one JSON value and allow only known trailing `am broadcast` metadata."""
-    value, end = json.JSONDecoder().raw_decode(raw)
-    trailing = raw[end:].strip()
-    if trailing.startswith(","):
-        trailing = trailing[1:].lstrip()
-    if trailing and not (trailing.startswith("extras:") or trailing.startswith("extras=")):
-        raise ValueError(f"unexpected trailing broadcast metadata: {trailing!r}")
-    return value
+    raw = raw.strip()
+    if not raw:
+        raise ValueError("diagnostics broadcast returned no result data")
+
+    payload_text = raw
+    extras_match = re.fullmatch(r"(.*)(,\s*extras\s*[:=].*)", raw)
+    if extras_match:
+        payload_text = extras_match.group(1).strip()
+
+    candidates: list[str] = []
+
+    # Android 35 / emulator 37 may print resultData as an outer quoted object
+    # with an additional shell-escape layer before each JSON quote, e.g.
+    # data="{\\\"apiLevel\\\":35,...}". Normalize only this bounded,
+    # object-shaped form; arbitrary trailing data remains fail-closed.
+    if payload_text.startswith('"{') and payload_text.endswith('}"'):
+        inner = payload_text[1:-1]
+        normalized = re.sub(r'\\+"', '"', inner)
+        if normalized != inner:
+            candidates.append(normalized)
+
+    if payload_text.startswith('{') and payload_text.endswith('}') and '\\"' in payload_text:
+        normalized = re.sub(r'\\+"', '"', payload_text)
+        if normalized != payload_text:
+            candidates.append(normalized)
+
+    candidates.append(payload_text)
+
+    last_error: Exception | None = None
+    for candidate in candidates:
+        try:
+            value, end = json.JSONDecoder().raw_decode(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+
+        trailing = candidate[end:].strip()
+        if trailing.startswith(","):
+            trailing = trailing[1:].lstrip()
+        if trailing:
+            last_error = ValueError(f"unexpected trailing broadcast metadata: {trailing!r}")
+            continue
+        return value
+
+    if isinstance(last_error, ValueError):
+        raise last_error
+    raise ValueError("diagnostics payload is not valid JSON")
 
 
 def parse_broadcast_result(text: str) -> tuple[int, dict[str, Any]]:
