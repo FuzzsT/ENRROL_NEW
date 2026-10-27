@@ -30,7 +30,7 @@ assert 'renderActivities(currentActivities)' in text, 'Live search must re-rende
 # available as secondary/advanced actions.
 for token in [
     'ModernUi.action(this@ActivityExplorerActivity, "Launch", primary = true)',
-    'Advanced component controls',
+    'Advanced controls',
     'Enable & Launch',
     'Restore default',
 ]:
