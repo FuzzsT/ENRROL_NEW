@@ -5,8 +5,12 @@ import android.content.ComponentName
 import android.os.Bundle
 import android.os.Process
 import android.os.UserHandle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
+import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.activity.ActivityAccessInput
@@ -35,9 +39,18 @@ import io.dpcaio.shizuku.ShizukuComponentStateExecutor
 import io.dpcaio.shizuku.ShizukuUserServiceClient
 
 class ActivityExplorerActivity : Activity() {
+    private enum class ActivityQuickFilter {
+        ALL,
+        ENABLED,
+        DISABLED,
+        EXPORTED,
+        PRIVATE,
+    }
+
     private lateinit var packageNameInput: EditText
     private lateinit var targetUserInput: EditText
     private lateinit var filterInput: EditText
+    private lateinit var filterBar: LinearLayout
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
@@ -45,24 +58,25 @@ class ActivityExplorerActivity : Activity() {
     private val componentRouter = ComponentControlRouter()
     private val snapshotStore by lazy { ComponentStateSnapshotStore(this) }
     private var currentActivities: List<DiscoveredActivity> = emptyList()
+    private var currentQuickFilter = ActivityQuickFilter.ALL
     private var pendingBatch: List<Pair<DiscoveredActivity, ComponentControlDecision>> = emptyList()
     private var pendingBatchState: ComponentOverrideState? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "Activity Manager 2.0 / Activity Explorer"
+        title = "Activity Launcher / Explorer"
 
         val body = ModernUi.page(this)
         body.addView(
             ModernUi.hero(
                 this,
-                title = "Activity Explorer",
-                subtitle = "Inspect, route, launch and manage component state with explicit safeguards.",
-                eyebrow = "ACTIVITY MANAGER 2.0",
+                title = "Activity Launcher",
+                subtitle = "Browse, filter and launch activities quickly. Privileged component controls remain explicitly routed and safeguarded.",
+                eyebrow = "ACTIVITY EXPLORER",
             )
         )
 
-        body.addView(ModernUi.section(this, "Target & filter"))
+        body.addView(ModernUi.section(this, "Package & user"))
         body.addView(
             ModernUi.card(this, emphasized = true).apply {
                 packageNameInput = ModernUi.field(this@ActivityExplorerActivity, "Package name").apply {
@@ -75,18 +89,44 @@ class ActivityExplorerActivity : Activity() {
                 ).apply {
                     setText(AndroidUserId.fromUid(Process.myUid()).toString())
                 }
-                filterInput = ModernUi.field(
-                    this@ActivityExplorerActivity,
-                    "Filter class / enabled / disabled",
-                )
                 addView(packageNameInput)
                 addView(targetUserInput)
-                addView(filterInput)
                 addView(
                     ModernUi.action(this@ActivityExplorerActivity, "Scan activities", primary = true) { scan() }
                 )
             }
         )
+
+        body.addView(ModernUi.section(this, "Find activities"))
+        body.addView(
+            ModernUi.card(this).apply {
+                filterInput = ModernUi.field(
+                    this@ActivityExplorerActivity,
+                    "Search class, package or permission",
+                )
+                filterInput.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        renderActivities(currentActivities)
+                    }
+                    override fun afterTextChanged(s: Editable?) = Unit
+                })
+                addView(filterInput)
+                filterBar = LinearLayout(this@ActivityExplorerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+                addView(filterBar)
+                renderFilterBar()
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Live result"))
+        status = ModernUi.outputCard(this, "Ready. Scan a package to inspect its activities.")
+        body.addView(status)
+
+        body.addView(ModernUi.section(this, "Activities"))
+        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(list)
 
         body.addView(ModernUi.section(this, "Batch Preview"))
         body.addView(
@@ -94,7 +134,7 @@ class ActivityExplorerActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@ActivityExplorerActivity,
-                        "Preview component-state changes before applying them. Unsupported or protected routes stay skipped.",
+                        "Batch actions follow the visible filtered set. Unsupported or protected routes stay skipped.",
                     )
                 )
                 addView(ModernUi.spacer(this@ActivityExplorerActivity, 8))
@@ -125,14 +165,6 @@ class ActivityExplorerActivity : Activity() {
             }
         )
 
-        body.addView(ModernUi.section(this, "Live result"))
-        status = ModernUi.outputCard(this, "Ready. Scan a package to inspect its activities.")
-        body.addView(status)
-
-        body.addView(ModernUi.section(this, "Activities"))
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        body.addView(list)
-
         setContentView(ModernUi.scrollPage(this, body))
         shizuku.bind()
     }
@@ -160,78 +192,161 @@ class ActivityExplorerActivity : Activity() {
         }.start()
     }
 
+    private fun renderFilterBar() {
+        if (!::filterBar.isInitialized) return
+        filterBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        ActivityQuickFilter.entries.forEach { filter ->
+            val button = ModernUi.action(
+                this,
+                filter.name,
+                primary = filter == currentQuickFilter,
+            ) {
+                currentQuickFilter = filter
+                renderFilterBar()
+                renderActivities(currentActivities)
+            }
+            button.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 8)
+            }
+            row.addView(button)
+        }
+        filterBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                clipToPadding = false
+                addView(row)
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+    }
+
+    private fun applyActivityFilter(activities: List<DiscoveredActivity>): List<DiscoveredActivity> {
+        val query = filterInput.text.toString().trim().lowercase()
+        return activities.filter { activity ->
+            val textMatch = query.isBlank() ||
+                activity.className.lowercase().contains(query) ||
+                activity.packageName.lowercase().contains(query) ||
+                activity.requiredPermission?.lowercase()?.contains(query) == true
+            val quickMatch = when (currentQuickFilter) {
+                ActivityQuickFilter.ALL -> true
+                ActivityQuickFilter.ENABLED -> activity.effectiveEnabled
+                ActivityQuickFilter.DISABLED -> !activity.effectiveEnabled
+                ActivityQuickFilter.EXPORTED -> activity.exported
+                ActivityQuickFilter.PRIVATE -> !activity.exported
+            }
+            textMatch && quickMatch
+        }
+    }
+
     private fun renderActivities(activities: List<DiscoveredActivity>) {
         list.removeAllViews()
-        val filter = filterInput.text.toString().trim().lowercase()
-        val shown = activities.filter { activity ->
-            filter.isBlank() || activity.className.lowercase().contains(filter) ||
-                (filter == "enabled" && activity.effectiveEnabled) ||
-                (filter == "disabled" && !activity.effectiveEnabled)
+        val shown = applyActivityFilter(activities)
+        status.text = buildString {
+            appendLine("Activity Launcher")
+            appendLine("TOTAL=${activities.size} FILTERED=${shown.size} FILTER=${currentQuickFilter.name}")
+            append("Target user ID=${targetUserId()}")
         }
-        status.text = "Activity Manager 2.0\nactivities=${activities.size} shown=${shown.size}\nTarget user ID=${targetUserId()}"
 
         if (shown.isEmpty()) {
             list.addView(
                 ModernUi.card(this).apply {
-                    addView(ModernUi.body(this@ActivityExplorerActivity, "No activities match the current package and filter."))
+                    addView(ModernUi.body(this@ActivityExplorerActivity, "No activities match the current search and quick filter."))
                 }
             )
             return
         }
 
-        shown.forEach { activity ->
-            val effectiveTone = if (activity.effectiveEnabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING
-            list.addView(
-                ModernUi.card(this, emphasized = activity.effectiveEnabled).apply {
-                    addView(ModernUi.title(this@ActivityExplorerActivity, activity.className))
-                    addView(
-                        ModernUi.body(
-                            this@ActivityExplorerActivity,
-                            "Manifest=${if (activity.manifestEnabled) "ENABLED" else "DISABLED"} • Override=${activity.overrideState}",
-                        )
-                    )
-                    addView(
-                        ModernUi.body(
-                            this@ActivityExplorerActivity,
-                            "exported=${activity.exported} • permission=${activity.requiredPermission ?: "-"}",
-                        )
-                    )
-                    addView(
-                        ModernUi.chip(
-                            this@ActivityExplorerActivity,
-                            if (activity.effectiveEnabled) "EFFECTIVE ENABLED" else "EFFECTIVE DISABLED",
-                            effectiveTone,
-                        )
-                    )
-                    addView(ModernUi.spacer(this@ActivityExplorerActivity, 10))
-                    addView(
-                        ModernUi.actionRow(
-                            this@ActivityExplorerActivity,
-                            ModernUi.action(this@ActivityExplorerActivity, "Enable") {
-                                changeState(activity, ComponentOverrideState.ENABLED, false)
-                            },
-                            ModernUi.action(this@ActivityExplorerActivity, "Disable", destructive = true) {
-                                changeState(activity, ComponentOverrideState.DISABLED, false)
-                            },
-                        )
-                    )
-                    addView(
-                        ModernUi.actionRow(
-                            this@ActivityExplorerActivity,
-                            ModernUi.action(this@ActivityExplorerActivity, "Restore default") {
-                                changeState(activity, ComponentOverrideState.DEFAULT, false)
-                            },
-                            ModernUi.action(this@ActivityExplorerActivity, "Enable & Launch") {
-                                changeState(activity, ComponentOverrideState.ENABLED, true)
-                            },
-                        )
-                    )
-                    addView(
-                        ModernUi.action(this@ActivityExplorerActivity, "Launch", primary = true) { launch(activity) }
-                    )
+        shown.forEach { activity -> list.addView(renderActivityRow(activity)) }
+    }
+
+    private fun renderActivityRow(activity: DiscoveredActivity): LinearLayout {
+        val effectiveTone = if (activity.effectiveEnabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING
+        val exposureTone = if (activity.exported) ModernUi.Tone.NEUTRAL else ModernUi.Tone.WARNING
+        return ModernUi.card(this, emphasized = false).apply {
+            addView(ModernUi.title(this@ActivityExplorerActivity, shortActivityName(activity)))
+            addView(
+                ModernUi.body(
+                    this@ActivityExplorerActivity,
+                    activity.className,
+                )
+            )
+
+            val badges = LinearLayout(this@ActivityExplorerActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+            fun addBadge(label: String, tone: ModernUi.Tone) {
+                val badge = ModernUi.chip(this@ActivityExplorerActivity, label, tone)
+                badge.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginEnd = ModernUi.dp(this@ActivityExplorerActivity, 7)
+                    topMargin = ModernUi.dp(this@ActivityExplorerActivity, 7)
                 }
+                badges.addView(badge)
+            }
+            addBadge(if (activity.effectiveEnabled) "ENABLED" else "DISABLED", effectiveTone)
+            addBadge(if (activity.exported) "EXPORTED" else "PRIVATE", exposureTone)
+            if (activity.requiredPermission != null) addBadge("PERMISSION", ModernUi.Tone.NEUTRAL)
+            addView(badges)
+
+            addView(
+                ModernUi.body(
+                    this@ActivityExplorerActivity,
+                    "Manifest=${if (activity.manifestEnabled) "enabled" else "disabled"} • Override=${activity.overrideState} • Permission=${activity.requiredPermission ?: "none"}",
+                ).apply { setPadding(0, ModernUi.dp(this@ActivityExplorerActivity, 8), 0, 0) }
+            )
+            addView(ModernUi.spacer(this@ActivityExplorerActivity, 10))
+            addView(
+                ModernUi.action(this@ActivityExplorerActivity, "Launch", primary = true) { launch(activity) }
+            )
+            addView(ModernUi.spacer(this@ActivityExplorerActivity, 8))
+            addView(
+                ModernUi.body(this@ActivityExplorerActivity, "Advanced component controls")
+            )
+            addView(ModernUi.spacer(this@ActivityExplorerActivity, 6))
+            addView(
+                ModernUi.actionRow(
+                    this@ActivityExplorerActivity,
+                    ModernUi.action(this@ActivityExplorerActivity, "Enable") {
+                        changeState(activity, ComponentOverrideState.ENABLED, false)
+                    },
+                    ModernUi.action(this@ActivityExplorerActivity, "Disable", destructive = true) {
+                        changeState(activity, ComponentOverrideState.DISABLED, false)
+                    },
+                )
+            )
+            addView(
+                ModernUi.actionRow(
+                    this@ActivityExplorerActivity,
+                    ModernUi.action(this@ActivityExplorerActivity, "Restore default") {
+                        changeState(activity, ComponentOverrideState.DEFAULT, false)
+                    },
+                    ModernUi.action(this@ActivityExplorerActivity, "Enable & Launch") {
+                        changeState(activity, ComponentOverrideState.ENABLED, true)
+                    },
+                )
             )
         }
+    }
+
+    private fun shortActivityName(activity: DiscoveredActivity): String {
+        val className = activity.className
+        val relative = when {
+            className.startsWith(activity.packageName + ".") -> className.removePrefix(activity.packageName + ".")
+            className.startsWith(".") -> className.removePrefix(".")
+            else -> className.substringAfterLast('.')
+        }
+        return relative.ifBlank { className }
     }
 
     private fun decision(activity: DiscoveredActivity, desired: ComponentOverrideState): ComponentControlDecision {
@@ -313,8 +428,7 @@ class ActivityExplorerActivity : Activity() {
     }
 
     private fun batchPreviewFiltered(desired: ComponentOverrideState) {
-        val filter = filterInput.text.toString().trim().lowercase()
-        val selected = currentActivities.filter { filter.isBlank() || it.className.lowercase().contains(filter) }
+        val selected = applyActivityFilter(currentActivities)
         pendingBatchState = desired
         pendingBatch = selected.map { it to decision(it, desired) }
         val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, pendingBatch.map { it.second })
