@@ -34,8 +34,11 @@ class ScenarioOverlayService : Service() {
     }
 
     override fun onDestroy() {
-        root?.let { getSystemService(WindowManager::class.java).removeView(it) }
+        val overlay = root
         root = null
+        overlay?.let {
+            runCatching { getSystemService(WindowManager::class.java).removeView(it) }
+        }
         bridge.uninstall(application)
         super.onDestroy()
     }

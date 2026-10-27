@@ -130,6 +130,7 @@ jobs:
           python3 tools/tests/test_control_center_shizuku_launcher_contract.py
           python3 tools/tests/test_shizuku_reactive_launcher_icons_contract.py
           python3 tools/tests/test_activity_launcher_lazy_icons_contract.py
+          python3 tools/tests/test_scenario_android_contract.py
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
