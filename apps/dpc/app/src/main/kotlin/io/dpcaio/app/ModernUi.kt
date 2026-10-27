@@ -260,12 +260,24 @@ object ModernUi {
     }
 
     fun actionRow(activity: Activity, vararg buttons: Button): LinearLayout = LinearLayout(activity).apply {
-        orientation = LinearLayout.HORIZONTAL
+        val screenWidthDp = activity.resources.configuration.screenWidthDp
+        val stacked = screenWidthDp < 420 || buttons.size >= 3
+        orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         buttons.forEachIndexed { index, button ->
-            addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                if (index > 0) marginStart = dp(activity, 8)
-            })
+            val params = if (stacked) {
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    if (index > 0) topMargin = dp(activity, 8)
+                }
+            } else {
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (index > 0) marginStart = dp(activity, 8)
+                }
+            }
+            addView(button, params)
         }
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
