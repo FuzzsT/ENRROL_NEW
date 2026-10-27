@@ -28,6 +28,7 @@ class ControlCenterActivity : Activity() {
     private var currentTab = ControlTab.FUNCTIONS
     private val shizukuRuntime = AndroidShizukuRuntime()
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
+    private var shizukuObserver: AutoCloseable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +38,36 @@ class ControlCenterActivity : Activity() {
         }.getOrDefault(ControlTab.FUNCTIONS)
         shizuku.bind()
         render()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (shizukuObserver == null) {
+            shizukuObserver = shizukuRuntime.observe { state ->
+                if (state.binderAlive && state.permissionGranted) {
+                    shizuku.bind()
+                }
+                if (::content.isInitialized && currentTab == ControlTab.SHIZUKU) {
+                    renderContent()
+                }
+                if (::status.isInitialized) {
+                    status.text = buildString {
+                        append("Shizuku: ")
+                        append(if (state.binderAlive) "binder online" else "binder offline")
+                        append(" • permission=")
+                        append(if (state.permissionGranted) "granted" else "missing")
+                        append(" • identity=")
+                        append(state.identity)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onStop() {
+        shizukuObserver?.close()
+        shizukuObserver = null
+        super.onStop()
     }
 
     override fun onResume() {
