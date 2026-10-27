@@ -3,13 +3,9 @@ package io.dpcaio.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
-import android.graphics.Typeface
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import io.dpcaio.core.model.CapabilityResolution
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.policy.AppFunctionsPolicy
@@ -32,45 +28,60 @@ class EnterprisePolicyHubActivity : Activity() {
 
     private fun render() {
         val management = ManagementContextFactory.create(this)
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
+        root = LinearLayout(this)
+        val ownership = management.ownership.toString()
+        val profileSuffix = if (management.organizationOwnedProfile) " • organization-owned profile" else ""
+
+        root.addView(ModernUi.hero(
+            this,
+            title = "Enterprise Policy Hub",
+            subtitle = "Android API ${management.apiLevel} • $ownership$profileSuffix",
+            eyebrow = "Device policy",
+        ))
+
+        val summary = ModernUi.card(this, emphasized = true).apply {
+            addView(ModernUi.title(this@EnterprisePolicyHubActivity, "Capability-aware controls"))
+            addView(ModernUi.body(
+                this@EnterprisePolicyHubActivity,
+                "Only controls visible for this API level and management context are shown. High-impact actions still require confirmation.",
+            ))
+            addView(ModernUi.chip(this@EnterprisePolicyHubActivity, ownership, "success"))
         }
-        root.addView(TextView(this).apply {
-            text = "Android API ${management.apiLevel} • ${management.ownership}" +
-                if (management.organizationOwnedProfile) " • organization-owned profile" else ""
-        })
+        root.addView(summary)
 
         EnterprisePolicyGroup.entries.forEach { group ->
-            val entries = EnterprisePolicyCatalog.entries.map { it to CapabilityResolver.resolve(it.requirements, management) }
+            val entries = EnterprisePolicyCatalog.entries
+                .map { it to CapabilityResolver.resolve(it.requirements, management) }
                 .filter { (entry, resolution) -> entry.group == group && resolution.visible }
             if (entries.isEmpty()) return@forEach
-            root.addView(TextView(this).apply {
-                text = "\n${group.label}"
-                textSize = 18f
-                setTypeface(typeface, Typeface.BOLD)
-            })
+
+            root.addView(ModernUi.section(this, group.label))
             entries.forEach { (entry, resolution) -> addEntry(entry, resolution) }
         }
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(ModernUi.page(this, root))
     }
 
     private fun addEntry(entry: EnterprisePolicyDescriptor, resolution: CapabilityResolution) {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 14, 0, 14)
+        val tone = when {
+            !resolution.executable -> "warning"
+            entry.requirements.risk.name.contains("HIGH", ignoreCase = true) -> "danger"
+            else -> "success"
         }
-        box.addView(TextView(this).apply {
-            text = entry.title
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        box.addView(TextView(this).apply {
-            text = "${resolution.availability.name} • API ${entry.requirements.minApi}+ • " +
-                "${entry.requirements.ownership} • ${entry.requirements.risk}"
-        })
-        resolution.reason?.let { box.addView(TextView(this).apply { text = it }) }
+        val box = ModernUi.card(this, emphasized = resolution.executable).apply {
+            addView(ModernUi.title(this@EnterprisePolicyHubActivity, entry.title))
+            addView(ModernUi.body(
+                this@EnterprisePolicyHubActivity,
+                "API ${entry.requirements.minApi}+ • ${entry.requirements.ownership} • ${entry.requirements.risk}",
+            ))
+            addView(ModernUi.chip(this@EnterprisePolicyHubActivity, resolution.availability.name, tone))
+            resolution.reason?.let {
+                addView(ModernUi.spacer(this@EnterprisePolicyHubActivity, 8))
+                addView(ModernUi.body(this@EnterprisePolicyHubActivity, it))
+            }
+        }
 
         if (resolution.executable) {
+            box.addView(ModernUi.spacer(this, 10))
             when (entry.id) {
                 "usb_data" -> addUsbControls(box)
                 "auto_time" -> addTriStateControls(box, "Auto time", gateway.getAutoTimePolicy(), gateway::setAutoTimePolicy)
@@ -87,15 +98,13 @@ class EnterprisePolicyHubActivity : Activity() {
 
     private fun addUsbControls(box: LinearLayout) {
         val current = gateway.getUsbDataSignalingEnabled()
-        box.addView(TextView(this).apply { text = "Current: ${resultValue(current)}" })
-        box.addView(Button(this).apply {
-            text = "Enable USB data"
-            setOnClickListener { confirmUsb(true) }
-        })
-        box.addView(Button(this).apply {
-            text = "Disable USB data"
-            setOnClickListener { confirmUsb(false) }
-        })
+        box.addView(ModernUi.body(this, "Current: ${resultValue(current)}"))
+        box.addView(ModernUi.spacer(this, 8))
+        box.addView(ModernUi.actionRow(
+            this,
+            ModernUi.action(this, "Enable USB data") { confirmUsb(true) },
+            ModernUi.action(this, "Disable USB data", destructive = true) { confirmUsb(false) },
+        ))
     }
 
     private fun confirmUsb(enabled: Boolean) {
@@ -114,60 +123,65 @@ class EnterprisePolicyHubActivity : Activity() {
         current: PolicyResult<TriStatePolicy>,
         apply: (TriStatePolicy) -> PolicyResult<Unit>,
     ) {
-        box.addView(TextView(this).apply { text = "Current: ${resultValue(current)}" })
-        TriStatePolicy.entries.forEach { policy ->
-            box.addView(Button(this).apply {
-                text = policy.name
-                setOnClickListener { showResult(label, apply(policy)) }
-            })
-        }
+        box.addView(ModernUi.body(this, "Current: ${resultValue(current)}"))
+        box.addView(ModernUi.spacer(this, 8))
+        val buttons = TriStatePolicy.entries.map { policy ->
+            ModernUi.action(this, policy.name) { showResult(label, apply(policy)) }
+        }.toTypedArray()
+        box.addView(ModernUi.actionRow(this, *buttons))
     }
 
     private fun addRestrictionControls(box: LinearLayout, restriction: DeviceRestriction) {
         val current = gateway.getDeviceRestriction(restriction)
-        box.addView(TextView(this).apply { text = "Restricted: ${resultValue(current)}" })
-        box.addView(Button(this).apply {
-            text = "Apply restriction"
-            setOnClickListener { showResult(restriction.name, gateway.setDeviceRestriction(restriction, true)) }
-        })
-        box.addView(Button(this).apply {
-            text = "Clear restriction"
-            setOnClickListener { showResult(restriction.name, gateway.setDeviceRestriction(restriction, false)) }
-        })
+        box.addView(ModernUi.body(this, "Restricted: ${resultValue(current)}"))
+        box.addView(ModernUi.spacer(this, 8))
+        box.addView(ModernUi.actionRow(
+            this,
+            ModernUi.action(this, "Apply restriction", destructive = true) {
+                showResult(restriction.name, gateway.setDeviceRestriction(restriction, true))
+            },
+            ModernUi.action(this, "Clear restriction") {
+                showResult(restriction.name, gateway.setDeviceRestriction(restriction, false))
+            },
+        ))
     }
 
     private fun addAppFunctionsControls(box: LinearLayout) {
         val current = gateway.getAppFunctionsPolicy()
-        box.addView(TextView(this).apply { text = "Current: ${resultValue(current)}" })
-        AppFunctionsPolicy.entries.forEach { policy ->
-            box.addView(Button(this).apply {
-                text = policy.name
-                setOnClickListener { showResult("App Functions", gateway.setAppFunctionsPolicy(policy)) }
-            })
+        box.addView(ModernUi.body(this, "Current: ${resultValue(current)}"))
+        box.addView(ModernUi.spacer(this, 8))
+        val buttons = AppFunctionsPolicy.entries.map { policy ->
+            ModernUi.action(this, policy.name) { showResult("App Functions", gateway.setAppFunctionsPolicy(policy)) }
+        }.toTypedArray()
+        if (buttons.size <= 3) {
+            box.addView(ModernUi.actionRow(this, *buttons))
+        } else {
+            buttons.forEach { button ->
+                box.addView(button)
+                box.addView(ModernUi.spacer(this, 7))
+            }
         }
     }
 
     private fun addLocalNetworkControls(box: LinearLayout) {
-        val packageNameInput = EditText(this).apply { hint = "Target package (e.g. com.example.app)" }
+        val packageNameInput: EditText = ModernUi.field(this, "Target package (e.g. com.example.app)")
         box.addView(packageNameInput)
         val permission = "android.permission.ACCESS_LOCAL_NETWORK"
-        listOf(
+        val buttons = listOf(
             "DEFAULT" to ManagedPermissionState.DEFAULT,
             "GRANT" to ManagedPermissionState.GRANTED,
             "DENY" to ManagedPermissionState.DENIED,
-        ).forEach { (label, state) ->
-            box.addView(Button(this).apply {
-                text = "$label ACCESS_LOCAL_NETWORK"
-                setOnClickListener {
-                    val pkg = packageNameInput.text.toString().trim()
-                    if (pkg.isEmpty()) {
-                        showMessage("Local network", "Enter a target package name")
-                    } else {
-                        showResult("Local network", gateway.setPermissionGrantState(pkg, permission, state))
-                    }
+        ).map { (label, state) ->
+            ModernUi.action(this, label, destructive = state == ManagedPermissionState.DENIED) {
+                val pkg = packageNameInput.text.toString().trim()
+                if (pkg.isEmpty()) {
+                    showMessage("Local network", "Enter a target package name")
+                } else {
+                    showResult("Local network", gateway.setPermissionGrantState(pkg, permission, state))
                 }
-            })
-        }
+            }
+        }.toTypedArray()
+        box.addView(ModernUi.actionRow(this, *buttons))
     }
 
     private fun resultValue(result: PolicyResult<*>): String =
