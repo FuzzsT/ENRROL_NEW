@@ -1,5 +1,6 @@
 package io.dpcaio.app
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.res.ColorStateList
 import android.content.res.Configuration
@@ -357,6 +358,10 @@ object ModernUi {
                 null,
             )
             setOnClickListener {
+                if (!ValueAnimator.areAnimatorsEnabled()) {
+                    onClick()
+                    return@setOnClickListener
+                }
                 animate().scaleX(0.985f).scaleY(0.985f).setDuration(65L).withEndAction {
                     scaleX = 1f
                     scaleY = 1f
