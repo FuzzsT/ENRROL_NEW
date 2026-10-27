@@ -36,4 +36,26 @@ class AndroidShizukuRuntime {
         Shizuku.requestPermission(requestCode)
         return true
     }
+
+    fun observe(onChanged: (ShizukuRuntimeState) -> Unit): AutoCloseable {
+        val binderReceived = Shizuku.OnBinderReceivedListener {
+            onChanged(probe())
+        }
+        val binderDead = Shizuku.OnBinderDeadListener {
+            onChanged(probe())
+        }
+        val permissionResult = Shizuku.OnRequestPermissionResultListener { _, _ ->
+            onChanged(probe())
+        }
+
+        Shizuku.addBinderReceivedListenerSticky(binderReceived)
+        Shizuku.addBinderDeadListener(binderDead)
+        Shizuku.addRequestPermissionResultListener(permissionResult)
+
+        return AutoCloseable {
+            runCatching { Shizuku.removeBinderReceivedListener(binderReceived) }
+            runCatching { Shizuku.removeBinderDeadListener(binderDead) }
+            runCatching { Shizuku.removeRequestPermissionResultListener(permissionResult) }
+        }
+    }
 }
