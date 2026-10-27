@@ -23,4 +23,16 @@ for token in [
 ]:
     assert token in row, f'ModernUi.actionRow responsive contract missing: {token}'
 
+# Button press motion must also respect the system animator setting. When animations
+# are disabled the action should run immediately rather than waiting on ViewPropertyAnimator.
+action_start = design.index('private fun buildAction(')
+action_end = design.index('\n    fun actionRow(', action_start)
+action = design[action_start:action_end]
+assert 'ValueAnimator.areAnimatorsEnabled()' in action, \
+    'ModernUi actions must respect the system animator setting'
+assert 'if (!ValueAnimator.areAnimatorsEnabled())' in action, \
+    'ModernUi actions need an explicit reduced-motion path'
+assert 'onClick()' in action, \
+    'reduced-motion action path must execute the click immediately'
+
 print('UI_ACCESSIBILITY_RESPONSIVE_CONTRACT: PASS')
