@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Recover the historical DPC-AIO password-backed signing keystore from the
-dpc-aio-continuous release asset.
+dpc-aio-continuous release asset and verify it against the historical APK.
 
 The historical workflow encrypted the PKCS12 keystore with:
   openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000
@@ -10,6 +10,7 @@ Safety:
 - recovery password is read from DPC_AIO_RECOVERY_PASSWORD or an interactive prompt;
 - no password command-line option is provided;
 - password/keystore bytes are never printed;
+- the recovered certificate must match the signer of the historical APK;
 - GitHub Secrets are modified only with --configure-github;
 - recovered material is stored outside the repository by default.
 """
@@ -37,6 +38,10 @@ DEFAULT_ASSET_URL = (
     "https://github.com/FuzzsT/ENRROL_NEW/releases/download/"
     "dpc-aio-continuous/DPC-AIO-signing-keystore.enc"
 )
+DEFAULT_HISTORICAL_APK_URL = (
+    "https://github.com/FuzzsT/ENRROL_NEW/releases/download/"
+    "dpc-aio-continuous/DPC-AIO-enterprise-release.apk"
+)
 SECRET_NAMES = (
     "DPC_AIO_RELEASE_KEYSTORE_B64",
     "DPC_AIO_RELEASE_STORE_PASSWORD",
@@ -51,6 +56,30 @@ def require_tool(name: str) -> str:
     if not path:
         raise SystemExit(f"ERROR: required tool not found in PATH: {name}")
     return path
+
+
+def find_apksigner() -> str:
+    direct = shutil.which("apksigner")
+    if direct:
+        return direct
+    roots = [
+        os.environ.get("ANDROID_SDK_ROOT", ""),
+        os.environ.get("ANDROID_HOME", ""),
+    ]
+    for raw_root in roots:
+        if not raw_root:
+            continue
+        build_tools = Path(raw_root) / "build-tools"
+        if not build_tools.is_dir():
+            continue
+        candidates = sorted(build_tools.glob("*/apksigner"), reverse=True)
+        for candidate in candidates:
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+    raise SystemExit(
+        "ERROR: required tool not found: apksigner. Install Android SDK build-tools "
+        "or place apksigner in PATH."
+    )
 
 
 def run(
@@ -91,7 +120,7 @@ def read_password() -> str:
 def download_asset(url: str, destination: Path) -> None:
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "DPC-AIO-stable-signing-recovery/1"},
+        headers={"User-Agent": "DPC-AIO-stable-signing-recovery/2"},
     )
     with urllib.request.urlopen(req, timeout=60) as response:
         if getattr(response, "status", 200) != 200:
@@ -192,6 +221,29 @@ def validate_and_fingerprint(
         cert_path.unlink(missing_ok=True)
 
 
+def apk_signer_fingerprint(apksigner: str, apk: Path) -> str:
+    cp = subprocess.run(
+        [apksigner, "verify", "--print-certs", str(apk)],
+        text=True,
+        capture_output=True,
+    )
+    if cp.returncode != 0:
+        raise SystemExit(
+            "HISTORICAL_APK_INVALID: apksigner could not verify the historical APK."
+        )
+    output = cp.stdout + "\n" + cp.stderr
+    for line in output.splitlines():
+        marker = "certificate SHA-256 digest:"
+        if marker not in line:
+            continue
+        value = normalized_sha256(line.split(marker, 1)[1])
+        if len(value) == 64 and all(ch in "0123456789ABCDEF" for ch in value):
+            return value
+    raise SystemExit(
+        "HISTORICAL_APK_INVALID: certificate SHA-256 digest not found in apksigner output."
+    )
+
+
 def set_secret(gh: str, repo: str, name: str, value: str) -> None:
     run([gh, "secret", "set", name, "--repo", repo], input_text=value)
 
@@ -246,6 +298,8 @@ def main() -> int:
     parser.add_argument("--alias", default=DEFAULT_ALIAS)
     parser.add_argument("--asset-url", default=DEFAULT_ASSET_URL)
     parser.add_argument("--encrypted-file", type=Path)
+    parser.add_argument("--historical-apk-url", default=DEFAULT_HISTORICAL_APK_URL)
+    parser.add_argument("--historical-apk-file", type=Path)
     parser.add_argument("--backup-dir", type=Path)
     parser.add_argument("--expected-sha256")
     parser.add_argument("--configure-github", action="store_true")
@@ -257,6 +311,7 @@ def main() -> int:
 
     openssl = require_tool("openssl")
     keytool = require_tool("keytool")
+    apksigner = find_apksigner()
     gh = require_tool("gh") if args.configure_github else None
 
     password = read_password()
@@ -275,6 +330,7 @@ def main() -> int:
 
     encrypted = backup_dir / "DPC-AIO-signing-keystore.enc"
     recovered = backup_dir / "dpc-aio-enterprise-release.p12"
+    historical_apk = backup_dir / "DPC-AIO-historical-enterprise-release.apk"
     metadata = backup_dir / "metadata.json"
 
     if args.encrypted_file:
@@ -286,9 +342,27 @@ def main() -> int:
         print(f"Downloading historical encrypted signer asset from: {args.asset_url}")
         download_asset(args.asset_url, encrypted)
 
+    if args.historical_apk_file:
+        apk_source = args.historical_apk_file.expanduser().resolve()
+        if not apk_source.is_file() or apk_source.stat().st_size == 0:
+            raise SystemExit(f"ERROR: historical APK not found: {apk_source}")
+        shutil.copyfile(apk_source, historical_apk)
+        historical_apk_source = str(apk_source)
+    else:
+        print(f"Downloading historical APK from: {args.historical_apk_url}")
+        download_asset(args.historical_apk_url, historical_apk)
+        historical_apk_source = args.historical_apk_url
+
     chmod_private(encrypted)
     decrypt_keystore(openssl, encrypted, recovered, password)
     fingerprint = validate_and_fingerprint(keytool, recovered, args.alias, password)
+    historical_apk_fingerprint = apk_signer_fingerprint(apksigner, historical_apk)
+
+    if fingerprint != historical_apk_fingerprint:
+        raise SystemExit(
+            "HISTORICAL_APK_SIGNER_MISMATCH: "
+            f"historical_apk={historical_apk_fingerprint} recovered={fingerprint}"
+        )
 
     expected = normalized_sha256(args.expected_sha256 or "")
     if expected and fingerprint != expected:
@@ -299,10 +373,13 @@ def main() -> int:
     metadata.write_text(
         json.dumps(
             {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "repository": args.repo,
                 "recoveredAtUtc": timestamp,
                 "sourceAsset": args.asset_url if not args.encrypted_file else str(args.encrypted_file),
+                "historicalApkSource": historical_apk_source,
+                "historicalApkSignerVerified": True,
+                "historicalApkCertificateSha256": historical_apk_fingerprint,
                 "keystore": recovered.name,
                 "storeType": "PKCS12",
                 "alias": args.alias,
@@ -349,6 +426,7 @@ def main() -> int:
         )
         print("Production enrollment workflow dispatched on main.")
 
+    print("Historical APK signer verification: PASS")
     print("Historical signing keystore recovery completed.")
     print(f"Certificate SHA-256: {fingerprint}")
     print(f"Local recovery directory: {backup_dir}")
