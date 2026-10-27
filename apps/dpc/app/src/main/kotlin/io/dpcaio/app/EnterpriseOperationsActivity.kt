@@ -4,17 +4,14 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import io.dpcaio.core.model.CapabilityRequirements
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.OwnershipRequirement
 import io.dpcaio.core.model.RiskClass
-import io.dpcaio.policy.SystemUpdateMode
 import io.dpcaio.policy.FreezePeriodTextParser
+import io.dpcaio.policy.SystemUpdateMode
 import io.dpcaio.policy.SystemUpdatePolicySpec
 import io.dpcaio.policy.android.AndroidDevicePolicyGateway
 
@@ -34,77 +31,137 @@ class EnterpriseOperationsActivity : Activity() {
 
     private fun render() {
         val management = ManagementContextFactory.create(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24,24,24,24) }
-        root.addView(TextView(this).apply { text = "Compliance & Logs / System Update Policy"; textSize = 20f })
+        val root = ModernUi.page(this)
+
+        root.addView(
+            ModernUi.hero(
+                this,
+                title = "Enterprise Operations",
+                subtitle = "Compliance logs and controlled system update policy",
+                eyebrow = "OPERATIONS CENTER",
+            )
+        )
 
         val logging = CapabilityResolver.resolve(
             CapabilityRequirements(minApi = 24, ownership = OwnershipRequirement.DEVICE_OR_ORG_OWNED_PROFILE, risk = RiskClass.HIGH),
             management,
         )
-        addStatus(root, "Security Logging", logging.availability.name, logging.reason)
-        if (logging.executable) {
-            addAction(root, "Enable Security Logging") { show("Security Logging", gateway.setSecurityLoggingEnabled(true).toString()) }
-            addAction(root, "Disable Security Logging") { show("Security Logging", gateway.setSecurityLoggingEnabled(false).toString()) }
-            addAction(root, "Retrieve Security Logs") {
-                val result = gateway.retrieveSecurityLogs()
-                result.value?.let { store.append(it); state.consumeSecurityAvailability() }
-                show("Security Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
+        root.addView(ModernUi.section(this, "Security Logging"))
+        root.addView(
+            capabilityCard("Security Logging", logging.availability.name, logging.reason).apply {
+                if (logging.executable) {
+                    addView(
+                        ModernUi.actionRow(
+                            this@EnterpriseOperationsActivity,
+                            ModernUi.action(this@EnterpriseOperationsActivity, "Enable") { show("Security Logging", gateway.setSecurityLoggingEnabled(true).toString()) },
+                            ModernUi.action(this@EnterpriseOperationsActivity, "Disable", destructive = true) { show("Security Logging", gateway.setSecurityLoggingEnabled(false).toString()) },
+                        )
+                    )
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Retrieve Security Logs", primary = true) {
+                        val result = gateway.retrieveSecurityLogs()
+                        result.value?.let { store.append(it); state.consumeSecurityAvailability() }
+                        show("Security Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
+                    })
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 7))
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Pre-reboot logs") {
+                        val result = gateway.retrievePreRebootSecurityLogs()
+                        result.value?.let(store::append)
+                        show("Security Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
+                    })
+                }
             }
-            addAction(root, "Pre-reboot logs") {
-                val result = gateway.retrievePreRebootSecurityLogs(); result.value?.let(store::append)
-                show("Security Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
-            }
-        }
+        )
 
         val network = CapabilityResolver.resolve(
             CapabilityRequirements(minApi = 26, ownership = OwnershipRequirement.DEVICE_OR_PROFILE_OWNER, risk = RiskClass.HIGH),
             management,
         )
-        addStatus(root, "Network Logging", network.availability.name, network.reason)
-        root.addView(TextView(this).apply { text = "Pending batch token: ${state.networkBatchToken() ?: "none"}" })
-        if (network.executable) {
-            addAction(root, "Enable Network Logging") { show("Network Logging", gateway.setNetworkLoggingEnabled(true).toString()) }
-            addAction(root, "Disable Network Logging") { show("Network Logging", gateway.setNetworkLoggingEnabled(false).toString()) }
-            addAction(root, "Retrieve Network Logs") {
-                val token = state.networkBatchToken()
-                if (token == null) show("Network Logging", "WAITING_FOR_CALLBACK") else {
-                    val result = gateway.retrieveNetworkLogs(token)
-                    result.value?.let { store.append(it); state.clearNetworkBatch() }
-                    show("Network Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
+        root.addView(ModernUi.section(this, "Network Logging"))
+        root.addView(
+            capabilityCard("Network Logging", network.availability.name, network.reason).apply {
+                addView(ModernUi.body(this@EnterpriseOperationsActivity, "Pending batch token: ${state.networkBatchToken() ?: "none"}"))
+                if (network.executable) {
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 8))
+                    addView(
+                        ModernUi.actionRow(
+                            this@EnterpriseOperationsActivity,
+                            ModernUi.action(this@EnterpriseOperationsActivity, "Enable") { show("Network Logging", gateway.setNetworkLoggingEnabled(true).toString()) },
+                            ModernUi.action(this@EnterpriseOperationsActivity, "Disable", destructive = true) { show("Network Logging", gateway.setNetworkLoggingEnabled(false).toString()) },
+                        )
+                    )
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Retrieve Network Logs", primary = true) {
+                        val token = state.networkBatchToken()
+                        if (token == null) {
+                            show("Network Logging", "WAITING_FOR_CALLBACK")
+                        } else {
+                            val result = gateway.retrieveNetworkLogs(token)
+                            result.value?.let { store.append(it); state.clearNetworkBatch() }
+                            show("Network Logging", "${result.status}; events=${result.value?.eventCount ?: 0}")
+                        }
+                    })
                 }
             }
-        }
+        )
 
         val updates = CapabilityResolver.resolve(
             CapabilityRequirements(minApi = 23, ownership = OwnershipRequirement.DEVICE_OR_ORG_OWNED_PROFILE, risk = RiskClass.HIGH),
             management,
         )
-        addStatus(root, "System Update Policy", updates.availability.name, updates.reason)
-        root.addView(TextView(this).apply { text = "Current: ${gateway.getSystemUpdatePolicySpec()}" })
-        if (updates.executable) {
-            val freezeText = EditText(this).apply {
-                hint = "Freeze periods (MM-DD:MM-DD;...)"
+        root.addView(ModernUi.section(this, "System Update Policy"))
+        val freezeText = ModernUi.field(this, "Freeze periods (MM-DD:MM-DD;...)")
+        val start = ModernUi.field(this, "Window start minute 0..1439").apply { setText("1380") }
+        val end = ModernUi.field(this, "Window end minute 0..1439").apply { setText("120") }
+        root.addView(
+            capabilityCard("System Update Policy", updates.availability.name, updates.reason).apply {
+                addView(ModernUi.body(this@EnterpriseOperationsActivity, "Current: ${gateway.getSystemUpdatePolicySpec()}"))
+                if (updates.executable) {
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 8))
+                    addView(freezeText)
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Preview Automatic") {
+                        previewWithFreeze(SystemUpdatePolicySpec(SystemUpdateMode.AUTOMATIC), freezeText.text.toString())
+                    })
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 7))
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Preview Postpone (max 30 days)") {
+                        previewWithFreeze(SystemUpdatePolicySpec(SystemUpdateMode.POSTPONE), freezeText.text.toString())
+                    })
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 7))
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Preview System default") {
+                        previewWithFreeze(SystemUpdatePolicySpec(SystemUpdateMode.SYSTEM_DEFAULT), freezeText.text.toString())
+                    })
+                    addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 10))
+                    addView(start)
+                    addView(end)
+                    addView(ModernUi.action(this@EnterpriseOperationsActivity, "Preview windowed update", primary = true) {
+                        previewWithFreeze(
+                            SystemUpdatePolicySpec(SystemUpdateMode.WINDOWED, start.text.toString().toIntOrNull(), end.text.toString().toIntOrNull()),
+                            freezeText.text.toString(),
+                        )
+                    })
+                }
             }
-            root.addView(freezeText)
-            addUpdateButton(root, "Automatic", SystemUpdatePolicySpec(SystemUpdateMode.AUTOMATIC), freezeText)
-            addUpdateButton(root, "Postpone (max 30 days)", SystemUpdatePolicySpec(SystemUpdateMode.POSTPONE), freezeText)
-            addUpdateButton(root, "System default", SystemUpdatePolicySpec(SystemUpdateMode.SYSTEM_DEFAULT), freezeText)
-            val start = EditText(this).apply { hint = "Window start minute 0..1439"; setText("1380") }
-            val end = EditText(this).apply { hint = "Window end minute 0..1439"; setText("120") }
-            root.addView(start); root.addView(end)
-            addAction(root, "Preview windowed update") {
-                previewWithFreeze(
-                    SystemUpdatePolicySpec(SystemUpdateMode.WINDOWED, start.text.toString().toIntOrNull(), end.text.toString().toIntOrNull()),
-                    freezeText.text.toString(),
-                )
+        )
+
+        root.addView(ModernUi.section(this, "Stored logs"))
+        root.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                addView(ModernUi.title(this@EnterpriseOperationsActivity, "Stored log batches"))
+                addView(ModernUi.body(this@EnterpriseOperationsActivity, "Stored log batches: ${store.batches().size}. Manual redacted export only."))
+                addView(ModernUi.chip(this@EnterpriseOperationsActivity, "REDACTED EXPORT ONLY", ModernUi.Tone.WARNING))
             }
-        }
-        root.addView(TextView(this).apply { text = "Stored log batches: ${store.batches().size}. Manual redacted export only." })
-        setContentView(ScrollView(this).apply { addView(root) })
+        )
+
+        setContentView(ModernUi.scrollPage(this, root))
     }
 
-    private fun addUpdateButton(root: LinearLayout, label: String, spec: SystemUpdatePolicySpec, freezeText: EditText) =
-        addAction(root, "Preview $label") { previewWithFreeze(spec, freezeText.text.toString()) }
+    private fun capabilityCard(title: String, status: String, reason: String?): LinearLayout =
+        ModernUi.card(this).apply {
+            addView(ModernUi.title(this@EnterpriseOperationsActivity, title))
+            addView(ModernUi.chip(this@EnterpriseOperationsActivity, status, if (status.contains("AVAILABLE")) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING))
+            reason?.let {
+                addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 7))
+                addView(ModernUi.body(this@EnterpriseOperationsActivity, it))
+            }
+        }
 
     private fun previewWithFreeze(base: SystemUpdatePolicySpec, text: String) {
         if (base.mode == SystemUpdateMode.SYSTEM_DEFAULT) {
@@ -131,9 +188,7 @@ class EnterpriseOperationsActivity : Activity() {
             }.show()
     }
 
-    private fun addStatus(root: LinearLayout, title: String, status: String, reason: String?) {
-        root.addView(TextView(this).apply { text = "\n$title\n$status${reason?.let { " • $it" } ?: ""}"; textSize = 17f })
+    private fun show(title: String, message: String) {
+        AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show()
     }
-    private fun addAction(root: LinearLayout, label: String, action: () -> Unit) { root.addView(Button(this).apply { text=label; setOnClickListener { action() } }) }
-    private fun show(title: String, message: String) { AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show() }
 }
