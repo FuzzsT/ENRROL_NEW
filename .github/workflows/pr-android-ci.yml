@@ -129,6 +129,7 @@ jobs:
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
           python3 tools/tests/test_app_dpc_compile_114_contract_v2.py
+          python3 tools/tests/test_persisted_signing_recovery_contract.py
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
 
