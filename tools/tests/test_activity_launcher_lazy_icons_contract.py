@@ -19,4 +19,10 @@ assert "generation != renderGeneration" in launcher
 assert "if (isFinishing || isDestroyed) return@runOnUiThread" in launcher, "inventory completion must be discarded after destruction"
 assert "iconExecutor.isShutdown" in launcher, "icon submission must be guarded after executor shutdown"
 assert "ICON_CACHE_SIZE" in launcher
+
+# Favorites/Recent counters must reflect the current installed inventory, not stale persisted package names.
+assert "private fun installedPackageNames(): Set<String>" in launcher, "launcher should centralize installed package membership"
+assert "favoritePackages.count { it in installedPackages }" in launcher, "Favorites overview count must ignore uninstalled packages"
+assert "recentPackages.count { it in installedPackages }" in launcher, "Recent overview count must ignore uninstalled packages"
+
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")
