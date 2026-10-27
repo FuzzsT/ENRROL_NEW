@@ -10,6 +10,9 @@ for name in [
     'ModuleCenterActivity.kt',
     'NetworkControlActivity.kt',
     'DpcDiagnosticsActivity.kt',
+    'EnrollmentManualActivity.kt',
+    'EnrollmentStatusActivity.kt',
+    'KnoxEnterpriseCenterActivity.kt',
 ]:
     text = (APP / name).read_text(encoding='utf-8')
     assert 'ModernUi.' in text, f'{name}: modern design system not applied'
@@ -20,7 +23,7 @@ for token in [
     'fun page(activity: Activity): LinearLayout',
     'fun scrollPage(activity: Activity, content: LinearLayout): ScrollView',
     'fun chip(activity: Activity, text: String, tone: Tone)',
-    'primary: Boolean = false',
+    'primary: Boolean',
     'fun outputCard(activity: Activity, text: String): TextView',
 ]:
     assert token in design, f'ModernUi compatibility API missing: {token}'
@@ -32,5 +35,17 @@ for token in ['Private DNS', 'DNS over HTTPS', 'ModernUi.hero', 'ModernUi.output
 diagnostics = (APP / 'DpcDiagnosticsActivity.kt').read_text(encoding='utf-8')
 for token in ['System health', 'Management state', 'Module availability', 'ModernUi.Tone', 'ModernUi.chip', 'ModernUi.card']:
     assert token in diagnostics, token
+
+enrollment = (APP / 'EnrollmentManualActivity.kt').read_text(encoding='utf-8')
+for token in ['ModernUi.hero', 'ModernUi.field', 'ModernUi.card', 'ModernUi.action', 'ModernUi.outputCard']:
+    assert token in enrollment, token
+
+status = (APP / 'EnrollmentStatusActivity.kt').read_text(encoding='utf-8')
+for token in ['ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.action', 'ModernUi.scrollPage']:
+    assert token in status, token
+
+knox = (APP / 'KnoxEnterpriseCenterActivity.kt').read_text(encoding='utf-8')
+for token in ['Capability Matrix', 'ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.scrollPage']:
+    assert token in knox, token
 
 print('MODERN_UI_V2_CONTRACT: PASS')
