@@ -58,8 +58,8 @@ class KnoxEnterpriseCenterActivity : Activity() {
             state: String,
         ) {
             val tone = when {
-                state.contains("UNSUPPORTED") -> ModernUi.Tone.DANGER
-                state.contains("ACTIVE") || state.contains("AVAILABLE") || state.contains("SUPPORTED") -> ModernUi.Tone.SUCCESS
+                state.startsWith("UNSUPPORTED") -> ModernUi.Tone.DANGER
+                state == "ACTIVE" || state == "AVAILABLE" || state == "SUPPORTED" -> ModernUi.Tone.SUCCESS
                 state.contains("REQUIRED") || state.contains("LIMITED") || state.contains("DEPRECATED") -> ModernUi.Tone.WARNING
                 else -> ModernUi.Tone.NEUTRAL
             }
