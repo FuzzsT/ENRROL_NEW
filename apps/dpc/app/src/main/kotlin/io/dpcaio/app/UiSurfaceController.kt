@@ -3,6 +3,7 @@ package io.dpcaio.app
 import android.app.Activity
 import android.app.Application
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
@@ -53,13 +54,23 @@ object UiSurfaceController : Application.ActivityLifecycleCallbacks {
         }
 
         content.setOnApplyWindowInsetsListener { view, insets ->
-            val bars = insets.getInsets(WindowInsets.Type.systemBars())
-            view.setPadding(
-                baseline.left + bars.left,
-                baseline.top + bars.top,
-                baseline.right + bars.right,
-                baseline.bottom + bars.bottom,
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                view.setPadding(
+                    baseline.left + bars.left,
+                    baseline.top + bars.top,
+                    baseline.right + bars.right,
+                    baseline.bottom + bars.bottom,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                view.setPadding(
+                    baseline.left + insets.systemWindowInsetLeft,
+                    baseline.top + insets.systemWindowInsetTop,
+                    baseline.right + insets.systemWindowInsetRight,
+                    baseline.bottom + insets.systemWindowInsetBottom,
+                )
+            }
             insets
         }
         content.requestApplyInsets()
