@@ -13,6 +13,7 @@ for name in [
     'EnrollmentManualActivity.kt',
     'EnrollmentStatusActivity.kt',
     'KnoxEnterpriseCenterActivity.kt',
+    'ActivityExplorerActivity.kt',
 ]:
     text = (APP / name).read_text(encoding='utf-8')
     assert 'ModernUi.' in text, f'{name}: modern design system not applied'
@@ -47,5 +48,13 @@ for token in ['ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.actio
 knox = (APP / 'KnoxEnterpriseCenterActivity.kt').read_text(encoding='utf-8')
 for token in ['Capability Matrix', 'ModernUi.hero', 'ModernUi.card', 'ModernUi.chip', 'ModernUi.scrollPage']:
     assert token in knox, token
+
+explorer = (APP / 'ActivityExplorerActivity.kt').read_text(encoding='utf-8')
+for token in [
+    'Activity Manager 2.0', 'Batch Preview', 'Restore snapshot',
+    'ModernUi.hero', 'ModernUi.field', 'ModernUi.card', 'ModernUi.action',
+    'ModernUi.actionRow', 'ModernUi.outputCard', 'ModernUi.scrollPage',
+]:
+    assert token in explorer, token
 
 print('MODERN_UI_V2_CONTRACT: PASS')
