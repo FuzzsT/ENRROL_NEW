@@ -41,13 +41,14 @@
             android:name=".GoogleAccountManagerActivity"
             android:exported="false" />
 
-
         <activity android:name=".AioDashboardActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".ControlCenterActivity" android:exported="false" />
+        <activity android:name=".ActivityLauncherHubActivity" android:exported="false" />
         <activity android:name=".ModuleCenterActivity" android:exported="false" />
         <activity android:name=".EnterprisePolicyHubActivity" android:exported="false" />
         <activity android:name=".EnterpriseOperationsActivity" android:exported="false" />
@@ -99,7 +100,6 @@
         </receiver>
         <activity android:name=".SamsungSettingsEditorActivity" android:exported="false" />
         <activity android:name=".KnoxZtManagerActivity" android:exported="false" />
-
 
         <receiver
             android:name=".OfflineInstallStatusReceiver"
