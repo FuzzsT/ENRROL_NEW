@@ -22,6 +22,7 @@ m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 25: errors.append('versionCode >=25 required')
 
 workflow=read('.github/workflows/build-aio-enrollment.yml')
+emergency_workflow=read('.github/workflows/build-emergency-enrollment.yml')
 for token in [
     'Build QR release bundle',
     'tools/release/build_qr_release_bundle.py',
@@ -60,6 +61,72 @@ for forbidden in [
     'keytool -genkeypair',
 ]:
     if forbidden in workflow: errors.append(f'production workflow contains forbidden/stale marker {forbidden}')
+
+# Runtime smoke retry is deliberately narrow: one fresh-AVD retry is allowed
+# only for Android's known fresh-emulator eligibility flake where set-device-owner
+# reports pre-existing accounts. No account removal or setup-state manipulation.
+retry_gate_path=ROOT/'tools/runtime/runtime_smoke_retry_gate.py'
+if not retry_gate_path.is_file():
+    errors.append('runtime smoke retry gate missing')
+else:
+    try:
+        spec=importlib.util.spec_from_file_location('runtime_smoke_retry_gate_contract', retry_gate_path)
+        if not spec or not spec.loader:
+            raise RuntimeError('could not import runtime smoke retry gate')
+        retry_gate=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(retry_gate)
+        retryable={
+            'state':'FAIL',
+            'setDeviceOwner':{
+                'exitCode':255,
+                'output':'Error: Not allowed to set the device owner because there are already some accounts on the device.'
+            },
+            'error':'ValueError: Device Owner readback is not true',
+        }
+        generic_failure={
+            'state':'FAIL',
+            'setDeviceOwner':{'exitCode':255,'output':'SecurityException: caller is not allowed'},
+            'error':'ValueError: Device Owner readback is not true',
+        }
+        misleading_pass={
+            'state':'PASS',
+            'setDeviceOwner':{
+                'exitCode':0,
+                'output':'historical text: already some accounts on the device'
+            },
+        }
+        if retry_gate.is_retryable_preexisting_accounts(retryable) is not True:
+            errors.append('pre-existing-account Device Owner failure must be retryable')
+        if retry_gate.is_retryable_preexisting_accounts(generic_failure) is not False:
+            errors.append('generic Device Owner failure must not be retryable')
+        if retry_gate.is_retryable_preexisting_accounts(misleading_pass) is not False:
+            errors.append('PASS report must never request retry')
+    except Exception as exc:
+        errors.append(f'runtime smoke retry gate behavior failed: {exc}')
+
+for label, text in [('production', workflow), ('emergency', emergency_workflow)]:
+    for token in [
+        'id: runtime_smoke_primary',
+        'continue-on-error: true',
+        'tools/runtime/runtime_smoke_retry_gate.py',
+        'DPC_AIO_RUNTIME_RETRY=1',
+        "if: env.DPC_AIO_RUNTIME_RETRY == '1'",
+        'AOSP Device Owner runtime smoke retry',
+        'android-runtime-smoke-attempt1.json',
+    ]:
+        if token not in text:
+            errors.append(f'{label} workflow runtime retry missing {token}')
+    if text.count('ReactiveCircus/android-emulator-runner@') != 2:
+        errors.append(f'{label} workflow must contain exactly two emulator-runner attempts')
+    for forbidden in [
+        'device_provisioned',
+        'user_setup_complete',
+        'remove-account',
+        'remove_account',
+        'cmd account remove',
+    ]:
+        if forbidden in text:
+            errors.append(f'{label} workflow contains forbidden Device Owner eligibility manipulation {forbidden}')
 
 script=read('tools/release/build_qr_release_bundle.py')
 for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
