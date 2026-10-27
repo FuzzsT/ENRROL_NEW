@@ -271,12 +271,41 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: AOSP Device Owner runtime smoke
+        id: runtime_smoke_primary
+        continue-on-error: true
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           target: default
           arch: x86_64
           profile: pixel_7_pro
+          force-avd-creation: true
+          disable-animations: true
+          script: >-
+            python3 tools/runtime/android_device_owner_smoke.py
+            --apk dist/DPC-AIO-enterprise-release.apk
+            --out dist/android-runtime-smoke.json
+            --expected-version 1.1.4
+
+      - name: Classify Device Owner runtime smoke failure
+        if: steps.runtime_smoke_primary.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/android-runtime-smoke.json
+          cp dist/android-runtime-smoke.json dist/android-runtime-smoke-attempt1.json
+          python3 tools/runtime/runtime_smoke_retry_gate.py --report dist/android-runtime-smoke.json
+          echo "DPC_AIO_RUNTIME_RETRY=1" >> "$GITHUB_ENV"
+
+      - name: AOSP Device Owner runtime smoke retry
+        if: env.DPC_AIO_RUNTIME_RETRY == '1'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_7_pro
+          force-avd-creation: true
           disable-animations: true
           script: >-
             python3 tools/runtime/android_device_owner_smoke.py
