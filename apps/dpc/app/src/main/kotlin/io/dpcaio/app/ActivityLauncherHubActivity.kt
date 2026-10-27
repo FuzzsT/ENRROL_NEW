@@ -450,8 +450,16 @@ class ActivityLauncherHubActivity : Activity() {
                     ModernUi.action(this@ActivityLauncherHubActivity, if (favorite) "Remove favorite" else "Add favorite") {
                         toggleFavorite(app.packageName)
                     },
-                    ModernUi.action(this@ActivityLauncherHubActivity, "Package details") {
-                        showPackageDetails(app)
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Open app") {
+                        val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
+                        if (launchIntent != null) {
+                            startActivity(launchIntent)
+                            recordRecent(app.packageName)
+                            status.text = "Opened ${app.packageName}"
+                            renderTabs()
+                        } else {
+                            status.text = "No launcher intent for ${app.packageName}"
+                        }
                     },
                 )
             )
@@ -464,36 +472,31 @@ class ActivityLauncherHubActivity : Activity() {
         preferences.edit().putStringSet(KEY_FAVORITES, next).apply()
         renderTabs()
         renderApps()
+        status.text = if (packageName in next) "Added to favorites: $packageName" else "Removed from favorites: $packageName"
     }
 
-    private fun rememberRecent(packageName: String) {
+    private fun recordRecent(packageName: String) {
         val next = buildList {
             add(packageName)
             addAll(recentPackages.filterNot { it == packageName })
         }.take(MAX_RECENT)
         preferences.edit().putString(KEY_RECENTS, next.joinToString("\n")).apply()
-        renderTabs()
     }
 
     private fun openActivities(app: AppEntry) {
-        rememberRecent(app.packageName)
-        startActivity(Intent(this, ActivityExplorerActivity::class.java).putExtra("package", app.packageName))
-    }
-
-    private fun showPackageDetails(app: AppEntry) {
-        status.text = buildString {
-            append(app.label).append('\n')
-            append(app.packageName).append('\n')
-            append("Version: ").append(app.versionName).append('\n')
-            append("Type: ").append(if (app.system) "SYSTEM" else "USER").append('\n')
-            append("Enabled: ").append(app.enabled)
-        }
+        recordRecent(app.packageName)
+        renderTabs()
+        status.text = "Opening guarded activity inventory for ${app.packageName}"
+        startActivity(
+            Intent(this, ActivityExplorerActivity::class.java)
+                .putExtra("package", app.packageName)
+        )
     }
 
     companion object {
         private const val PREFS_NAME = "activity_launcher_hub"
-        private const val KEY_FAVORITES = "favorite_packages"
-        private const val KEY_RECENTS = "recent_packages"
+        private const val KEY_FAVORITES = "favoritePackages"
+        private const val KEY_RECENTS = "recentPackages"
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
         private const val ICON_WORKER_COUNT = 2
