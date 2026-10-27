@@ -20,6 +20,8 @@ import android.widget.TextView
 
 /** Lightweight design system for the classic View-based DPC-AIO UI. */
 object ModernUi {
+    enum class Tone { NEUTRAL, SUCCESS, WARNING, DANGER }
+
     data class Palette(
         val page: Int,
         val surface: Int,
@@ -66,7 +68,13 @@ object ModernUi {
         }
     }
 
-    fun page(activity: Activity, content: LinearLayout): ScrollView {
+    fun page(activity: Activity): LinearLayout = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+    }
+
+    fun page(activity: Activity, content: LinearLayout): ScrollView = scrollPage(activity, content)
+
+    fun scrollPage(activity: Activity, content: LinearLayout): ScrollView {
         val colors = palette(activity)
         content.orientation = LinearLayout.VERTICAL
         content.setPadding(dp(activity, 18), dp(activity, 18), dp(activity, 18), dp(activity, 30))
@@ -167,14 +175,12 @@ object ModernUi {
         }
     }
 
-    fun chip(activity: Activity, text: String, tone: String = "neutral"): TextView {
+    fun chip(activity: Activity, text: String, tone: String = "neutral"): TextView =
+        chip(activity, text, toneFromString(tone))
+
+    fun chip(activity: Activity, text: String, tone: Tone): TextView {
         val colors = palette(activity)
-        val foreground = when (tone.lowercase()) {
-            "success" -> colors.success
-            "warning" -> colors.warning
-            "danger" -> colors.danger
-            else -> colors.accent
-        }
+        val foreground = toneColor(colors, tone)
         return TextView(activity).apply {
             this.text = text
             setTextColor(foreground)
@@ -207,9 +213,28 @@ object ModernUi {
         }
     }
 
-    fun action(activity: Activity, label: String, destructive: Boolean = false, onClick: () -> Unit): Button {
+    fun action(activity: Activity, label: String, destructive: Boolean = false, onClick: () -> Unit): Button =
+        buildAction(activity, label, destructive = destructive, primary = false, onClick = onClick)
+
+    fun action(
+        activity: Activity,
+        label: String,
+        primary: Boolean,
+        destructive: Boolean = false,
+        onClick: () -> Unit,
+    ): Button = buildAction(activity, label, destructive = destructive, primary = primary, onClick = onClick)
+
+    private fun buildAction(
+        activity: Activity,
+        label: String,
+        destructive: Boolean,
+        primary: Boolean,
+        onClick: () -> Unit,
+    ): Button {
         val colors = palette(activity)
         val accent = if (destructive) colors.danger else colors.accent
+        val fill = if (primary) withAlpha(accent, 44) else colors.surfaceRaised
+        val stroke = if (primary) withAlpha(accent, 170) else withAlpha(accent, 90)
         return Button(activity).apply {
             text = label
             isAllCaps = false
@@ -221,7 +246,7 @@ object ModernUi {
             setPadding(dp(activity, 12), 0, dp(activity, 12), 0)
             background = RippleDrawable(
                 ColorStateList.valueOf(withAlpha(accent, 45)),
-                rounded(colors.surfaceRaised, withAlpha(accent, 90), dp(activity, 14), dp(activity, 1)),
+                rounded(fill, stroke, dp(activity, 14), dp(activity, 1)),
                 null,
             )
             setOnClickListener {
@@ -246,6 +271,25 @@ object ModernUi {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { bottomMargin = dp(activity, 8) }
+    }
+
+    fun outputCard(activity: Activity, text: String): TextView = TextView(activity).apply {
+        this.text = text
+        setTextIsSelectable(true)
+        setTextColor(palette(activity).text)
+        textSize = 12.5f
+        setLineSpacing(0f, 1.08f)
+        setPadding(dp(activity, 16), dp(activity, 15), dp(activity, 16), dp(activity, 15))
+        background = rounded(
+            palette(activity).surfaceRaised,
+            withAlpha(palette(activity).accent, 85),
+            dp(activity, 18),
+            dp(activity, 1),
+        )
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(activity, 10) }
     }
 
     fun outputCard(activity: Activity, output: TextView): LinearLayout {
@@ -276,6 +320,20 @@ object ModernUi {
         value.toFloat(),
         activity.resources.displayMetrics,
     ).toInt()
+
+    private fun toneFromString(tone: String): Tone = when (tone.lowercase()) {
+        "success" -> Tone.SUCCESS
+        "warning" -> Tone.WARNING
+        "danger" -> Tone.DANGER
+        else -> Tone.NEUTRAL
+    }
+
+    private fun toneColor(colors: Palette, tone: Tone): Int = when (tone) {
+        Tone.SUCCESS -> colors.success
+        Tone.WARNING -> colors.warning
+        Tone.DANGER -> colors.danger
+        Tone.NEUTRAL -> colors.accent
+    }
 
     private fun rounded(fill: Int, stroke: Int, radius: Int, strokeWidth: Int): GradientDrawable =
         GradientDrawable().apply {
