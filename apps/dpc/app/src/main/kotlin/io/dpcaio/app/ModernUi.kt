@@ -200,10 +200,10 @@ object ModernUi {
         val colors = palette(activity)
         return EditText(activity).apply {
             this.hint = hint
+            setSingleLine(true)
             this.inputType = inputType
             setTextColor(colors.text)
             setHintTextColor(withAlpha(colors.secondaryText, 180))
-            setSingleLine(true)
             setPadding(dp(activity, 14), dp(activity, 11), dp(activity, 14), dp(activity, 11))
             background = rounded(colors.surfaceRaised, colors.border, dp(activity, 14), dp(activity, 1))
             layoutParams = LinearLayout.LayoutParams(
