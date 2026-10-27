@@ -3,9 +3,8 @@ package io.dpcaio.app
 import android.app.Activity
 import android.nfc.NfcAdapter
 import android.os.Bundle
-import android.widget.Button
+import android.view.Gravity
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.nfc.NfcTraceCodec
 import io.dpcaio.nfc.android.NfcTagInspector
@@ -20,15 +19,51 @@ class NfcLabActivity : Activity(), NfcAdapter.ReaderCallback {
         super.onCreate(savedInstanceState)
         title = "NFC Lab"
         adapter = NfcAdapter.getDefaultAdapter(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
-        output = TextView(this).apply { setTextIsSelectable(true) }
-        trace = EditText(this).apply { hint = "Paste DPC-AIO-NFC/1 trace for owned/synthetic HCE replay"; minLines = 8 }
-        root.addView(Button(this).apply { text = "Enable reader"; setOnClickListener { enableReader() } })
-        root.addView(trace)
-        root.addView(Button(this).apply { text = "Install replay trace"; setOnClickListener { installTrace() } })
-        root.addView(Button(this).apply { text = "Clear replay"; setOnClickListener { SyntheticNfcReplayRegistry.clear(); output.text = "replay cleared" } })
-        root.addView(output)
-        setContentView(root)
+
+        val body = ModernUi.page(this)
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "NFC Lab",
+                subtitle = "Reader diagnostics and owned/synthetic trace replay",
+                eyebrow = "DEVELOPER LAB",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Reader"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.body(this@NfcLabActivity, "Reads NFC-A/B/F/V and barcode tags using Android reader mode."))
+                addView(ModernUi.action(this@NfcLabActivity, "Enable reader", primary = true) { enableReader() })
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Synthetic / owned replay"))
+        body.addView(
+            ModernUi.card(this).apply {
+                trace = ModernUi.field(this@NfcLabActivity, "Paste DPC-AIO-NFC/1 trace for owned/synthetic HCE replay").apply {
+                    setSingleLine(false)
+                    minLines = 8
+                    gravity = Gravity.TOP or Gravity.START
+                }
+                addView(trace)
+                addView(
+                    ModernUi.actionRow(
+                        this@NfcLabActivity,
+                        ModernUi.action(this@NfcLabActivity, "Install replay trace") { installTrace() },
+                        ModernUi.action(this@NfcLabActivity, "Clear replay", destructive = true) {
+                            SyntheticNfcReplayRegistry.clear()
+                            output.text = "replay cleared"
+                        },
+                    )
+                )
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Result"))
+        output = TextView(this).apply { text = if (adapter == null) "NFC unavailable" else "Ready"; setTextIsSelectable(true) }
+        body.addView(ModernUi.outputCard(this, output))
+        setContentView(ModernUi.scrollPage(this, body))
     }
 
     private fun enableReader() {
