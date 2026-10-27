@@ -43,10 +43,10 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentTab = AppTab.USER
     private var currentSort = AppSort.NAME
     private var installedApps: List<AppEntry> = emptyList()
-    private var renderGeneration = 0L
     private val runtime = AndroidShizukuRuntime()
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
+    private var renderGeneration = 0L
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -146,13 +146,16 @@ class ActivityLauncherHubActivity : Activity() {
         setContentView(ModernUi.scrollPage(this, body))
     }
 
+    private fun installedPackageNames(): Set<String> =
+        installedApps.asSequence().map { it.packageName }.toSet()
+
     private fun tabLabel(tab: AppTab): String {
-        val installed = installedApps.map { it.packageName }.toSet()
+        val installedPackages = installedPackageNames()
         val count = when (tab) {
             AppTab.SYSTEM -> installedApps.count { it.system }
             AppTab.USER -> installedApps.count { !it.system }
-            AppTab.FAVORITES -> favoritePackages.count { it in installed }
-            AppTab.RECENT -> recentPackages.count { it in installed }
+            AppTab.FAVORITES -> favoritePackages.count { it in installedPackages }
+            AppTab.RECENT -> recentPackages.count { it in installedPackages }
         }
         return "${tab.name} ($count)"
     }
@@ -364,6 +367,7 @@ class ActivityLauncherHubActivity : Activity() {
     private fun renderStats(shown: List<AppEntry>) {
         if (!::stats.isInitialized) return
         stats.removeAllViews()
+        val installedPackages = installedPackageNames()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -378,8 +382,8 @@ class ActivityLauncherHubActivity : Activity() {
         }
         add(installedApps.size.toString(), "TOTAL", ModernUi.Tone.NEUTRAL)
         add(shown.size.toString(), "VISIBLE", ModernUi.Tone.SUCCESS)
-        add(favoritePackages.size.toString(), "FAVORITES", ModernUi.Tone.NEUTRAL)
-        add(recentPackages.size.toString(), "RECENT", ModernUi.Tone.NEUTRAL)
+        add(favoritePackages.count { it in installedPackages }.toString(), "FAVORITES", ModernUi.Tone.NEUTRAL)
+        add(recentPackages.count { it in installedPackages }.toString(), "RECENT", ModernUi.Tone.NEUTRAL)
         stats.addView(
             HorizontalScrollView(this).apply {
                 isHorizontalScrollBarEnabled = false
