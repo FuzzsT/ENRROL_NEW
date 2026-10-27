@@ -156,7 +156,7 @@ class EnterpriseOperationsActivity : Activity() {
     private fun capabilityCard(title: String, status: String, reason: String?): LinearLayout =
         ModernUi.card(this).apply {
             addView(ModernUi.title(this@EnterpriseOperationsActivity, title))
-            addView(ModernUi.chip(this@EnterpriseOperationsActivity, status, if (status.contains("AVAILABLE")) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING))
+            addView(ModernUi.chip(this@EnterpriseOperationsActivity, status, if (status == "AVAILABLE") ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING))
             reason?.let {
                 addView(ModernUi.spacer(this@EnterpriseOperationsActivity, 7))
                 addView(ModernUi.body(this@EnterpriseOperationsActivity, it))

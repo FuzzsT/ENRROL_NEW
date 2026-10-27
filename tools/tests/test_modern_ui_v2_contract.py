@@ -116,6 +116,10 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.scrollPage',
 ]:
     assert token in ops, token
+assert 'status.contains("AVAILABLE")' not in ops, \
+    'Enterprise capability tone must not classify UNAVAILABLE as AVAILABLE by substring'
+assert 'status == "AVAILABLE"' in ops, \
+    'Enterprise capability success tone must require exact AVAILABLE status'
 
 google = (APP / 'GoogleAccountManagerActivity.kt').read_text(encoding='utf-8')
 for token in [
