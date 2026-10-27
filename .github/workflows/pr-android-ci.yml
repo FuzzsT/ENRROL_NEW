@@ -3,6 +3,7 @@ name: Android PR compile gate
 on:
   push:
     branches:
+      - main
       - ui/safe-area-motion-refresh
     paths:
       - 'apps/dpc/**'
