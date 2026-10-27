@@ -3,10 +3,7 @@ package io.dpcaio.app
 import android.app.Activity
 import android.os.Bundle
 import android.os.Process
-import android.view.ViewGroup
-import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.knoxzt.android.KnoxZtActivitySupport
 import io.dpcaio.knoxzt.android.KnoxZtInstallSource
@@ -23,17 +20,41 @@ class KnoxZtManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "KnoxZT Framework"
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,20) }
-        output = TextView(this).apply { setTextIsSelectable(true) }
-        url = EditText(this).apply { hint = "Trusted HTTPS APK URL" }
-        apkSha = EditText(this).apply { hint = "APK SHA-256" }
-        signerSha = EditText(this).apply { hint = "Signer SHA-256 (comma separated)" }
-        val save = Button(this).apply { text = "Save trusted source"; setOnClickListener { saveSource() } }
-        val ensure = Button(this).apply { text = "Detect / enable / restore / install"; setOnClickListener { ensureReady() } }
-        val activities = Button(this).apply { text = "Prepare + list KnoxZT activities"; setOnClickListener { listActivities() } }
-        root.addView(url); root.addView(apkSha); root.addView(signerSha); root.addView(save); root.addView(ensure); root.addView(activities)
-        root.addView(output, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        setContentView(root)
+        val body = ModernUi.page(this)
+        body.addView(
+            ModernUi.hero(
+                this,
+                title = "KnoxZT Framework",
+                subtitle = "Trusted source, recovery and activity inventory for the official Knox Zero Trust package",
+                eyebrow = "SAMSUNG / KNOXZT",
+            )
+        )
+
+        body.addView(ModernUi.section(this, "Trusted source"))
+        body.addView(
+            ModernUi.card(this).apply {
+                url = ModernUi.field(this@KnoxZtManagerActivity, "Trusted HTTPS APK URL")
+                apkSha = ModernUi.field(this@KnoxZtManagerActivity, "APK SHA-256")
+                signerSha = ModernUi.field(this@KnoxZtManagerActivity, "Signer SHA-256 (comma separated)")
+                addView(url)
+                addView(apkSha)
+                addView(signerSha)
+                addView(ModernUi.action(this@KnoxZtManagerActivity, "Save trusted source", primary = true) { saveSource() })
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Recovery & inventory"))
+        body.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.action(this@KnoxZtManagerActivity, "Detect / enable / restore / install") { ensureReady() })
+                addView(ModernUi.action(this@KnoxZtManagerActivity, "Prepare + list KnoxZT activities") { listActivities() })
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Result"))
+        output = TextView(this).apply { text = "Ready"; setTextIsSelectable(true) }
+        body.addView(ModernUi.outputCard(this, output))
+        setContentView(ModernUi.scrollPage(this, body))
     }
 
     private fun saveSource() {
