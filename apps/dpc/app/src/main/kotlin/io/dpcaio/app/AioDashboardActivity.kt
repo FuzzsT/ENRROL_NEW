@@ -22,6 +22,10 @@ class AioDashboardActivity : Activity() {
             eyebrow = "Enterprise control center",
         ))
 
+        addSection(body, "Control")
+        add(body, "Control Center • Functions / Modules / Shizuku") { ControlCenterActivity::class.java }
+        add(body, "Activity Launcher • Apps / Favorites / Recent") { ActivityLauncherHubActivity::class.java }
+
         addSection(body, "Setup & enrollment")
         add(body, "Enrollment Engine") { EnrollmentManualActivity::class.java }
         add(body, "Full Offline Setup") { OfflineSetupActivity::class.java }
@@ -37,7 +41,7 @@ class AioDashboardActivity : Activity() {
 
         addSection(body, "Tools")
         add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
-        add(body, "Activity Explorer") { ActivityExplorerActivity::class.java }
+        add(body, "Activity Explorer • direct package mode") { ActivityExplorerActivity::class.java }
         add(body, "Permission Manager") { PermissionManagerActivity::class.java }
         add(body, "Samsung Settings") { SamsungSettingsEditorActivity::class.java }
         add(body, "Google Account Manager") { GoogleAccountManagerActivity::class.java }
@@ -60,7 +64,7 @@ class AioDashboardActivity : Activity() {
     }
 
     private fun add(root: LinearLayout, label: String, target: () -> Class<out Activity>) {
-        root.addView(ModernUi.card(this).apply {
+        root.addView(ModernUi.compactCard(this).apply {
             addView(ModernUi.action(this@AioDashboardActivity, label) {
                 startActivity(Intent(this@AioDashboardActivity, target()))
             })
