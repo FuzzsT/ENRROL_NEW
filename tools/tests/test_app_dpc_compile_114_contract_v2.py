@@ -20,8 +20,10 @@ if 'UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)
     errors.append('ActivityExplorer must resolve target users through public UserHandle.getUserHandleForUid')
 if 'UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId))' not in offline_policy:
     errors.append('OfflinePolicyApplier must resolve target users through public UserHandle.getUserHandleForUid')
-if 'LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)' not in activity:
-    errors.append('ActivityExplorer ScrollView must use a LinearLayout.LayoutParams object with weight')
+if 'ModernUi.scrollPage(this, body)' not in activity:
+    errors.append('ActivityExplorer must use the shared ModernUi scroll surface')
+if 'setContentView(ScrollView(this)' in activity:
+    errors.append('ActivityExplorer must not regress to the legacy raw ScrollView surface')
 if 'management.deviceOwner' in knox or 'management.profileOwner' in knox:
     errors.append('KnoxEnterpriseCenter must use ManagementContext.ownership, not removed deviceOwner/profileOwner fields')
 if 'val ownerSatisfied = management.ownership != OwnershipMode.NONE' not in knox:
