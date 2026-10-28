@@ -73,7 +73,10 @@ class KnoxZtManagerActivity : Activity() {
         output.text = "Checking KnoxZT..."
         Thread {
             val result = KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = ShizukuUserServiceClient(this)).ensureReady()
-            runOnUiThread { output.text = "status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}" }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                output.text = "status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}"
+            }
         }.start()
     }
 
@@ -87,7 +90,10 @@ class KnoxZtManagerActivity : Activity() {
                 appendLine("activities=${activities.size}")
                 activities.forEach { appendLine("${it.className} exported=${it.exported} enabled=${it.enabled} permission=${it.requiredPermission}") }
             }
-            runOnUiThread { output.text = text }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                output.text = text
+            }
         }.start()
     }
 }
