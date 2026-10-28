@@ -133,6 +133,11 @@ class OfflineSetupActivity : Activity() {
             renderState("Offline bundle I/O already in progress")
             return
         }
+        if (deploymentOwnsBundle()) {
+            bundleIoInProgress.set(false)
+            renderState("Offline deployment is still using the current bundle")
+            return
+        }
         val sourceUri = uri
         val generation = ++importGeneration
         importedBundle = null
@@ -235,6 +240,26 @@ class OfflineSetupActivity : Activity() {
         }
         val syncPending = mode == OfflineMode.OFFLINE_THEN_SYNC
         if (manifest.packages.isEmpty()) {
+            startPolicyOnlyDeployment(file, manifest, syncPending)
+            return
+        }
+        stageAndCommitBundle(file, manifest, syncPending)
+    }
+
+    private fun startPolicyOnlyDeployment(
+        file: File,
+        manifest: io.dpcaio.offline.OfflineBundleManifest,
+        syncPending: Boolean,
+    ) {
+        if (!bundleIoInProgress.compareAndSet(false, true)) {
+            renderState("Offline bundle I/O already in progress")
+            return
+        }
+        try {
+            if (deploymentOwnsBundle()) {
+                renderState("Offline deployment is already using the current bundle")
+                return
+            }
             coordinator.startFullOffline(manifest.bundleId)
             deploymentStore.save(
                 OfflineDeploymentState(
@@ -249,9 +274,9 @@ class OfflineSetupActivity : Activity() {
                     .setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE)
             )
             renderState("PACKAGES_INSTALLED\nNo package payload; policy application scheduled")
-            return
+        } finally {
+            bundleIoInProgress.set(false)
         }
-        stageAndCommitBundle(file, manifest, syncPending)
     }
 
     private fun stageAndCommitBundle(
@@ -261,6 +286,11 @@ class OfflineSetupActivity : Activity() {
     ) {
         if (!bundleIoInProgress.compareAndSet(false, true)) {
             renderState("Offline bundle I/O already in progress")
+            return
+        }
+        if (deploymentOwnsBundle()) {
+            bundleIoInProgress.set(false)
+            renderState("Offline deployment is already using the current bundle")
             return
         }
         val appContext = applicationContext
