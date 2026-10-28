@@ -39,6 +39,7 @@ class EnrollmentStatusActivity : Activity() {
                 ModernUi.body(
                     this,
                     buildString {
+                        appendLine("Stage: ${session.stage}")
                         appendLine("Source: ${session.source}")
                         appendLine("Mode: ${session.requestedMode}")
                         appendLine("Policy: ${session.policyProfile}")

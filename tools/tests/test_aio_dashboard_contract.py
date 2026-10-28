@@ -39,7 +39,7 @@ for token in [
     'addSection(body, "Tools")',
     'ModernUi.hero',
     'ModernUi.page',
-    'ModernUi.card',
+    'ModernUi.compactCard',
     'ModernUi.action',
 ]:
     assert token in dashboard, token

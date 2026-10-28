@@ -18,7 +18,7 @@ def main() -> None:
     if not version_code or version_code.group(1) != EXPECTED_CODE:
         raise AssertionError(f'versionCode must be {EXPECTED_CODE}, got {version_code.group(1) if version_code else None}')
     dashboard = read('apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt')
-    for marker in ['packageManager.getPackageInfo(packageName, 0).versionName', 'DPC-AIO $versionName']:
+    for marker in ['packageManager.getPackageInfo(packageName, 0).versionName', 'v$versionName • Device Owner / policy / research toolkit']:
         if marker not in dashboard:
             raise AssertionError(f'dashboard must render package version dynamically: missing {marker}')
     for path in ['docs/releases/PACKAGE-INFO.txt', 'docs/publishing/GITHUB-READY.md', 'docs/history/checkpoints/CHECKPOINT.md']:

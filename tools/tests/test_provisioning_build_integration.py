@@ -43,7 +43,7 @@ def main():
         if token not in gradle:
             raise AssertionError(f'apps/dpc/app/build.gradle.kts missing {token}')
 
-    workflow = must('.github/workflows/build-aio-enrollment.yml', 'generate provisioning QR')
+    workflow = must('.github/workflows/build-aio-enrollment.yml', 'Build signed enterpriseRelease')
     if 'releases/latest/download/DPC-AIO-enterprise-debug.apk' in workflow:
         raise AssertionError('manual provisioning must not depend on a pre-existing latest release asset')
     if 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' not in workflow:

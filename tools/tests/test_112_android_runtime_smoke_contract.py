@@ -35,7 +35,7 @@ for marker in [
 for marker in [
     'Enable KVM group perms', 'ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d',
     'api-level: 35', 'tools/runtime/android_device_owner_smoke.py',
-    'android-runtime-smoke.json', 'Upload Android runtime smoke evidence'
+    'android-runtime-smoke.json', 'Upload full build + enrollment artifacts'
 ]:
     if marker not in workflow:
         errors.append(f'workflow runtime smoke missing {marker}')
