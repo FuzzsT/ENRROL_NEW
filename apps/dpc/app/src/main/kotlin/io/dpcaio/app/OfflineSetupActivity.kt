@@ -125,14 +125,24 @@ class OfflineSetupActivity : Activity() {
     }
 
     private fun importOfflineBundle(uri: Uri) {
+        if (!importInProgress.compareAndSet(false, true)) {
+            renderState("Offline bundle import already in progress")
+            return
+        }
         val sourceUri = uri
         val generation = ++importGeneration
+        importedBundle = null
+        bundleInspection = null
         renderState("Importing offline bundle...")
-        Thread {
-            val result = runCatching {
-                val file = bundleStore.copyToPrivateStorage(sourceUri)
-                val inspected = bundleReader.inspect(file, BuildConfig.OFFLINE_SIGNING_PUBLIC_KEY)
-                OfflineBundleImportResult(file, inspected, sha256(file))
+        val worker = Thread {
+            val result = try {
+                runCatching {
+                    val file = bundleStore.copyToPrivateStorage(sourceUri)
+                    val inspected = bundleReader.inspect(file, BuildConfig.OFFLINE_SIGNING_PUBLIC_KEY)
+                    OfflineBundleImportResult(file, inspected, sha256(file))
+                }
+            } finally {
+                importInProgress.set(false)
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -154,7 +164,13 @@ class OfflineSetupActivity : Activity() {
                     renderState("OFFLINE_BUNDLE_INVALID\n${error.javaClass.simpleName}: ${error.message}")
                 }
             }
-        }.start()
+        }
+        runCatching { worker.start() }.onFailure { error ->
+            importInProgress.set(false)
+            if (!isFinishing && !isDestroyed) {
+                renderState("OFFLINE_BUNDLE_INVALID\n${error.javaClass.simpleName}: ${error.message}")
+            }
+        }
     }
 
     private fun preview() {
@@ -305,5 +321,6 @@ class OfflineSetupActivity : Activity() {
 
     companion object {
         private const val REQ_IMPORT = 4100
+        private val importInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
     }
 }
