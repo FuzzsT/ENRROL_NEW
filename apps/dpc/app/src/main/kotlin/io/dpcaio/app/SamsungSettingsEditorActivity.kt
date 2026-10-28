@@ -20,6 +20,12 @@ import io.dpcaio.samsung.settings.android.AndroidThreadSettingDelay
 import io.dpcaio.shizuku.ShizukuUserServiceClient
 
 class SamsungSettingsEditorActivity : Activity() {
+    companion object {
+        private val operationLock = Any()
+        @Volatile
+        private var operationRunning = false
+    }
+
     private lateinit var namespace: Spinner
     private lateinit var key: EditText
     private lateinit var value: EditText
@@ -100,43 +106,61 @@ class SamsungSettingsEditorActivity : Activity() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
         val v = value.text.toString()
         val ns = selectedNamespace()
+        val acquired = synchronized(operationLock) {
+            if (operationRunning) {
+                false
+            } else {
+                operationRunning = true
+                true
+            }
+        }
+        if (!acquired) {
+            status.text = "Write already in progress"
+            return
+        }
         status.text = "Writing..."
         Thread {
-            val routes = listOf(SettingWriteRoute.PUBLIC_SETTINGS, SettingWriteRoute.SHIZUKU_SETTINGS, SettingWriteRoute.SYSTEM_PRIVILEGED)
-            val result = SamsungSettingEditCoordinator(gateway(), AndroidThreadSettingDelay).apply(SettingEditRequest(ns, k, v, routes))
-            val uri = when (ns) {
-                SettingNamespace.SYSTEM -> Settings.System.getUriFor(k)
-                SettingNamespace.SECURE -> Settings.Secure.getUriFor(k)
-                SettingNamespace.GLOBAL -> Settings.Global.getUriFor(k)
-                else -> null
-            }
-            val monitor = uri?.let {
-                AndroidSettingStabilityMonitor(contentResolver).observe(it) {
-                    runOnUiThread {
-                        if (isFinishing || isDestroyed) return@runOnUiThread
-                        status.append("\nChanged again after write")
+            try {
+                val routes = listOf(SettingWriteRoute.PUBLIC_SETTINGS, SettingWriteRoute.SHIZUKU_SETTINGS, SettingWriteRoute.SYSTEM_PRIVILEGED)
+                val result = SamsungSettingEditCoordinator(gateway(), AndroidThreadSettingDelay).apply(SettingEditRequest(ns, k, v, routes))
+                val uri = when (ns) {
+                    SettingNamespace.SYSTEM -> Settings.System.getUriFor(k)
+                    SettingNamespace.SECURE -> Settings.Secure.getUriFor(k)
+                    SettingNamespace.GLOBAL -> Settings.Global.getUriFor(k)
+                    else -> null
+                }
+                val monitor = uri?.let {
+                    AndroidSettingStabilityMonitor(contentResolver).observe(it) {
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            status.append("\nChanged again after write")
+                        }
                     }
                 }
-            }
-            synchronized(this) {
-                activeStabilityMonitor?.close()
-                activeStabilityMonitor = monitor
-            }
-            runOnUiThread {
-                if (isFinishing || isDestroyed) {
-                    monitor?.close()
-                    synchronized(this) {
-                        if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
-                    }
-                    return@runOnUiThread
+                synchronized(this) {
+                    activeStabilityMonitor?.close()
+                    activeStabilityMonitor = monitor
                 }
-                status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
-                status.postDelayed({
-                    monitor?.close()
-                    synchronized(this) {
-                        if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) {
+                        monitor?.close()
+                        synchronized(this) {
+                            if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
+                        }
+                        return@runOnUiThread
                     }
-                }, 5000)
+                    status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
+                    status.postDelayed({
+                        monitor?.close()
+                        synchronized(this) {
+                            if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
+                        }
+                    }, 5000)
+                }
+            } finally {
+                synchronized(operationLock) {
+                    operationRunning = false
+                }
             }
         }.start()
     }
