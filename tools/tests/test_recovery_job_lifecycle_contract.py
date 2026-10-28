@@ -34,4 +34,18 @@ assert 'runCatching' in enrollment and 'EnrollmentCoordinator(this).resumeOrCrea
 assert 'jobFinished(params, true)' in enrollment, \
     'Enrollment recovery exceptions must finish the active job and request reschedule'
 
+# Offline policy application persists intermediate stages as it progresses. A process death at
+# any of these points must remain recoverable instead of permanently blocking both Apply and Import.
+offline = services['OfflineRecoveryJobService.kt']
+for stage in [
+    'OfflineStage.PACKAGES_INSTALLED',
+    'OfflineStage.PERMISSIONS_APPLIED',
+    'OfflineStage.COMPONENTS_APPLIED',
+    'OfflineStage.POLICIES_APPLIED',
+    'OfflineStage.READBACK_VERIFIED',
+]:
+    assert stage in offline, f'Offline recovery must resume persisted intermediate stage: {stage}'
+assert 'OfflinePolicyApplier(this).apply(File(path))' in offline, \
+    'Offline recovery must resume policy application from persisted intermediate stages'
+
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
