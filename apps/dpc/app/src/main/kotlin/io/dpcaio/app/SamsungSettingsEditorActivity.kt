@@ -33,6 +33,7 @@ class SamsungSettingsEditorActivity : Activity() {
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
     @Volatile
     private var activeStabilityMonitor: AutoCloseable? = null
+    private var stabilityCleanup: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,6 +103,13 @@ class SamsungSettingsEditorActivity : Activity() {
         status.text = gateway().read(selectedNamespace(), k) ?: "<null/unavailable>"
     }
 
+    private fun cancelStabilityCleanup() {
+        if (::status.isInitialized) {
+            stabilityCleanup?.let(status::removeCallbacks)
+        }
+        stabilityCleanup = null
+    }
+
     private fun writeValue() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
         val v = value.text.toString()
@@ -150,12 +158,17 @@ class SamsungSettingsEditorActivity : Activity() {
                         return@runOnUiThread
                     }
                     status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
-                    status.postDelayed({
+                    cancelStabilityCleanup()
+                    lateinit var cleanup: Runnable
+                    cleanup = Runnable {
                         monitor?.close()
                         synchronized(this) {
                             if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
                         }
-                    }, 5000)
+                        if (stabilityCleanup === cleanup) stabilityCleanup = null
+                    }
+                    stabilityCleanup = cleanup
+                    status.postDelayed(cleanup, 5000)
                 }
             } finally {
                 synchronized(operationLock) {
@@ -166,6 +179,7 @@ class SamsungSettingsEditorActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelStabilityCleanup()
         synchronized(this) {
             activeStabilityMonitor?.close()
             activeStabilityMonitor = null
