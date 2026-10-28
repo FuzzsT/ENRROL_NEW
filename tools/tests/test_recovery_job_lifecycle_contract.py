@@ -62,4 +62,23 @@ assert 'PACKAGE_SESSION_RECOVERY_UNAVAILABLE' in offline, \
 assert 'PACKAGE_SESSION_MISSING' in offline, \
     'Missing PackageInstaller session must fail explicitly instead of blocking forever'
 
+# PackageInstaller session inspection/commit can cross binder and storage boundaries. JobService callbacks
+# run on the main thread, so staged-session recovery must enter the same generation-guarded worker model
+# before touching the PackageInstaller session and must finish the job from that worker.
+staged_start = offline.index('if (state.stage == OfflineStage.PACKAGES_STAGED)')
+staged_end = offline.index('val policyRecoveryStage', staged_start)
+staged = offline[staged_start:staged_end]
+assert 'val generation = synchronized(lifecycleLock)' in staged, \
+    'PACKAGES_STAGED recovery must allocate a worker generation before PackageInstaller work'
+assert 'val thread = Thread {' in staged, \
+    'PACKAGES_STAGED recovery must move PackageInstaller inspection/commit off JobService main thread'
+assert staged.index('val thread = Thread {') < staged.index('packageInstaller.isCommitted(commitSessionId)'), \
+    'PackageInstaller session inspection must execute inside the staged-session worker'
+assert 'generation != workGeneration.get()' in staged, \
+    'PACKAGES_STAGED recovery worker must reject stale completion'
+assert 'jobFinished(params, false)' in staged, \
+    'PACKAGES_STAGED recovery worker must finish the active JobScheduler job'
+assert 'return true' in staged, \
+    'PACKAGES_STAGED asynchronous recovery must report ongoing work to JobScheduler'
+
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
