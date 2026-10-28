@@ -82,7 +82,7 @@ for token in [
     assert token in stage_body, f'Package staging failure ownership predicate missing: {token}'
 assert 'workerStore.load()?.let { state ->' not in stage_body, \
     'Package staging failure must not use a non-atomic load/save transition that can overwrite receiver success'
-assert 'runCatching {\n                        workerStore.updateIf(' in stage_body, \
+assert 'runCatching {\n                            workerStore.updateIf(' in stage_body or 'runCatching {\n                        workerStore.updateIf(' in stage_body, \
     'Package staging failure bookkeeping must not let a persistence exception escape the worker'
 assert 'workerStore.hasPendingPersistence()' in stage_body, \
     'Package staging failure must detect a pending durable checkpoint after commit failure'
@@ -118,6 +118,21 @@ abandon_guard = stage_body.index('if (orphanedPlan != null && !stageCheckpointPe
 failure_update = stage_body.index('workerStore.updateIf(', abandon_guard)
 assert plan_capture < staged_save < persisted_mark < abandon_guard < failure_update, \
     'Staged-session cleanup ordering must capture plan, persist checkpoint, then abandon before failure bookkeeping'
+
+# Once PACKAGES_STAGED is durable, a synchronous commit exception must not destroy
+# recovery ownership by rewriting the checkpoint to terminal FAILED. Recovery must
+# inspect/recommit the durable PackageInstaller session instead.
+failure_handler_start = stage_body.index('}.onFailure { error ->')
+failure_handler_end = stage_body.index('\n            } finally {', failure_handler_start)
+failure_handler = stage_body[failure_handler_start:failure_handler_end]
+assert 'if (stageCheckpointPersisted)' in failure_handler, \
+    'Durable PACKAGES_STAGED commit failures must branch into recovery ownership'
+assert 'OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE' in failure_handler, \
+    'Durable PACKAGES_STAGED commit failures must schedule OfflineRecoveryJobService'
+durable_branch = failure_handler.index('if (stageCheckpointPersisted)')
+local_failure_update = failure_handler.index('workerStore.updateIf(')
+assert durable_branch < local_failure_update, \
+    'Durable staged recovery must be decided before local FAILED bookkeeping'
 
 assert 'fun abandon(plan: OfflineInstallSession)' in installer_text, \
     'AndroidOfflinePackageInstaller must expose bounded cleanup for a staged install plan'
