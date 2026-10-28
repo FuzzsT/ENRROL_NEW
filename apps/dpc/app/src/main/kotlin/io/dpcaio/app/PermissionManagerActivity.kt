@@ -452,10 +452,14 @@ class PermissionManagerActivity : Activity() {
     private fun scanSystemConfigs() {
         shizuku.bind()
         output.postDelayed({
-            postUiIfAlive {
-                val permissions = shizuku.listPermissionConfigFiles() ?: "permission config unavailable"
-                val sysconfig = shizuku.listSysconfigFiles() ?: "sysconfig unavailable"
-                output.text = "PERMISSIONS XML\n$permissions\n\nSYSCONFIG XML\n$sysconfig"
+            if (!isFinishing && !isDestroyed) {
+                Thread {
+                    val permissions = shizuku.listPermissionConfigFiles() ?: "permission config unavailable"
+                    val sysconfig = shizuku.listSysconfigFiles() ?: "sysconfig unavailable"
+                    postUiIfAlive {
+                        output.text = "PERMISSIONS XML\n$permissions\n\nSYSCONFIG XML\n$sysconfig"
+                    }
+                }.start()
             }
         }, 500)
     }
@@ -463,7 +467,12 @@ class PermissionManagerActivity : Activity() {
     private fun scanShizuku() {
         shizuku.bind()
         output.postDelayed({
-            postUiIfAlive { output.text = shizuku.listPermissions() ?: "Shizuku not ready/authorized" }
+            if (!isFinishing && !isDestroyed) {
+                Thread {
+                    val permissions = shizuku.listPermissions() ?: "Shizuku not ready/authorized"
+                    postUiIfAlive { output.text = permissions }
+                }.start()
+            }
         }, 500)
     }
 }
