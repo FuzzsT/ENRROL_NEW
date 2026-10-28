@@ -25,13 +25,14 @@ for snapshot in [
     'val organizationValue = organization.text.toString().trim()',
     'val modeValue = mode.selectedItem.toString()',
     'val allowOfflineValue = allowOffline.isChecked',
+    'val appContext = applicationContext',
 ]:
-    assert snapshot in s and s.index(snapshot) < thread_index, f'UI value must be snapshotted before worker: {snapshot}'
+    assert snapshot in s and s.index(snapshot) < thread_index, f'UI/context value must be snapshotted before worker: {snapshot}'
 
 for persistence in [
-    'EnrollmentSecretStore(applicationContext).put(',
-    'EnrollmentSessionStore(applicationContext).write(session)',
-    'EnrollmentCoordinator.scheduleResume(applicationContext, "MANUAL_TOKEN")',
+    'EnrollmentSecretStore(appContext).put(',
+    'EnrollmentSessionStore(appContext).write(session)',
+    'EnrollmentCoordinator.scheduleResume(appContext, "MANUAL_TOKEN")',
 ]:
     assert persistence in s and s.index(persistence) > thread_index, f'persistence must run off UI thread: {persistence}'
 
