@@ -48,4 +48,18 @@ for stage in [
 assert 'OfflinePolicyApplier(this).apply(File(path))' in offline, \
     'Offline recovery must resume policy application from persisted intermediate stages'
 
+# A crash after PACKAGES_STAGED but before Session.commit() must not permanently strand the bundle.
+for token in [
+    'OfflineStage.PACKAGES_STAGED',
+    'state.commitSessionId',
+    'AndroidOfflinePackageInstaller(this)',
+    'packageInstaller.isCommitted(commitSessionId)',
+    'packageInstaller.commitSession(commitSessionId, callback.intentSender)',
+]:
+    assert token in offline, f'Offline staged-session recovery missing required behavior: {token}'
+assert 'PACKAGE_SESSION_RECOVERY_UNAVAILABLE' in offline, \
+    'Legacy/missing staged session state must fail explicitly instead of blocking forever'
+assert 'PACKAGE_SESSION_MISSING' in offline, \
+    'Missing PackageInstaller session must fail explicitly instead of blocking forever'
+
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
