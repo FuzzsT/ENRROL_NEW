@@ -37,6 +37,7 @@ class PermissionManagerActivity : Activity() {
     private val batchTransaction = PermissionBatchTransaction()
     private var pendingBatchChanges: List<PermissionBatchChange> = emptyList()
     private var pendingBatchPlan: PermissionBatchPlan2? = null
+    private var batchPreviewGeneration: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -237,6 +238,7 @@ class PermissionManagerActivity : Activity() {
         val pkg = targetPackage.text.toString().trim()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
         val userId = targetUserId()
+        val generation = ++batchPreviewGeneration
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
             val shizukuAvailable = shizuku.identity() != null
@@ -264,8 +266,6 @@ class PermissionManagerActivity : Activity() {
                 PermissionBatchChange(pkg, permission, userId, current.dpcState, state, decision)
             }
             val plan = batchTransaction.plan(changes)
-            pendingBatchChanges = changes
-            pendingBatchPlan = plan
             val text = buildString {
                 appendLine("Batch Preview")
                 appendLine("Package=$pkg Target user ID=$userId requested=$state")
@@ -277,7 +277,12 @@ class PermissionManagerActivity : Activity() {
                     appendLine("× ${item.permission}: ${item.previousState} -> ${item.requestedState} SKIPPED ${item.detail}")
                 }
             }
-            postUiIfAlive { output.text = text }
+            postUiIfAlive {
+                if (generation != batchPreviewGeneration) return@postUiIfAlive
+                pendingBatchChanges = changes
+                pendingBatchPlan = plan
+                output.text = text
+            }
         }.start()
     }
 
