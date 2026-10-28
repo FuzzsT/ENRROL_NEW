@@ -72,9 +72,11 @@ class NetworkControlActivity : Activity() {
 
     private fun doh() {
         output.text = "Querying DNS over HTTPS..."
+        val endpointValue = endpoint.text.toString().trim()
+        val queryHexValue = queryHex.text.toString()
         Thread {
             val result = runCatching {
-                DohDiagnosticClient().query(endpoint.text.toString().trim(), hex(queryHex.text.toString()))
+                DohDiagnosticClient().query(endpointValue, hex(queryHexValue))
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
