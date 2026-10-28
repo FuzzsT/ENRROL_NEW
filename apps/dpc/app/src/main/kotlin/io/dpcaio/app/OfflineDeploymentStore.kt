@@ -14,10 +14,36 @@ data class OfflineDeploymentState(
 )
 
 class OfflineDeploymentStore(context: Context) {
+    companion object {
+        private val stateLock = Any()
+    }
+
     private val prefs = context.createDeviceProtectedStorageContext()
         .getSharedPreferences("dpc_aio_offline_deployment", Context.MODE_PRIVATE)
 
-    fun save(state: OfflineDeploymentState) {
+    fun save(state: OfflineDeploymentState) = synchronized(stateLock) {
+        saveUnlocked(state)
+    }
+
+    fun load(): OfflineDeploymentState? = synchronized(stateLock) {
+        loadUnlocked()
+    }
+
+    fun updateIf(
+        predicate: (OfflineDeploymentState) -> Boolean,
+        transform: (OfflineDeploymentState) -> OfflineDeploymentState,
+    ): Boolean = synchronized(stateLock) {
+        val current = loadUnlocked() ?: return@synchronized false
+        if (!predicate(current)) return@synchronized false
+        saveUnlocked(transform(current))
+        true
+    }
+
+    fun clear() = synchronized(stateLock) {
+        prefs.edit().clear().apply()
+    }
+
+    private fun saveUnlocked(state: OfflineDeploymentState) {
         prefs.edit()
             .putString("bundleId", state.bundleId)
             .putString("stage", state.stage.name)
@@ -29,7 +55,7 @@ class OfflineDeploymentStore(context: Context) {
             .apply()
     }
 
-    fun load(): OfflineDeploymentState? {
+    private fun loadUnlocked(): OfflineDeploymentState? {
         val bundleId = prefs.getString("bundleId", null) ?: return null
         val stage = prefs.getString("stage", null)?.let { runCatching { OfflineStage.valueOf(it) }.getOrNull() } ?: return null
         val session = prefs.getInt("parentSessionId", -1).takeIf { it >= 0 }
@@ -44,6 +70,4 @@ class OfflineDeploymentStore(context: Context) {
             bundlePath = prefs.getString("bundlePath", null),
         )
     }
-
-    fun clear() = prefs.edit().clear().apply()
 }
