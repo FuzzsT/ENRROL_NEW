@@ -31,7 +31,7 @@ class PermissionManagerActivity : Activity() {
     companion object {
         @Volatile
         private var lastAppliedBatchChanges: List<PermissionBatchChange> = emptyList()
-        private val batchMutationInProgress = AtomicBoolean(false)
+        private val permissionMutationInProgress = AtomicBoolean(false)
     }
 
     private lateinit var output: TextView
@@ -202,33 +202,41 @@ class PermissionManagerActivity : Activity() {
         val permission = query.text.toString().trim()
         if (pkg.isBlank() || permission.isBlank()) { output.text = "Target package and exact permission required"; return }
         val targetUserId = targetUserId()
+        if (!permissionMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Permission mutation already in progress"
+            return
+        }
         Thread {
-            val entry = catalogEntry(permission)
-            val shizukuAvailable = shizuku.identity() != null
-            val decision = manager.resolveDecision(
-                permission,
-                targetUserId,
-                state,
-                entry?.protection ?: PermissionProtection.UNKNOWN,
-                sensorGrantOptOut = false,
-                shizukuAvailable = shizukuAvailable,
-                systemPrivilegedAvailable = false,
-                userActionAvailable = entry?.protection == PermissionProtection.SPECIAL_ACCESS
-            )
-            val text = when (decision.route) {
-                PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC -> manager.setDpcPermissionState(pkg, permission, targetUserId, state).toString()
-                PermissionControlRoute.SHIZUKU -> when (state) {
-                    ManagedPermissionState.GRANTED -> "SHIZUKU_GRANT exit=${shizuku.grantRuntimePermission(pkg, permission, targetUserId)}"
-                    ManagedPermissionState.DENIED -> "SHIZUKU_REVOKE exit=${shizuku.revokeRuntimePermission(pkg, permission, targetUserId)}"
-                    ManagedPermissionState.DEFAULT -> "Default is a DPC policy state; Shizuku does not fake DPC DEFAULT"
+            try {
+                val entry = catalogEntry(permission)
+                val shizukuAvailable = shizuku.identity() != null
+                val decision = manager.resolveDecision(
+                    permission,
+                    targetUserId,
+                    state,
+                    entry?.protection ?: PermissionProtection.UNKNOWN,
+                    sensorGrantOptOut = false,
+                    shizukuAvailable = shizukuAvailable,
+                    systemPrivilegedAvailable = false,
+                    userActionAvailable = entry?.protection == PermissionProtection.SPECIAL_ACCESS
+                )
+                val text = when (decision.route) {
+                    PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC -> manager.setDpcPermissionState(pkg, permission, targetUserId, state).toString()
+                    PermissionControlRoute.SHIZUKU -> when (state) {
+                        ManagedPermissionState.GRANTED -> "SHIZUKU_GRANT exit=${shizuku.grantRuntimePermission(pkg, permission, targetUserId)}"
+                        ManagedPermissionState.DENIED -> "SHIZUKU_REVOKE exit=${shizuku.revokeRuntimePermission(pkg, permission, targetUserId)}"
+                        ManagedPermissionState.DEFAULT -> "Default is a DPC policy state; Shizuku does not fake DPC DEFAULT"
+                    }
+                    PermissionControlRoute.USER_ACTION -> "USER_ACTION_REQUIRED"
+                    PermissionControlRoute.SYSTEM_PRIVILEGED -> "SYSTEM_PRIVILEGED route available only in matching build/runtime"
+                    PermissionControlRoute.UNAVAILABLE -> "${decision.capability}: ${decision.reason}"
                 }
-                PermissionControlRoute.USER_ACTION -> "USER_ACTION_REQUIRED"
-                PermissionControlRoute.SYSTEM_PRIVILEGED -> "SYSTEM_PRIVILEGED route available only in matching build/runtime"
-                PermissionControlRoute.UNAVAILABLE -> "${decision.capability}: ${decision.reason}"
-            }
-            val readback = manager.inspectPermission(pkg, permission, targetUserId, entry?.group, entry?.protection ?: PermissionProtection.UNKNOWN, shizukuAvailable = shizukuAvailable)
-            postUiIfAlive {
-                output.text = "$text\n\nReadback\nActual=${readback.actualGranted}\nDPC=${readback.dpcState}\nAppOp=${readback.appOpState}\nRoute=${readback.route}"
+                val readback = manager.inspectPermission(pkg, permission, targetUserId, entry?.group, entry?.protection ?: PermissionProtection.UNKNOWN, shizukuAvailable = shizukuAvailable)
+                postUiIfAlive {
+                    output.text = "$text\n\nReadback\nActual=${readback.actualGranted}\nDPC=${readback.dpcState}\nAppOp=${readback.appOpState}\nRoute=${readback.route}"
+                }
+            } finally {
+                permissionMutationInProgress.set(false)
             }
         }.start()
     }
@@ -298,8 +306,8 @@ class PermissionManagerActivity : Activity() {
         val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName
             ?: run { output.text = "Preview package unavailable; run Batch Preview again"; return }
         val previewChanges = pendingBatchChanges
-        if (!batchMutationInProgress.compareAndSet(false, true)) {
-            output.text = "Batch permission operation already in progress"
+        if (!permissionMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Permission mutation already in progress"
             return
         }
         Thread {
@@ -357,7 +365,7 @@ class PermissionManagerActivity : Activity() {
                 plan.skipped.forEach { results += "${it.permission}: SKIPPED ${it.detail}" }
                 postUiIfAlive { output.text = "Apply supported\n${results.joinToString("\n")}" }
             } finally {
-                batchMutationInProgress.set(false)
+                permissionMutationInProgress.set(false)
             }
         }.start()
     }
@@ -365,8 +373,8 @@ class PermissionManagerActivity : Activity() {
     private fun restorePreviousDpcStates() {
         val restore = batchTransaction.restorePlan(lastAppliedBatchChanges)
         if (restore.isEmpty()) { output.text = "No applied DPC-managed states to restore"; return }
-        if (!batchMutationInProgress.compareAndSet(false, true)) {
-            output.text = "Batch permission operation already in progress"
+        if (!permissionMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Permission mutation already in progress"
             return
         }
         Thread {
@@ -382,7 +390,7 @@ class PermissionManagerActivity : Activity() {
                 }
                 postUiIfAlive { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
             } finally {
-                batchMutationInProgress.set(false)
+                permissionMutationInProgress.set(false)
             }
         }.start()
     }
@@ -416,20 +424,28 @@ class PermissionManagerActivity : Activity() {
         val pkg = targetPackage.text.toString().trim()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
         val userId = targetUserId()
+        if (!permissionMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Permission mutation already in progress"
+            return
+        }
         output.text = "Planning/applying verified routes..."
         Thread {
-            val snapshot = AndroidPermissionCatalog(this).scan()
-            val byName = snapshot.permissions.associateBy { it.name }
-            val requested = requestedPermissions(pkg)
-            val entries = requested.mapNotNull(byName::get)
-            val coordinator = AndroidPermissionGrantCoordinator(this, admin, shizuku = shizuku)
-            val results = coordinator.grantAllAuto(pkg, userId, entries, systemPrivilegedAvailable = false)
-            val text = buildString {
-                appendLine("AUTO permission result for $pkg")
-                appendLine("requested=${requested.size} catalog-matched=${entries.size}")
-                results.forEach { appendLine("${it.permission}: ${it.route} verified=${it.verified} ${it.detail}") }
+            try {
+                val snapshot = AndroidPermissionCatalog(this).scan()
+                val byName = snapshot.permissions.associateBy { it.name }
+                val requested = requestedPermissions(pkg)
+                val entries = requested.mapNotNull(byName::get)
+                val coordinator = AndroidPermissionGrantCoordinator(this, admin, shizuku = shizuku)
+                val results = coordinator.grantAllAuto(pkg, userId, entries, systemPrivilegedAvailable = false)
+                val text = buildString {
+                    appendLine("AUTO permission result for $pkg")
+                    appendLine("requested=${requested.size} catalog-matched=${entries.size}")
+                    results.forEach { appendLine("${it.permission}: ${it.route} verified=${it.verified} ${it.detail}") }
+                }
+                postUiIfAlive { output.text = text }
+            } finally {
+                permissionMutationInProgress.set(false)
             }
-            postUiIfAlive { output.text = text }
         }.start()
     }
 
