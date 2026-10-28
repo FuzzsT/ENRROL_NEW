@@ -23,6 +23,7 @@ class OfflineSetupActivity : Activity() {
     private var mode: OfflineMode = OfflineMode.FULL_OFFLINE
     private var importedBundle: File? = null
     private var bundleInspection: io.dpcaio.offline.android.AndroidOfflineBundleInspection? = null
+    private var importGeneration = 0L
     private val bundleStore by lazy { AndroidOfflineBundleStore(this) }
     private val bundleReader by lazy { AndroidOfflineBundleReader(this) }
     private val packageInstaller by lazy { AndroidOfflinePackageInstaller(this) }
@@ -119,24 +120,41 @@ class OfflineSetupActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQ_IMPORT || resultCode != RESULT_OK) return
-        val uri: Uri = data?.data ?: return
-        runCatching { bundleStore.copyToPrivateStorage(uri) }
-            .onSuccess { file ->
-                importedBundle = file
-                bundleInspection = bundleReader.inspect(file, BuildConfig.OFFLINE_SIGNING_PUBLIC_KEY)
-                val inspected = bundleInspection!!
-                renderState(buildString {
-                    appendLine("Bundle imported")
-                    appendLine("path=${file.name}")
-                    appendLine("sha256=${sha256(file)}")
-                    appendLine("signatureVerified=${inspected.signatureVerified}")
-                    appendLine("packageFilesVerified=${inspected.packagePlan.verifiedFiles.size}")
-                    appendLine("packageIssues=${inspected.packagePlan.issues.size}")
-                    appendLine("signingIdentityIssues=${inspected.signingIdentityIssues.size}")
-                    appendLine("detail=${inspected.detail}")
-                })
+        val sourceUri: Uri = data?.data ?: return
+        importOfflineBundle(sourceUri)
+    }
+
+    private fun importOfflineBundle(uri: Uri) {
+        val sourceUri = uri
+        val generation = ++importGeneration
+        renderState("Importing offline bundle...")
+        Thread {
+            val result = runCatching {
+                val file = bundleStore.copyToPrivateStorage(sourceUri)
+                val inspected = bundleReader.inspect(file, BuildConfig.OFFLINE_SIGNING_PUBLIC_KEY)
+                OfflineBundleImportResult(file, inspected, sha256(file))
             }
-            .onFailure { renderState("OFFLINE_BUNDLE_INVALID\n${it.javaClass.simpleName}: ${it.message}") }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != importGeneration) return@runOnUiThread
+                result.onSuccess { imported ->
+                    importedBundle = imported.file
+                    bundleInspection = imported.inspection
+                    renderState(buildString {
+                        appendLine("Bundle imported")
+                        appendLine("path=${imported.file.name}")
+                        appendLine("sha256=${imported.sha256}")
+                        appendLine("signatureVerified=${imported.inspection.signatureVerified}")
+                        appendLine("packageFilesVerified=${imported.inspection.packagePlan.verifiedFiles.size}")
+                        appendLine("packageIssues=${imported.inspection.packagePlan.issues.size}")
+                        appendLine("signingIdentityIssues=${imported.inspection.signingIdentityIssues.size}")
+                        appendLine("detail=${imported.inspection.detail}")
+                    })
+                }.onFailure { error ->
+                    renderState("OFFLINE_BUNDLE_INVALID\n${error.javaClass.simpleName}: ${error.message}")
+                }
+            }
+        }.start()
     }
 
     private fun preview() {
@@ -266,9 +284,24 @@ class OfflineSetupActivity : Activity() {
         output.text = text
     }
 
-    private fun sha256(file: File): String = MessageDigest.getInstance("SHA-256")
-        .digest(file.readBytes())
-        .joinToString("") { "%02x".format(it) }
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (read > 0) digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private data class OfflineBundleImportResult(
+        val file: File,
+        val inspection: io.dpcaio.offline.android.AndroidOfflineBundleInspection,
+        val sha256: String,
+    )
 
     companion object {
         private const val REQ_IMPORT = 4100
