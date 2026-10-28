@@ -34,4 +34,18 @@ assert '"Load more' in launcher, "launcher must expose an explicit way to materi
 assert "visibleAppLimit + RENDER_PAGE_SIZE" in launcher, "Load more must advance by a bounded page size"
 assert "renderStats(shown)" in launcher, "overview stats must continue to reflect all matching apps, not only the materialized page"
 
+# Loading another page must append only the new slice instead of rebuilding the full growing prefix.
+assert "private fun appendNextPage" in launcher, "launcher must isolate append-only page growth"
+append_start = launcher.index("private fun appendNextPage")
+append_end = launcher.index("private fun renderStats", append_start)
+append_body = launcher[append_start:append_end]
+assert "shown.subList(start, nextLimit)" in append_body, "Load more must materialize only the newly requested slice"
+assert "renderApps(resetLimit = false)" not in append_body, "Load more must not rebuild the whole visible prefix"
+
+# Favorite changes do not change USER/SYSTEM membership, so preserve the amount already materialized.
+toggle_start = launcher.index("private fun toggleFavorite")
+toggle_end = launcher.index("private fun recordRecent", toggle_start)
+toggle_body = launcher[toggle_start:toggle_end]
+assert "renderApps(resetLimit = false)" in toggle_body, "favorite updates must preserve the current render limit"
+
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")
