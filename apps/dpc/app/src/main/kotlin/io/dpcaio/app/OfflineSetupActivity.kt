@@ -15,6 +15,7 @@ import io.dpcaio.offline.OfflineStage
 import io.dpcaio.offline.android.AndroidOfflineBundleReader
 import io.dpcaio.offline.android.AndroidOfflineBundleStore
 import io.dpcaio.offline.android.AndroidOfflinePackageInstaller
+import io.dpcaio.offline.android.OfflineInstallSession
 import java.io.File
 import java.security.MessageDigest
 
@@ -311,6 +312,8 @@ class OfflineSetupActivity : Activity() {
             val workerStore = OfflineDeploymentStore(appContext)
             val workerCoordinator = OfflineDeploymentCoordinator(workerStore)
             var stagedCommitSessionId: Int? = null
+            var stagedPlan: OfflineInstallSession? = null
+            var stageCheckpointPersisted = false
             val result = try {
                 runCatching {
                     workerCoordinator.startFullOffline(manifest.bundleId)
@@ -323,6 +326,7 @@ class OfflineSetupActivity : Activity() {
                         )
                     )
                     val plan = packageInstaller.stageBundle(file, manifest)
+                    stagedPlan = plan
                     val commitSessionId = plan.parentSessionId ?: plan.childSessionIds.single()
                     workerStore.save(
                         workerStore.load()!!.copy(
@@ -332,6 +336,7 @@ class OfflineSetupActivity : Activity() {
                             bundlePath = file.absolutePath,
                         )
                     )
+                    stageCheckpointPersisted = true
                     stagedCommitSessionId = commitSessionId
                     val callback = PendingIntent.getBroadcast(
                         appContext,
@@ -343,6 +348,10 @@ class OfflineSetupActivity : Activity() {
                     packageInstaller.commit(plan, callback.intentSender)
                     plan
                 }.onFailure { error ->
+                    val orphanedPlan = stagedPlan
+                    if (orphanedPlan != null && !stageCheckpointPersisted) {
+                        packageInstaller.abandon(orphanedPlan)
+                    }
                     runCatching {
                         workerStore.updateIf(
                             predicate = { current ->
