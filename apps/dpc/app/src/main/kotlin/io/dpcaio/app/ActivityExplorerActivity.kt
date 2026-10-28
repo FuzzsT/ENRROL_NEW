@@ -63,6 +63,7 @@ class ActivityExplorerActivity : Activity() {
     private var currentQuickFilter = ActivityQuickFilter.ALL
     private var pendingBatch: List<Pair<DiscoveredActivity, ComponentControlDecision>> = emptyList()
     private var pendingBatchState: ComponentOverrideState? = null
+    private var pendingBatchTargetUserId: Int? = null
     private var scanGeneration = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -425,15 +426,19 @@ class ActivityExplorerActivity : Activity() {
         return relative.ifBlank { className }
     }
 
-    private fun decision(activity: DiscoveredActivity, desired: ComponentOverrideState): ComponentControlDecision {
+    private fun decision(
+        activity: DiscoveredActivity,
+        desired: ComponentOverrideState,
+        targetUserId: Int = targetUserId(),
+    ): ComponentControlDecision {
         val shizukuState = AndroidShizukuRuntime().probe()
         val currentUser = AndroidUserId.fromUid(Process.myUid())
         return componentRouter.resolve(
             ComponentControlRequest(
                 packageName = activity.packageName,
                 className = activity.className,
-                targetUserId = targetUserId(),
-                sameUid = activity.sameUid && targetUserId() == currentUser,
+                targetUserId = targetUserId,
+                sameUid = activity.sameUid && targetUserId == currentUser,
                 shizukuAvailable = shizukuState.binderAlive && shizukuState.permissionGranted,
                 systemPrivilegedAvailable = false,
                 criticalSystemComponent = isCriticalSystemComponent(activity),
@@ -455,7 +460,7 @@ class ActivityExplorerActivity : Activity() {
 
     private fun changeState(activity: DiscoveredActivity, desired: ComponentOverrideState, launchAfter: Boolean) {
         val operationUserId = targetUserId()
-        val decision = decision(activity, desired)
+        val decision = decision(activity, desired, operationUserId)
         if (!decision.allowed) {
             status.text = "${decision.status}\n${decision.detail}\nRisk=${decision.risk}\nPROTECTED_DPC_COMPONENT=${decision.status == ComponentControlStatus.PROTECTED_DPC_COMPONENT}"
             return
@@ -507,13 +512,17 @@ class ActivityExplorerActivity : Activity() {
 
     private fun batchPreviewFiltered(desired: ComponentOverrideState) {
         val selected = applyActivityFilter(currentActivities)
+        val previewUserId = targetUserId()
         pendingBatchState = desired
-        pendingBatch = selected.map { it to decision(it, desired) }
+        pendingBatchTargetUserId = previewUserId
+        pendingBatch = selected.map { decisionTarget ->
+            decisionTarget to decision(decisionTarget, desired, previewUserId)
+        }
         val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, pendingBatch.map { it.second })
         val atomicLabel = if (plan.atomic) "ATOMIC" else "BATCH_NOT_ATOMIC"
         status.text = buildString {
             appendLine("Batch Preview")
-            appendLine("selected=${selected.size} desired=$desired atomic=${plan.atomic} $atomicLabel status=${plan.status}")
+            appendLine("selected=${selected.size} user=$previewUserId desired=$desired atomic=${plan.atomic} $atomicLabel status=${plan.status}")
             pendingBatch.forEach { (activity, decision) ->
                 appendLine("${activity.className}: ${activity.overrideState} -> $desired route=${decision.route} allowed=${decision.allowed} risk=${decision.risk} ${decision.status}")
             }
@@ -526,7 +535,10 @@ class ActivityExplorerActivity : Activity() {
             return
         }
         val batch = pendingBatch.toList()
-        val operationUserId = targetUserId()
+        val operationUserId = pendingBatchTargetUserId ?: run {
+            status.text = "Run Batch Preview first"
+            return
+        }
         val allowed = batch.filter { it.second.allowed }
         if (allowed.isEmpty()) {
             status.text = "Apply batch\nNo supported component changes"
