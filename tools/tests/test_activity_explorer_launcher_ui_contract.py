@@ -66,7 +66,7 @@ assert 'val previewUserId = targetUserId()' in preview, \
     'Batch Preview must snapshot target user before computing decisions'
 assert 'pendingBatchTargetUserId = previewUserId' in preview, \
     'Batch Preview must persist the target user associated with its decisions'
-assert 'decision(it, desired, previewUserId)' in preview, \
+assert 'decision(decisionTarget, desired, previewUserId)' in preview, \
     'Batch Preview decisions must be computed for the captured preview user'
 
 apply_start = text.index('private fun applyBatch()')
