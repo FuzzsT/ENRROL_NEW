@@ -181,6 +181,7 @@ class GoogleAccountManagerActivity : Activity() {
         val name = accountNames[index]
         reorderGateway.requestRemoveGoogleAccount(this, name) { removed, error ->
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 if (removed) removeSequentially(accountNames, targetName, index + 1, restoreManagementDisabled)
                 else {
                     selectionStore.savePendingReAdd(targetName, accountNames.drop(index), restoreManagementDisabled)
