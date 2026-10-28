@@ -68,12 +68,22 @@ companion_end = text.index('private lateinit var output', companion_start)
 companion = text[companion_start:companion_end]
 assert '@Volatile' in companion and 'lastAppliedBatchChanges' in companion, \
     'Applied restore state must survive Activity recreation and be visible across worker/main threads'
+assert 'AtomicBoolean' in text and 'batchMutationInProgress' in companion, \
+    'Batch apply/restore must share a process-wide mutation gate across Activity recreation'
+assert 'batchMutationInProgress.compareAndSet(false, true)' in apply_batch, \
+    'Batch apply must reject overlapping batch mutation workers before starting work'
+assert 'batchMutationInProgress.set(false)' in apply_batch, \
+    'Batch apply must release the mutation gate after worker completion'
 
 restore = function_body('restorePreviousDpcStates', 'scanCatalog')
 assert 'restorePlan(lastAppliedBatchChanges)' in restore, \
     'Restore must target the last verified applied DPC batch, not the latest preview'
 assert 'restorePlan(pendingBatchChanges)' not in restore, \
     'Restore must not be redirected by a newer preview'
+assert 'batchMutationInProgress.compareAndSet(false, true)' in restore, \
+    'Restore must reject overlap with apply or another restore operation'
+assert 'batchMutationInProgress.set(false)' in restore, \
+    'Restore must release the mutation gate after worker completion'
 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
