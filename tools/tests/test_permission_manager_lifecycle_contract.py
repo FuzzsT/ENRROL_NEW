@@ -91,6 +91,14 @@ assert 'permissionMutationInProgress.compareAndSet(false, true)' in restore, \
     'Restore must reject overlap with any other permission-state mutation'
 assert 'permissionMutationInProgress.set(false)' in restore, \
     'Restore must release the shared permission mutation gate after worker completion'
+assert 'val remainingRestoreChanges = mutableListOf<PermissionBatchChange>()' in restore, \
+    'Restore must track only changes that still need retry after execution'
+assert 'if (result.observedDpcState != change.requestedState)' in restore, \
+    'Restore must keep a candidate only when readback did not reach the previous state'
+assert 'remainingRestoreChanges += change' in restore, \
+    'Failed restore candidates must remain retryable'
+assert 'lastAppliedBatchChanges = remainingRestoreChanges.toList()' in restore, \
+    'Successful restore candidates must be consumed so stale rollback cannot be applied again later'
 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
