@@ -138,6 +138,20 @@ assert 'isFinishing || isDestroyed' in google, \
     'Google account removal callback must ignore Activity teardown'
 assert 'return@runOnUiThread' in google, \
     'Google account lifecycle guard must exit before recursive UI workflow'
+execute_start = google.index('private fun executeRemovalPhase')
+execute_end = google.index('private fun removeSequentially', execute_start)
+execute_body = google[execute_start:execute_end]
+persist_recovery = 'selectionStore.savePendingReAdd(targetName, accountNames, restoreManagementDisabled)'
+assert persist_recovery in execute_body and execute_body.index(persist_recovery) < execute_body.index('removeSequentially('), \
+    'Google account recovery state must be persisted before automatic removal starts'
+assert 'accountNames.drop(index)' not in google, \
+    'Google account removal failure must not discard accounts removed earlier in the sequence'
+assert 'val isLastPending = pending.size == 1' in google, \
+    'Google account recovery must detect the last re-add before store cleanup drops restore state'
+assert 'val restorePolicy = selectionStore.shouldRestoreManagementDisabled()' in google, \
+    'Google account recovery must capture the management-policy restore flag before the last re-add'
+assert 'if (isLastPending)' in google and 'reorderGateway.setGoogleAccountManagementDisabled(true)' in google, \
+    'Google account recovery must restore the previous management restriction after the last re-add'
 
 knoxzt = (APP / 'KnoxZtManagerActivity.kt').read_text(encoding='utf-8')
 for token in [
