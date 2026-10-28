@@ -360,6 +360,12 @@ class OfflineSetupActivity : Activity() {
                             },
                         )
                     }
+                    if (workerStore.hasPendingPersistence()) {
+                        appContext.sendBroadcast(
+                            Intent(appContext, OfflineRecoveryReceiver::class.java)
+                                .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                        )
+                    }
                 }
             } finally {
                 bundleIoInProgress.set(false)
