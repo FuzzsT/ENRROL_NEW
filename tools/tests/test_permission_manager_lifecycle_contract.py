@@ -28,6 +28,12 @@ assert scan.index('val q = query.text.toString().trim().lowercase()') < scan.ind
     'Permission scan must snapshot query text on the UI thread before starting worker work'
 assert scan.index('val targetUserId = targetUserId()') < scan.index('Thread {'), \
     'Permission scan must snapshot target user on the UI thread before starting worker work'
+assert 'permissionScanGeneration' in text, \
+    'Permission Manager must track permission-scan generations to reject stale results'
+assert 'val generation = ++permissionScanGeneration' in scan, \
+    'Each permission scan must capture a new generation before starting worker work'
+assert 'if (generation != permissionScanGeneration) return@postUiIfAlive' in scan, \
+    'Stale permission scan completion must exit before replacing the visible result'
 
 mutate = function_body('mutateSelected', 'setGlobalPolicy')
 assert mutate.index('val targetUserId = targetUserId()') < mutate.index('Thread {'), \
@@ -103,6 +109,12 @@ assert 'lastAppliedBatchChanges = remainingRestoreChanges.toList()' in restore, 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
     'Catalog scan must snapshot query text on the UI thread before starting worker work'
+assert 'catalogScanGeneration' in text, \
+    'Permission Manager must track catalog-scan generations to reject stale results'
+assert 'val generation = ++catalogScanGeneration' in catalog, \
+    'Each catalog scan must capture a new generation before starting worker work'
+assert 'if (generation != catalogScanGeneration) return@postUiIfAlive' in catalog, \
+    'Stale catalog scan completion must exit before replacing the visible result'
 
 auto = function_body('autoRequestedPermissions', 'scanSystemConfigs')
 assert auto.index('val userId = targetUserId()') < auto.index('Thread {'), \
