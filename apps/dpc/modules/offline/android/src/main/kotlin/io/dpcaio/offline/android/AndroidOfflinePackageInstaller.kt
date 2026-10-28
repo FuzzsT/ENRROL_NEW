@@ -81,6 +81,15 @@ class AndroidOfflinePackageInstaller(context: Context) {
         commitSession(id, statusReceiver)
     }
 
+    fun abandon(plan: OfflineInstallSession) {
+        buildList {
+            plan.parentSessionId?.let(::add)
+            addAll(plan.childSessionIds)
+        }.distinct().forEach { id ->
+            runCatching { installer.abandonSession(id) }
+        }
+    }
+
     fun commitSession(sessionId: Int, statusReceiver: IntentSender) {
         installer.openSession(sessionId).use { it.commit(statusReceiver) }
     }
