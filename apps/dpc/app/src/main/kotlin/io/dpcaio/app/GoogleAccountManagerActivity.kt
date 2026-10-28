@@ -162,8 +162,8 @@ class GoogleAccountManagerActivity : Activity() {
             runCatching { reorderGateway.setGoogleAccountManagementDisabled(false) }
         }
 
+        selectionStore.savePendingReAdd(targetName, accountNames, restoreManagementDisabled)
         if (!reorderGateway.canRequestAccountRemoval()) {
-            selectionStore.savePendingReAdd(targetName, accountNames, restoreManagementDisabled)
             refresh("Automatyczne rozpoczęcie usuwania kont nie jest dostępne dla tej tożsamości. Usuń wskazane konta w ustawieniach systemowych, wróć tutaj, a AIO wznowi weryfikację/re-add.")
             startActivity(GoogleAccountIntentFactory.syncSettings())
             return
@@ -184,7 +184,7 @@ class GoogleAccountManagerActivity : Activity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (removed) removeSequentially(accountNames, targetName, index + 1, restoreManagementDisabled)
                 else {
-                    selectionStore.savePendingReAdd(targetName, accountNames.drop(index), restoreManagementDisabled)
+                    selectionStore.savePendingReAdd(targetName, accountNames, restoreManagementDisabled)
                     refresh("Nie udało się usunąć $name: ${error?.message ?: "authenticator odmówił"}. Kontynuuj ręcznie w ustawieniach kont.")
                     startActivity(GoogleAccountIntentFactory.syncSettings())
                 }
@@ -208,8 +208,15 @@ class GoogleAccountManagerActivity : Activity() {
         val visibleNames = repository.listGoogleAccounts().map { it.name }.toSet()
         val alreadyReturned = pending.firstOrNull { it in visibleNames }
         if (alreadyReturned != null) {
+            val restorePolicy = selectionStore.shouldRestoreManagementDisabled()
+            val isLastPending = pending.size == 1
             selectionStore.markReAdded(alreadyReturned)
-            resumePendingReorderIfPossible()
+            if (isLastPending) {
+                if (restorePolicy) runCatching { reorderGateway.setGoogleAccountManagementDisabled(true) }
+                verifyObservedOrder(target)
+            } else {
+                resumePendingReorderIfPossible()
+            }
             return
         }
         val next = pending.first()
