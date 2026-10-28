@@ -19,42 +19,48 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> {
                 val trust = verifyInstalledPackages(context, state)
                 if (!trust.first) {
-                    store.save(
+                    if (!persistOrStop(
+                            store,
+                            state.copy(
+                                stage = OfflineStage.FAILED,
+                                parentSessionId = null,
+                                commitSessionId = null,
+                                lastError = "PACKAGE_TRUST_MISMATCH:${trust.second}",
+                            )
+                        )) return
+                    return
+                }
+                if (!persistOrStop(
+                        store,
+                        state.copy(
+                            stage = OfflineStage.PACKAGES_INSTALLED,
+                            parentSessionId = null,
+                            commitSessionId = null,
+                            lastError = null,
+                        )
+                    )) return
+                context.sendBroadcast(Intent(context, OfflineRecoveryReceiver::class.java).setAction(ACTION_PACKAGE_DONE))
+            }
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                if (!persistOrStop(store, state.copy(lastError = "USER_ACTION_REQUIRED"))) return
+            }
+            else -> {
+                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "PACKAGE_INSTALL_FAILED:$status"
+                if (!persistOrStop(
+                        store,
                         state.copy(
                             stage = OfflineStage.FAILED,
                             parentSessionId = null,
                             commitSessionId = null,
-                            lastError = "PACKAGE_TRUST_MISMATCH:${trust.second}",
+                            lastError = message,
                         )
-                    )
-                    return
-                }
-                store.save(
-                    state.copy(
-                        stage = OfflineStage.PACKAGES_INSTALLED,
-                        parentSessionId = null,
-                        commitSessionId = null,
-                        lastError = null,
-                    )
-                )
-                context.sendBroadcast(Intent(context, OfflineRecoveryReceiver::class.java).setAction(ACTION_PACKAGE_DONE))
-            }
-            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                store.save(state.copy(lastError = "USER_ACTION_REQUIRED"))
-            }
-            else -> {
-                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "PACKAGE_INSTALL_FAILED:$status"
-                store.save(
-                    state.copy(
-                        stage = OfflineStage.FAILED,
-                        parentSessionId = null,
-                        commitSessionId = null,
-                        lastError = message,
-                    )
-                )
+                    )) return
             }
         }
     }
+
+    private fun persistOrStop(store: OfflineDeploymentStore, state: OfflineDeploymentState): Boolean =
+        runCatching { store.save(state) }.isSuccess
 
     private fun verifyInstalledPackages(context: Context, state: OfflineDeploymentState): Pair<Boolean, String> {
         val bundlePath = state.bundlePath ?: return false to "BUNDLE_PATH_MISSING"
