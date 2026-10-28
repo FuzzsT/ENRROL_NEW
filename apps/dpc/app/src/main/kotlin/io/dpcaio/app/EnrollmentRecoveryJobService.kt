@@ -19,11 +19,18 @@ class EnrollmentRecoveryJobService : JobService() {
         }
         val thread = Thread {
             if (generation != workGeneration.get()) return@Thread
-            val outcome = EnrollmentCoordinator(this).resumeOrCreate(
-                Intent().putExtra(EnrollmentCoordinator.KEY_TRIGGER, trigger)
-            )
+            val result = runCatching {
+                EnrollmentCoordinator(this).resumeOrCreate(
+                    Intent().putExtra(EnrollmentCoordinator.KEY_TRIGGER, trigger)
+                )
+            }
             synchronized(lifecycleLock) {
                 if (generation != workGeneration.get()) return@synchronized
+                val outcome = result.getOrElse {
+                    worker = null
+                    jobFinished(params, true)
+                    return@synchronized
+                }
                 if (outcome is EnrollmentOutcome.Retryable) {
                     EnrollmentRetryPolicy.delayMillis(outcome.session.retryCount)?.let { delay ->
                         if (generation != workGeneration.get()) return@synchronized

@@ -28,4 +28,10 @@ schedule = enrollment.index('EnrollmentResumeScheduler.schedule')
 assert enrollment.rfind('generation != workGeneration.get()', 0, schedule) != -1, \
     'Enrollment retry scheduling must be guarded against stale workers'
 
+# An unexpected coordinator exception must not strand JobScheduler in a permanently-running job.
+assert 'runCatching' in enrollment and 'EnrollmentCoordinator(this).resumeOrCreate' in enrollment, \
+    'Enrollment recovery must capture unexpected coordinator failures'
+assert 'jobFinished(params, true)' in enrollment, \
+    'Enrollment recovery exceptions must finish the active job and request reschedule'
+
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
