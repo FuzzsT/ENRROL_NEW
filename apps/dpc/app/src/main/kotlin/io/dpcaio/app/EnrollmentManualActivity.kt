@@ -11,8 +11,11 @@ import android.widget.TextView
 import io.dpcaio.core.model.EnrollmentSession
 import io.dpcaio.core.model.EnrollmentSource
 import io.dpcaio.core.model.NormalizedEnrollmentConfig
+import java.util.concurrent.atomic.AtomicBoolean
 
 class EnrollmentManualActivity : Activity() {
+    private val persistenceInProgress = AtomicBoolean(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "DPC-AIO Enrollment Engine"
@@ -66,6 +69,12 @@ class EnrollmentManualActivity : Activity() {
             ModernUi.action(this, "Start / Resume enrollment", primary = true) {
                 val endpointValue = endpoint.text.toString().trim()
                 val tokenValue = token.text.toString().trim()
+                val profileValue = profile.text.toString().trim()
+                val organizationValue = organization.text.toString().trim()
+                val modeValue = mode.selectedItem.toString()
+                val allowOfflineValue = allowOffline.isChecked
+                val appContext = applicationContext
+
                 if (!endpointValue.startsWith("https://", ignoreCase = true)) {
                     status.text = "Enrollment endpoint must use https://"
                     return@action
@@ -74,29 +83,50 @@ class EnrollmentManualActivity : Activity() {
                     status.text = "Enrollment token is required"
                     return@action
                 }
-                val config = NormalizedEnrollmentConfig(
-                    source = EnrollmentSource.MANUAL_TOKEN,
-                    requestedMode = mode.selectedItem.toString(),
-                    enrollmentToken = tokenValue,
-                    policyProfile = profile.text.toString().trim().ifBlank { "default" },
-                    serverUri = endpointValue,
-                    organizationId = organization.text.toString().trim().ifBlank { null },
-                    allowOffline = allowOffline.isChecked,
-                )
-                val initial = EnrollmentSession.new(config)
-                val secretRef = "session:${initial.sessionId}"
-                EnrollmentSecretStore(this@EnrollmentManualActivity).put(
-                    secretRef,
-                    EnrollmentSecrets(enrollmentToken = tokenValue),
-                )
-                val session = initial.copy(
-                    tokenFingerprint = EnrollmentSessionStore.tokenFingerprint(tokenValue),
-                    secretRef = secretRef,
-                )
-                EnrollmentSessionStore(this@EnrollmentManualActivity).write(session)
-                token.text?.clear()
-                EnrollmentCoordinator.scheduleResume(this@EnrollmentManualActivity, "MANUAL_TOKEN")
-                status.text = "Enrollment scheduled. Open Enrollment Status for progress."
+                if (!persistenceInProgress.compareAndSet(false, true)) {
+                    status.text = "Enrollment persistence already in progress"
+                    return@action
+                }
+
+                status.text = "Saving enrollment securely..."
+                Thread {
+                    val result = runCatching {
+                        val config = NormalizedEnrollmentConfig(
+                            source = EnrollmentSource.MANUAL_TOKEN,
+                            requestedMode = modeValue,
+                            enrollmentToken = tokenValue,
+                            policyProfile = profileValue.ifBlank { "default" },
+                            serverUri = endpointValue,
+                            organizationId = organizationValue.ifBlank { null },
+                            allowOffline = allowOfflineValue,
+                        )
+                        val initial = EnrollmentSession.new(config)
+                        val secretRef = "session:${initial.sessionId}"
+                        EnrollmentSecretStore(appContext).put(
+                            secretRef,
+                            EnrollmentSecrets(enrollmentToken = tokenValue),
+                        )
+                        val session = initial.copy(
+                            tokenFingerprint = EnrollmentSessionStore.tokenFingerprint(tokenValue),
+                            secretRef = secretRef,
+                        )
+                        EnrollmentSessionStore(appContext).write(session)
+                        EnrollmentCoordinator.scheduleResume(appContext, "MANUAL_TOKEN")
+                    }
+                    persistenceInProgress.set(false)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        result.fold(
+                            onSuccess = {
+                                token.text?.clear()
+                                status.text = "Enrollment scheduled. Open Enrollment Status for progress."
+                            },
+                            onFailure = { error ->
+                                status.text = "Enrollment persistence failed: ${error.message ?: error.javaClass.simpleName}"
+                            },
+                        )
+                    }
+                }.start()
             }
         )
         body.addView(ModernUi.spacer(this, 8))
