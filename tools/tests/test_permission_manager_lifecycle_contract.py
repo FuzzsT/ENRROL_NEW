@@ -68,22 +68,29 @@ companion_end = text.index('private lateinit var output', companion_start)
 companion = text[companion_start:companion_end]
 assert '@Volatile' in companion and 'lastAppliedBatchChanges' in companion, \
     'Applied restore state must survive Activity recreation and be visible across worker/main threads'
-assert 'AtomicBoolean' in text and 'batchMutationInProgress' in companion, \
-    'Batch apply/restore must share a process-wide mutation gate across Activity recreation'
-assert 'batchMutationInProgress.compareAndSet(false, true)' in apply_batch, \
-    'Batch apply must reject overlapping batch mutation workers before starting work'
-assert 'batchMutationInProgress.set(false)' in apply_batch, \
-    'Batch apply must release the mutation gate after worker completion'
+assert 'AtomicBoolean' in text and 'permissionMutationInProgress' in companion, \
+    'All permission-state mutations must share one process-wide gate across Activity recreation'
+assert 'batchMutationInProgress' not in companion, \
+    'Batch-only gate must be replaced by the shared permission mutation gate'
+
+for name, body in [
+    ('single permission mutation', mutate),
+    ('batch apply', apply_batch),
+]:
+    assert 'permissionMutationInProgress.compareAndSet(false, true)' in body, \
+        f'{name} must reject overlap with any other permission-state mutation'
+    assert 'permissionMutationInProgress.set(false)' in body, \
+        f'{name} must release the shared permission mutation gate after worker completion'
 
 restore = function_body('restorePreviousDpcStates', 'scanCatalog')
 assert 'restorePlan(lastAppliedBatchChanges)' in restore, \
     'Restore must target the last verified applied DPC batch, not the latest preview'
 assert 'restorePlan(pendingBatchChanges)' not in restore, \
     'Restore must not be redirected by a newer preview'
-assert 'batchMutationInProgress.compareAndSet(false, true)' in restore, \
-    'Restore must reject overlap with apply or another restore operation'
-assert 'batchMutationInProgress.set(false)' in restore, \
-    'Restore must release the mutation gate after worker completion'
+assert 'permissionMutationInProgress.compareAndSet(false, true)' in restore, \
+    'Restore must reject overlap with any other permission-state mutation'
+assert 'permissionMutationInProgress.set(false)' in restore, \
+    'Restore must release the shared permission mutation gate after worker completion'
 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
@@ -94,5 +101,9 @@ assert auto.index('val userId = targetUserId()') < auto.index('Thread {'), \
     'AUTO permission flow must snapshot target user on the UI thread before starting worker work'
 assert 'grantAllAuto(pkg, userId, entries' in auto, \
     'AUTO permission worker must use the snapshotted target user instead of touching EditText state'
+assert 'permissionMutationInProgress.compareAndSet(false, true)' in auto, \
+    'AUTO permission flow must reject overlap with any other permission-state mutation'
+assert 'permissionMutationInProgress.set(false)' in auto, \
+    'AUTO permission flow must release the shared permission mutation gate after worker completion'
 
 print('PERMISSION_MANAGER_LIFECYCLE_CONTRACT: PASS')
