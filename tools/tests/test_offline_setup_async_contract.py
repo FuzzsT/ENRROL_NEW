@@ -98,13 +98,22 @@ assert 'OfflineDeploymentStore(applicationContext)' in policy_activity, \
     'Policy compliance persistence recovery must inspect the device-protected offline store'
 assert 'hasPendingPersistence()' in policy_activity, \
     'Policy compliance must distinguish pending checkpoint durability failures'
+assert 'retryPendingPersistence()' in policy_activity, \
+    'Policy compliance must retry a pending durable checkpoint before enrollment execution'
 assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in policy_activity, \
     'Policy compliance pending checkpoint failure must schedule offline persistence recovery'
 assert 'EnrollmentExecutionOutcome.Retryable' in policy_activity, \
     'Policy compliance persistence failure must render a retryable enrollment result'
+router_index = policy_activity.index('EnrollmentExecutionRouter(this).execute(intent)')
+pending_index = policy_activity.index('hasPendingPersistence()')
+retry_index = policy_activity.index('retryPendingPersistence()')
+assert pending_index < retry_index < router_index, \
+    'Policy compliance must establish durable pending checkpoint recovery before invoking enrollment router'
+assert 'if (!offlineStore.retryPendingPersistence())' in policy_activity, \
+    'Policy compliance must keep enrollment retryable while pending checkpoint persistence still fails'
 
 assert 'file.inputStream().buffered().use' in text, \
-    'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle in memory'
+    'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'
 assert 'file.readBytes()' not in text, \
     'Offline bundle SHA-256 must not allocate the entire bundle in memory'
 assert 'private val bundleIoInProgress = java.util.concurrent.atomic.AtomicBoolean(false)' in text, \
