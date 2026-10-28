@@ -80,9 +80,18 @@ assert 'workerStore.load()?.let { state ->' not in stage_body, \
     'Package staging failure must not use a non-atomic load/save transition that can overwrite receiver success'
 assert 'runCatching {\n                        workerStore.updateIf(' in stage_body, \
     'Package staging failure bookkeeping must not let a persistence exception escape the worker'
+assert 'workerStore.hasPendingPersistence()' in stage_body, \
+    'Package staging failure must detect a pending durable checkpoint after commit failure'
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in stage_body, \
+    'Package staging persistence failure must schedule pending-checkpoint recovery'
+pending_check = stage_body.index('workerStore.hasPendingPersistence()')
+persistence_retry = stage_body.index('OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY', pending_check)
+ui_callback = stage_body.index('runOnUiThread', pending_check)
+assert pending_check < persistence_retry < ui_callback, \
+    'Package staging persistence retry must be scheduled from the worker before UI completion'
 
 assert 'file.inputStream().buffered().use' in text, \
-    'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'
+    'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle in memory'
 assert 'file.readBytes()' not in text, \
     'Offline bundle SHA-256 must not allocate the entire bundle in memory'
 assert 'private val bundleIoInProgress = java.util.concurrent.atomic.AtomicBoolean(false)' in text, \
