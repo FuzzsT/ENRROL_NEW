@@ -54,4 +54,20 @@ assert 'deploymentOwnsBundle()' in import_body, \
 assert 'deploymentOwnsBundle()' in apply_body, \
     'Apply must not start a second deployment while the current bundle is active'
 
+# Ownership must be rechecked only after the process-wide gate is actually acquired.
+# Otherwise a staging worker can persist PACKAGES_STAGED between the pre-check and CAS,
+# allowing import/apply to overwrite or reset a bundle still owned by recovery.
+import_gate = import_body.index('bundleIoInProgress.compareAndSet(false, true)')
+import_recheck = import_body.find('deploymentOwnsBundle()', import_gate)
+assert import_recheck > import_gate, \
+    'Import must recheck deployment ownership after acquiring the shared bundle I/O gate'
+helper_gate = helper_body.index('bundleIoInProgress.compareAndSet(false, true)')
+helper_recheck = helper_body.find('deploymentOwnsBundle()', helper_gate)
+assert helper_recheck > helper_gate, \
+    'Package staging must recheck deployment ownership after acquiring the shared bundle I/O gate'
+assert 'bundleIoInProgress.set(false)' in import_body[import_recheck:import_recheck + 500], \
+    'Import ownership rejection must release the acquired shared bundle I/O gate'
+assert 'bundleIoInProgress.set(false)' in helper_body[helper_recheck:helper_recheck + 500], \
+    'Package staging ownership rejection must release the acquired shared bundle I/O gate'
+
 print('OFFLINE_APPLY_ASYNC_CONTRACT: PASS')
