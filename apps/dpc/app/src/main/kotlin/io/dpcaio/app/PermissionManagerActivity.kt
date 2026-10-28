@@ -45,6 +45,8 @@ class PermissionManagerActivity : Activity() {
     private var pendingBatchChanges: List<PermissionBatchChange> = emptyList()
     private var pendingBatchPlan: PermissionBatchPlan2? = null
     private var batchPreviewGeneration: Long = 0
+    private var permissionScanGeneration: Long = 0
+    private var catalogScanGeneration: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -156,6 +158,7 @@ class PermissionManagerActivity : Activity() {
         val q = query.text.toString().trim().lowercase()
         val targetUserId = targetUserId()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
+        val generation = ++permissionScanGeneration
         output.text = "Scanning $pkg..."
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan()
@@ -193,7 +196,10 @@ class PermissionManagerActivity : Activity() {
                     appendLine("  Group: ${r.group ?: "-"} protection=${r.protection}")
                 }
             }
-            postUiIfAlive { output.text = text }
+            postUiIfAlive {
+                if (generation != permissionScanGeneration) return@postUiIfAlive
+                output.text = text
+            }
         }.start()
     }
 
@@ -402,6 +408,7 @@ class PermissionManagerActivity : Activity() {
 
     private fun scanCatalog() {
         val q = query.text.toString().trim().lowercase()
+        val generation = ++catalogScanGeneration
         output.text = "Scanning..."
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan()
@@ -420,7 +427,10 @@ class PermissionManagerActivity : Activity() {
                     appendLine("${it.name}\n  group=${it.group} pkg=${it.declaringPackage} protection=${it.protection} raw=0x${it.rawProtectionLevel.toString(16)} flags=0x${it.permissionFlags.toString(16)} public=${it.publicSdkConstant}")
                 }
             }
-            postUiIfAlive { output.text = text }
+            postUiIfAlive {
+                if (generation != catalogScanGeneration) return@postUiIfAlive
+                output.text = text
+            }
         }.start()
     }
 
