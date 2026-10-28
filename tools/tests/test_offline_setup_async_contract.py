@@ -27,6 +27,14 @@ assert 'return@runOnUiThread' in helper_body, \
 assert 'generation != importGeneration' in helper_body, \
     'Offline bundle import must reject stale completion from an older selection'
 
+# The store writes one shared private bundle path, so imports must be serialized across Activity recreation.
+assert 'importInProgress.compareAndSet(false, true)' in helper_body, \
+    'Offline bundle imports must share one process-wide gate before touching the shared bundle path'
+assert 'importedBundle = null' in helper_body and 'bundleInspection = null' in helper_body, \
+    'Starting an import must invalidate the previously verified bundle before the shared file is overwritten'
+assert 'finally' in helper_body and 'importInProgress.set(false)' in helper_body, \
+    'Offline bundle import gate must always be released after worker completion'
+
 result_start = text.index('override fun onActivityResult')
 result_end = helper_start
 result_body = text[result_start:result_end]
@@ -43,5 +51,7 @@ assert 'file.inputStream().buffered().use' in text, \
     'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'
 assert 'file.readBytes()' not in text, \
     'Offline bundle SHA-256 must not allocate the entire bundle in memory'
+assert 'private val importInProgress = java.util.concurrent.atomic.AtomicBoolean(false)' in text, \
+    'Offline bundle import gate must survive Activity recreation without retaining an Activity'
 
 print('OFFLINE_SETUP_ASYNC_CONTRACT: PASS')
