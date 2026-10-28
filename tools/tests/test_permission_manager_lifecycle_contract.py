@@ -36,6 +36,16 @@ assert mutate.index('val targetUserId = targetUserId()') < mutate.index('Thread 
 batch = function_body('batchPreview', 'applyPendingBatch')
 assert batch.index('val userId = targetUserId()') < batch.index('Thread {'), \
     'Batch preview must snapshot target user on the UI thread before starting worker work'
+assert 'batchPreviewGeneration' in text, \
+    'Permission Manager must track batch preview generations to reject stale results'
+assert 'val generation = ++batchPreviewGeneration' in batch, \
+    'Each batch preview must capture a new generation before starting worker work'
+assert 'if (generation != batchPreviewGeneration) return@postUiIfAlive' in batch, \
+    'Stale batch preview completion must exit before publishing pending plan state'
+assert batch.index('if (generation != batchPreviewGeneration) return@postUiIfAlive') < batch.index('pendingBatchChanges = changes'), \
+    'Pending batch state must only be published after stale-generation rejection'
+assert batch.index('pendingBatchChanges = changes') < batch.index('output.text = text'), \
+    'Pending batch state and visible preview must be published together on the UI thread'
 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
