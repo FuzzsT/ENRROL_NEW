@@ -84,6 +84,13 @@ class KnoxZtManagerActivity : Activity() {
         operationRunning = false
     }
 
+    private fun postResultIfAlive(text: String) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            output.text = text
+        }
+    }
+
     private fun ensureReady() {
         if (!beginOperation()) {
             output.text = "KnoxZT operation already running"
@@ -93,10 +100,9 @@ class KnoxZtManagerActivity : Activity() {
         Thread {
             try {
                 val result = KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = ShizukuUserServiceClient(this)).ensureReady()
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    output.text = "status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}"
-                }
+                postResultIfAlive("status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}")
+            } catch (error: Exception) {
+                postResultIfAlive("KnoxZT recovery error\n${error.message ?: error.javaClass.simpleName}")
             } finally {
                 finishOperation()
             }
@@ -118,10 +124,9 @@ class KnoxZtManagerActivity : Activity() {
                     appendLine("activities=${activities.size}")
                     activities.forEach { appendLine("${it.className} exported=${it.exported} enabled=${it.enabled} permission=${it.requiredPermission}") }
                 }
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    output.text = text
-                }
+                postResultIfAlive(text)
+            } catch (error: Exception) {
+                postResultIfAlive("KnoxZT activity inventory error\n${error.message ?: error.javaClass.simpleName}")
             } finally {
                 finishOperation()
             }
