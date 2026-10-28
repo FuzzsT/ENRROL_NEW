@@ -141,6 +141,7 @@ jobs:
           python3 tools/tests/test_knoxzt_manager_operation_gate_contract.py
           python3 tools/tests/test_enrollment_coordinator_serialization_contract.py
           python3 tools/tests/test_samsung_settings_operation_gate_contract.py
+          python3 tools/tests/test_samsung_settings_cleanup_contract.py
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py
