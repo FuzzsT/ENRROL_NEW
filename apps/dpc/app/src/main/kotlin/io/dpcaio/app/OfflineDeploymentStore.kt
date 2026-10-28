@@ -1,6 +1,7 @@
 package io.dpcaio.app
 
 import android.content.Context
+import android.content.SharedPreferences
 import io.dpcaio.offline.OfflineStage
 
 data class OfflineDeploymentState(
@@ -41,20 +42,25 @@ class OfflineDeploymentStore(context: Context) {
 
     fun clear() {
         synchronized(stateLock) {
-            prefs.edit().clear().commit()
+            commitOrThrow(prefs.edit().clear())
         }
     }
 
     private fun saveUnlocked(state: OfflineDeploymentState) {
-        prefs.edit()
-            .putString("bundleId", state.bundleId)
-            .putString("stage", state.stage.name)
-            .putInt("parentSessionId", state.parentSessionId ?: -1)
-            .putInt("commitSessionId", state.commitSessionId ?: -1)
-            .putBoolean("syncPending", state.syncPending)
-            .putString("lastError", state.lastError)
-            .putString("bundlePath", state.bundlePath)
-            .commit()
+        commitOrThrow(
+            prefs.edit()
+                .putString("bundleId", state.bundleId)
+                .putString("stage", state.stage.name)
+                .putInt("parentSessionId", state.parentSessionId ?: -1)
+                .putInt("commitSessionId", state.commitSessionId ?: -1)
+                .putBoolean("syncPending", state.syncPending)
+                .putString("lastError", state.lastError)
+                .putString("bundlePath", state.bundlePath)
+        )
+    }
+
+    private fun commitOrThrow(editor: SharedPreferences.Editor) {
+        check(editor.commit()) { "OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED" }
     }
 
     private fun loadUnlocked(): OfflineDeploymentState? {
