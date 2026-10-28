@@ -47,6 +47,7 @@ class ActivityLauncherHubActivity : Activity() {
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
     private var renderGeneration = 0L
+    private var visibleAppLimit = INITIAL_RENDER_LIMIT
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -73,7 +74,7 @@ class ActivityLauncherHubActivity : Activity() {
         super.onResume()
         if (::appList.isInitialized && installedApps.isNotEmpty()) {
             renderTabs()
-            renderApps()
+            renderApps(resetLimit = false)
         }
     }
 
@@ -344,8 +345,9 @@ class ActivityLauncherHubActivity : Activity() {
         }
     }
 
-    private fun renderApps() {
+    private fun renderApps(resetLimit: Boolean = true) {
         if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        if (resetLimit) visibleAppLimit = INITIAL_RENDER_LIMIT
         val generation = ++renderGeneration
         val shown = filteredApps()
         appList.removeAllViews()
@@ -361,7 +363,18 @@ class ActivityLauncherHubActivity : Activity() {
             )
             return
         }
-        shown.forEach { app -> appList.addView(renderApp(app, generation)) }
+
+        val rendered = shown.take(visibleAppLimit)
+        rendered.forEach { app -> appList.addView(renderApp(app, generation)) }
+        if (rendered.size < shown.size) {
+            val remaining = shown.size - rendered.size
+            appList.addView(
+                ModernUi.action(this, "Load more ($remaining remaining)") {
+                    visibleAppLimit = (visibleAppLimit + RENDER_PAGE_SIZE).coerceAtMost(shown.size)
+                    renderApps(resetLimit = false)
+                }
+            )
+        }
     }
 
     private fun renderStats(shown: List<AppEntry>) {
@@ -500,5 +513,7 @@ class ActivityLauncherHubActivity : Activity() {
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
         private const val ICON_WORKER_COUNT = 2
+        private const val INITIAL_RENDER_LIMIT = 40
+        private const val RENDER_PAGE_SIZE = 40
     }
 }
