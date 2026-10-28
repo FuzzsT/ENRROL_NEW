@@ -1,8 +1,13 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/OfflineSetupActivity.kt'
+APP = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app'
+ACTIVITY = APP / 'OfflineSetupActivity.kt'
+STORE = APP / 'OfflineDeploymentStore.kt'
+INSTALLER = ROOT / 'apps/dpc/modules/offline/android/src/main/kotlin/io/dpcaio/offline/android/AndroidOfflinePackageInstaller.kt'
 text = ACTIVITY.read_text(encoding='utf-8')
+store = STORE.read_text(encoding='utf-8')
+installer = INSTALLER.read_text(encoding='utf-8')
 
 assert 'private fun stageAndCommitBundle' in text, \
     'Offline package staging must be centralized in an off-main helper'
@@ -55,8 +60,6 @@ assert 'deploymentOwnsBundle()' in apply_body, \
     'Apply must not start a second deployment while the current bundle is active'
 
 # Ownership must be rechecked only after the process-wide gate is actually acquired.
-# Otherwise a staging worker can persist PACKAGES_STAGED between the pre-check and CAS,
-# allowing import/apply to overwrite or reset a bundle still owned by recovery.
 import_gate = import_body.index('bundleIoInProgress.compareAndSet(false, true)')
 import_recheck = import_body.find('deploymentOwnsBundle()', import_gate)
 assert import_recheck > import_gate, \
@@ -69,5 +72,21 @@ assert 'bundleIoInProgress.set(false)' in import_body[import_recheck:import_rech
     'Import ownership rejection must release the acquired shared bundle I/O gate'
 assert 'bundleIoInProgress.set(false)' in helper_body[helper_recheck:helper_recheck + 500], \
     'Package staging ownership rejection must release the acquired shared bundle I/O gate'
+
+# PACKAGES_STAGED must persist the exact session that commit() uses, including single-package plans.
+assert 'val commitSessionId = plan.parentSessionId ?: plan.childSessionIds.single()' in helper_body, \
+    'Staging must compute the exact PackageInstaller session used for commit'
+assert 'commitSessionId = commitSessionId' in helper_body, \
+    'PACKAGES_STAGED must persist the exact commit session for crash recovery'
+assert 'val commitSessionId: Int? = null' in store, \
+    'Offline deployment state must persist a resumable PackageInstaller commit session id'
+assert '.putInt("commitSessionId", state.commitSessionId ?: -1)' in store, \
+    'Offline deployment store must save commitSessionId'
+assert 'prefs.getInt("commitSessionId", -1).takeIf { it >= 0 }' in store, \
+    'Offline deployment store must restore commitSessionId'
+assert 'fun commitSession(sessionId: Int, statusReceiver: IntentSender)' in installer, \
+    'Offline installer must support resuming commit of an existing staged session'
+assert 'fun isCommitted(sessionId: Int): Boolean?' in installer and '.isCommitted' in installer, \
+    'Offline installer must distinguish staged-uncommitted sessions from committed sessions'
 
 print('OFFLINE_APPLY_ASYNC_CONTRACT: PASS')
