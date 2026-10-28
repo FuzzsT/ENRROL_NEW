@@ -55,13 +55,29 @@ assert 'targetUserId()' not in change_worker, \
 assert 'isFinishing || isDestroyed' in change_worker, \
     'Activity Explorer changeState callback must ignore Activity teardown'
 
+# Batch decisions and execution must stay bound to the same target user even if
+# the user edits the target-user field after Preview but before Apply.
+assert 'pendingBatchTargetUserId' in text, \
+    'Activity Explorer must remember the target user used to build a batch preview'
+preview_start = text.index('private fun batchPreviewFiltered(')
+preview_end = text.index('\n    private fun applyBatch()', preview_start)
+preview = text[preview_start:preview_end]
+assert 'val previewUserId = targetUserId()' in preview, \
+    'Batch Preview must snapshot target user before computing decisions'
+assert 'pendingBatchTargetUserId = previewUserId' in preview, \
+    'Batch Preview must persist the target user associated with its decisions'
+assert 'decision(it, desired, previewUserId)' in preview, \
+    'Batch Preview decisions must be computed for the captured preview user'
+
 apply_start = text.index('private fun applyBatch()')
 apply_end = text.index('\n    private fun restoreSnapshot()', apply_start)
 apply_batch = text[apply_start:apply_end]
 assert 'val batch = pendingBatch.toList()' in apply_batch, \
     'Activity Explorer applyBatch must snapshot pendingBatch before worker execution'
-assert 'val operationUserId = targetUserId()' in apply_batch, \
-    'Activity Explorer applyBatch must snapshot target user before worker execution'
+assert 'val operationUserId = pendingBatchTargetUserId' in apply_batch, \
+    'Activity Explorer applyBatch must execute against the user captured by Batch Preview'
+assert 'val operationUserId = targetUserId()' not in apply_batch, \
+    'Activity Explorer applyBatch must not retarget a preview using a newly edited user ID'
 apply_worker = apply_batch[apply_batch.index('Thread {'):]
 assert 'targetUserId()' not in apply_worker, \
     'Activity Explorer applyBatch worker must not read EditText-backed target user state'
