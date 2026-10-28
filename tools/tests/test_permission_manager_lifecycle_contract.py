@@ -16,4 +16,35 @@ for token in [
 ]:
     assert token in text, f'Permission Manager async callback missing lifecycle-safe helper: {token}'
 
+
+def function_body(name: str, next_name: str) -> str:
+    start = text.index(f'private fun {name}')
+    end = text.index(f'private fun {next_name}', start)
+    return text[start:end]
+
+
+scan = function_body('scanAppPermissions', 'mutateSelected')
+assert scan.index('val q = query.text.toString().trim().lowercase()') < scan.index('Thread {'), \
+    'Permission scan must snapshot query text on the UI thread before starting worker work'
+assert scan.index('val targetUserId = targetUserId()') < scan.index('Thread {'), \
+    'Permission scan must snapshot target user on the UI thread before starting worker work'
+
+mutate = function_body('mutateSelected', 'setGlobalPolicy')
+assert mutate.index('val targetUserId = targetUserId()') < mutate.index('Thread {'), \
+    'Permission mutation must snapshot target user on the UI thread before starting worker work'
+
+batch = function_body('batchPreview', 'applyPendingBatch')
+assert batch.index('val userId = targetUserId()') < batch.index('Thread {'), \
+    'Batch preview must snapshot target user on the UI thread before starting worker work'
+
+catalog = function_body('scanCatalog', 'autoRequestedPermissions')
+assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
+    'Catalog scan must snapshot query text on the UI thread before starting worker work'
+
+auto = function_body('autoRequestedPermissions', 'scanSystemConfigs')
+assert auto.index('val userId = targetUserId()') < auto.index('Thread {'), \
+    'AUTO permission flow must snapshot target user on the UI thread before starting worker work'
+assert 'grantAllAuto(pkg, userId, entries' in auto, \
+    'AUTO permission worker must use the snapshotted target user instead of touching EditText state'
+
 print('PERMISSION_MANAGER_LIFECYCLE_CONTRACT: PASS')
