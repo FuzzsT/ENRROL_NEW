@@ -49,6 +49,10 @@ assert field_body.index('setSingleLine(true)') < field_body.index('this.inputTyp
 network = (APP / 'NetworkControlActivity.kt').read_text(encoding='utf-8')
 for token in ['Private DNS', 'DNS over HTTPS', 'ModernUi.hero', 'ModernUi.outputCard', 'ModernUi.scrollPage']:
     assert token in network, token
+assert 'isFinishing || isDestroyed' in network, \
+    'Network DoH callback must ignore Activity teardown'
+assert 'return@runOnUiThread' in network, \
+    'Network lifecycle guard must exit before touching the result view'
 
 diagnostics = (APP / 'DpcDiagnosticsActivity.kt').read_text(encoding='utf-8')
 for token in ['System health', 'Management state', 'Module availability', 'ModernUi.Tone', 'ModernUi.chip', 'ModernUi.card']:
