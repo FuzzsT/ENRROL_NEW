@@ -61,5 +61,8 @@ discover_body = launcher[discover_start:discover_end]
 assert "++inventoryGeneration" in discover_body, "each inventory scan must get a monotonically increasing generation"
 assert "generation != inventoryGeneration" in discover_body, "stale installed-app scans must not overwrite newer inventory"
 assert "renderApps(resetLimit = resetLimit)" in discover_body, "restart refresh should be able to preserve already materialized depth"
+assert "iconCache.evictAll()" in discover_body, "accepted inventory refresh must invalidate cached icons so package updates cannot show stale artwork"
+assert discover_body.index("generation != inventoryGeneration") < discover_body.index("iconCache.evictAll()") < discover_body.index("renderApps(resetLimit = resetLimit)"), \
+    "icon cache must be invalidated only after accepting the latest inventory and before rerendering cards"
 
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")

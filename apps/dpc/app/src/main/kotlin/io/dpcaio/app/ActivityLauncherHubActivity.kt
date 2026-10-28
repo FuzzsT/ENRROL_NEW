@@ -258,6 +258,7 @@ class ActivityLauncherHubActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (generation != inventoryGeneration) return@runOnUiThread
+                iconCache.evictAll()
                 installedApps = mapped
                 status.text = "Installed app inventory loaded: ${mapped.size} packages"
                 renderTabs()
