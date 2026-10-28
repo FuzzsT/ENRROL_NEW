@@ -194,8 +194,11 @@ class ActivityExplorerActivity : Activity() {
                     UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
                 )
             }.getOrElse { emptyList() }
-            currentActivities = activities
-            runOnUiThread { renderActivities(activities) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                currentActivities = activities
+                renderActivities(activities)
+            }
         }.start()
     }
 
