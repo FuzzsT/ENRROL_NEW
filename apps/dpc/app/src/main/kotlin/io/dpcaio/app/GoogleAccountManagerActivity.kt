@@ -26,6 +26,12 @@ class GoogleAccountManagerActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var accounts: TextView
     private lateinit var addPendingButton: Button
+    private lateinit var manualRemovalButton: Button
+    private var recoveryPollScheduled = false
+    private val recoveryPoll = Runnable {
+        recoveryPollScheduled = false
+        if (!isFinishing && !isDestroyed) resumePendingReorderIfPossible()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +47,12 @@ class GoogleAccountManagerActivity : Activity() {
         super.onResume()
         refresh()
         resumePendingReorderIfPossible()
+    }
+
+    override fun onPause() {
+        if (::status.isInitialized) status.removeCallbacks(recoveryPoll)
+        recoveryPollScheduled = false
+        super.onPause()
     }
 
     private fun buildUi(): View {
@@ -77,6 +89,10 @@ class GoogleAccountManagerActivity : Activity() {
                 addView(ModernUi.action(this@GoogleAccountManagerActivity, "Otwórz ustawienia synchronizacji/kont") {
                     startActivity(GoogleAccountIntentFactory.syncSettings())
                 })
+                manualRemovalButton = ModernUi.action(this@GoogleAccountManagerActivity, "Usuń oczekujące konto ręcznie") {
+                    startActivity(GoogleAccountIntentFactory.syncSettings())
+                }.apply { visibility = View.GONE }
+                addView(manualRemovalButton)
                 addPendingButton = ModernUi.action(this@GoogleAccountManagerActivity, "Dodaj ponownie oczekujące konto", primary = true) {
                     startActivity(GoogleAccountIntentFactory.addGoogleAccount())
                 }.apply { visibility = View.GONE }
@@ -161,37 +177,38 @@ class GoogleAccountManagerActivity : Activity() {
         if (restoreManagementDisabled) {
             runCatching { reorderGateway.setGoogleAccountManagementDisabled(false) }
         }
-
-        if (!reorderGateway.canRequestAccountRemoval()) {
-            refresh("Automatyczne rozpoczęcie usuwania kont nie jest dostępne dla tej tożsamości. Usuń wskazane konta w ustawieniach systemowych, wróć tutaj, a AIO wznowi weryfikację/re-add.")
-            startActivity(GoogleAccountIntentFactory.syncSettings())
-            return
-        }
-        removeSequentially(accountNames, 0)
+        resumePendingReorderIfPossible()
     }
 
-    private fun removeSequentially(accountNames: List<String>, index: Int) {
-        if (index >= accountNames.size) {
-            resumePendingReorderIfPossible()
-            return
-        }
-        val name = accountNames[index]
-        reorderGateway.requestRemoveGoogleAccount(this, name) { removed, error ->
-            if (removed) selectionStore.markRemoved(name)
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (removed) {
-                    removeSequentially(accountNames, index + 1)
-                } else {
-                    refresh("Nie udało się usunąć $name: ${error?.message ?: "authenticator odmówił"}. Kontynuuj ręcznie w ustawieniach kont.")
-                    startActivity(GoogleAccountIntentFactory.syncSettings())
+    private fun requestRemoval(name: String) {
+        if (!markRemovalRequestActive(name)) return
+        selectionStore.markRemovalInFlight(name)
+        runCatching {
+            reorderGateway.requestRemoveGoogleAccount(this, name) { removed, error ->
+                markRemovalRequestInactive(name)
+                if (removed) selectionStore.markRemoved(name)
+                if (!removed) selectionStore.markRemovalFailed(name)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (removed) {
+                        resumePendingReorderIfPossible()
+                    } else {
+                        showManualRemoval(name, "Nie udało się usunąć $name: ${error?.message ?: "authenticator odmówił"}.")
+                    }
                 }
+            }
+        }.onFailure { error ->
+            markRemovalRequestInactive(name)
+            selectionStore.markRemovalFailed(name)
+            if (!isFinishing && !isDestroyed) {
+                showManualRemoval(name, "Nie udało się rozpocząć usuwania $name: ${error.message ?: error.javaClass.simpleName}.")
             }
         }
     }
 
     private fun resumePendingReorderIfPossible() {
         val target = selectionStore.pendingTarget() ?: run {
+            manualRemovalButton.visibility = View.GONE
             addPendingButton.visibility = View.GONE
             return
         }
@@ -199,12 +216,41 @@ class GoogleAccountManagerActivity : Activity() {
         val pendingRemoval = selectionStore.pendingRemoval()
         pendingRemoval.filterNot { it in visibleNames }.forEach { selectionStore.markRemoved(it) }
 
-        if (selectionStore.pendingRemoval().isNotEmpty()) {
+        val remainingRemoval = selectionStore.pendingRemoval()
+        if (remainingRemoval.isNotEmpty()) {
             addPendingButton.visibility = View.GONE
-            refresh("Oczekuje na usunięcie: ${selectionStore.pendingRemoval().joinToString(", ")}")
+            val manual = selectionStore.manualRemovalRequired()
+            if (manual != null && manual in remainingRemoval) {
+                showManualRemoval(manual, "Automatyczne usunięcie nie powiodło się. Usuń konto ręcznie i wróć do AIO.")
+                return
+            }
+
+            val inFlight = selectionStore.removalInFlight()
+            if (inFlight != null) {
+                manualRemovalButton.visibility = View.GONE
+                if (!isRemovalRequestActive(inFlight)) {
+                    selectionStore.markRemovalFailed(inFlight)
+                    showManualRemoval(inFlight, "Poprzednia sesja usuwania została przerwana. Dokończ usunięcie ręcznie.")
+                    return
+                }
+                refresh("Usuwanie w toku: $inFlight")
+                scheduleRecoveryPoll()
+                return
+            }
+
+            manualRemovalButton.visibility = View.GONE
+            val next = remainingRemoval.first()
+            if (!reorderGateway.canRequestAccountRemoval()) {
+                selectionStore.markRemovalFailed(next)
+                showManualRemoval(next, "Automatyczne rozpoczęcie usuwania nie jest dostępne dla tej tożsamości.")
+                return
+            }
+            requestRemoval(selectionStore.pendingRemoval().first())
+            refresh("Rozpoczynam usuwanie: $next")
             return
         }
 
+        manualRemovalButton.visibility = View.GONE
         val pending = selectionStore.pendingReAdd()
         if (pending.isEmpty()) {
             val restorePolicy = selectionStore.shouldRestoreManagementDisabled()
@@ -225,6 +271,19 @@ class GoogleAccountManagerActivity : Activity() {
         addPendingButton.text = "Dodaj ponownie: $next"
         addPendingButton.visibility = View.VISIBLE
         refresh("Oczekuje na ponowne dodanie: $next")
+    }
+
+    private fun showManualRemoval(accountName: String, detail: String) {
+        manualRemovalButton.text = "Usuń ręcznie: $accountName"
+        manualRemovalButton.visibility = View.VISIBLE
+        addPendingButton.visibility = View.GONE
+        refresh("$detail\nOczekuje na usunięcie: $accountName")
+    }
+
+    private fun scheduleRecoveryPoll() {
+        if (recoveryPollScheduled || isFinishing || isDestroyed) return
+        recoveryPollScheduled = true
+        status.postDelayed(recoveryPoll, RECOVERY_POLL_MS)
     }
 
     private fun verifyObservedOrder(targetName: String) {
@@ -249,5 +308,20 @@ class GoogleAccountManagerActivity : Activity() {
     private companion object {
         const val REQ_CHOOSE = 3101
         const val REQ_GET_ACCOUNTS = 3102
+        const val RECOVERY_POLL_MS = 750L
+        private val removalRequestLock = Any()
+        private val activeRemovalRequests = mutableSetOf<String>()
+
+        fun markRemovalRequestActive(accountName: String): Boolean = synchronized(removalRequestLock) {
+            activeRemovalRequests.add(accountName)
+        }
+
+        fun markRemovalRequestInactive(accountName: String) = synchronized(removalRequestLock) {
+            activeRemovalRequests.remove(accountName)
+        }
+
+        fun isRemovalRequestActive(accountName: String): Boolean = synchronized(removalRequestLock) {
+            accountName in activeRemovalRequests
+        }
     }
 }
