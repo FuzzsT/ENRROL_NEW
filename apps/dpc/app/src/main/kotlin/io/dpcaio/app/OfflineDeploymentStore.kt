@@ -39,8 +39,10 @@ class OfflineDeploymentStore(context: Context) {
         true
     }
 
-    fun clear() = synchronized(stateLock) {
-        prefs.edit().clear().apply()
+    fun clear() {
+        synchronized(stateLock) {
+            prefs.edit().clear().commit()
+        }
     }
 
     private fun saveUnlocked(state: OfflineDeploymentState) {
@@ -52,7 +54,7 @@ class OfflineDeploymentStore(context: Context) {
             .putBoolean("syncPending", state.syncPending)
             .putString("lastError", state.lastError)
             .putString("bundlePath", state.bundlePath)
-            .apply()
+            .commit()
     }
 
     private fun loadUnlocked(): OfflineDeploymentState? {
