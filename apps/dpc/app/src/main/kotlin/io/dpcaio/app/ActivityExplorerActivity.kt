@@ -63,6 +63,7 @@ class ActivityExplorerActivity : Activity() {
     private var currentQuickFilter = ActivityQuickFilter.ALL
     private var pendingBatch: List<Pair<DiscoveredActivity, ComponentControlDecision>> = emptyList()
     private var pendingBatchState: ComponentOverrideState? = null
+    private var scanGeneration = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -182,6 +183,7 @@ class ActivityExplorerActivity : Activity() {
     private fun scan() {
         val pkg = packageNameInput.text.toString().trim()
         if (pkg.isBlank()) return
+        val generation = ++scanGeneration
         val targetUserId = targetUserId()
         status.text = "Scanning $pkg for user $targetUserId..."
         Thread {
@@ -196,6 +198,7 @@ class ActivityExplorerActivity : Activity() {
             }.getOrElse { emptyList() }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != scanGeneration) return@runOnUiThread
                 currentActivities = activities
                 renderActivities(activities)
             }
