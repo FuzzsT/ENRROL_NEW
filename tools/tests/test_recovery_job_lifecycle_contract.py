@@ -7,6 +7,7 @@ services = {
     'EnrollmentRecoveryJobService.kt': (APP / 'EnrollmentRecoveryJobService.kt').read_text(encoding='utf-8'),
     'OfflineRecoveryJobService.kt': (APP / 'OfflineRecoveryJobService.kt').read_text(encoding='utf-8'),
 }
+store_text = (APP / 'OfflineDeploymentStore.kt').read_text(encoding='utf-8')
 
 for name, text in services.items():
     assert 'AtomicLong' in text, f'{name}: recovery job needs a generation token'
@@ -80,5 +81,21 @@ assert 'jobFinished(params, false)' in staged, \
     'PACKAGES_STAGED recovery worker must finish the active JobScheduler job'
 assert 'return true' in staged, \
     'PACKAGES_STAGED asynchronous recovery must report ongoing work to JobScheduler'
+
+# The install-result receiver may complete while the worker is inspecting the PackageInstaller session.
+# Failure transitions therefore need an atomic read-check-write against the latest persisted state so an
+# already persisted PACKAGES_INSTALLED success cannot be overwritten by a stale PACKAGES_STAGED snapshot.
+assert 'fun updateIf(' in store_text, \
+    'OfflineDeploymentStore must expose an atomic conditional update for recovery ownership checks'
+assert 'synchronized(stateLock)' in store_text, \
+    'OfflineDeploymentStore conditional updates must share a process-wide state lock with save/load'
+assert 'store.updateIf(' in staged, \
+    'PACKAGES_STAGED failure transitions must use an atomic persisted ownership check'
+for token in [
+    'current.bundleId == state.bundleId',
+    'current.stage == OfflineStage.PACKAGES_STAGED',
+    'current.commitSessionId == commitSessionId',
+]:
+    assert token in staged, f'PACKAGES_STAGED ownership predicate missing: {token}'
 
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
