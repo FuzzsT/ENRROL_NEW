@@ -80,7 +80,10 @@ class NfcLabActivity : Activity(), NfcAdapter.ReaderCallback {
 
     override fun onTagDiscovered(tag: android.nfc.Tag) {
         val snap = NfcTagInspector().inspect(tag)
-        runOnUiThread { output.text = "id=${snap.idHex}\ntech=${snap.techList.joinToString()}\nMIFARE Classic=${snap.mifareClassic}\nMIFARE Ultralight=${snap.mifareUltralight}\nIsoDep=${snap.isoDep}\nNDEF=${snap.ndef}" }
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            output.text = "id=${snap.idHex}\ntech=${snap.techList.joinToString()}\nMIFARE Classic=${snap.mifareClassic}\nMIFARE Ultralight=${snap.mifareUltralight}\nIsoDep=${snap.isoDep}\nNDEF=${snap.ndef}"
+        }
     }
 
     override fun onPause() { adapter?.disableReaderMode(this); super.onPause() }

@@ -25,6 +25,8 @@ class SamsungSettingsEditorActivity : Activity() {
     private lateinit var value: EditText
     private lateinit var status: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
+    @Volatile
+    private var activeStabilityMonitor: AutoCloseable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,9 +99,9 @@ class SamsungSettingsEditorActivity : Activity() {
     private fun writeValue() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
         val v = value.text.toString()
+        val ns = selectedNamespace()
         status.text = "Writing..."
         Thread {
-            val ns = selectedNamespace()
             val routes = listOf(SettingWriteRoute.PUBLIC_SETTINGS, SettingWriteRoute.SHIZUKU_SETTINGS, SettingWriteRoute.SYSTEM_PRIVILEGED)
             val result = SamsungSettingEditCoordinator(gateway(), AndroidThreadSettingDelay).apply(SettingEditRequest(ns, k, v, routes))
             val uri = when (ns) {
@@ -110,13 +112,40 @@ class SamsungSettingsEditorActivity : Activity() {
             }
             val monitor = uri?.let {
                 AndroidSettingStabilityMonitor(contentResolver).observe(it) {
-                    runOnUiThread { status.append("\nChanged again after write") }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        status.append("\nChanged again after write")
+                    }
                 }
             }
+            synchronized(this) {
+                activeStabilityMonitor?.close()
+                activeStabilityMonitor = monitor
+            }
             runOnUiThread {
+                if (isFinishing || isDestroyed) {
+                    monitor?.close()
+                    synchronized(this) {
+                        if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
+                    }
+                    return@runOnUiThread
+                }
                 status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
-                status.postDelayed({ monitor?.close() }, 5000)
+                status.postDelayed({
+                    monitor?.close()
+                    synchronized(this) {
+                        if (activeStabilityMonitor === monitor) activeStabilityMonitor = null
+                    }
+                }, 5000)
             }
         }.start()
+    }
+
+    override fun onDestroy() {
+        synchronized(this) {
+            activeStabilityMonitor?.close()
+            activeStabilityMonitor = null
+        }
+        super.onDestroy()
     }
 }

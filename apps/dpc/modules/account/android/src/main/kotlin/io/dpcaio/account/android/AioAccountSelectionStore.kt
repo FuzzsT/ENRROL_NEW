@@ -13,17 +13,40 @@ class AioAccountSelectionStore(context: Context) {
         }.apply()
     }
 
-    fun savePendingReAdd(targetName: String, accountNames: List<String>, restoreManagementDisabled: Boolean = false) {
+    fun saveReorderRecovery(
+        targetName: String,
+        pendingRemoval: List<String>,
+        pendingReAdd: List<String>,
+        restoreManagementDisabled: Boolean = false,
+    ) {
         preferences.edit()
             .putString(KEY_REORDER_TARGET, targetName)
-            .putString(KEY_PENDING_READD, accountNames.joinToString("\n"))
+            .putString(KEY_PENDING_REMOVAL, pendingRemoval.joinToString("\n"))
+            .putString(KEY_PENDING_READD, pendingReAdd.joinToString("\n"))
+            .remove(KEY_REMOVAL_IN_FLIGHT)
+            .remove(KEY_MANUAL_REMOVAL_REQUIRED)
             .putBoolean(KEY_RESTORE_MANAGEMENT_DISABLED, restoreManagementDisabled)
             .apply()
+    }
+
+    fun savePendingReAdd(targetName: String, accountNames: List<String>, restoreManagementDisabled: Boolean = false) {
+        saveReorderRecovery(
+            targetName = targetName,
+            pendingRemoval = emptyList(),
+            pendingReAdd = accountNames,
+            restoreManagementDisabled = restoreManagementDisabled,
+        )
     }
 
     fun pendingTarget(): String? = preferences.getString(KEY_REORDER_TARGET, null)
 
     fun shouldRestoreManagementDisabled(): Boolean = preferences.getBoolean(KEY_RESTORE_MANAGEMENT_DISABLED, false)
+
+    fun pendingRemoval(): List<String> = preferences.getString(KEY_PENDING_REMOVAL, null)
+        ?.lineSequence()
+        ?.filter { it.isNotBlank() }
+        ?.toList()
+        .orEmpty()
 
     fun pendingReAdd(): List<String> = preferences.getString(KEY_PENDING_READD, null)
         ?.lineSequence()
@@ -31,21 +54,63 @@ class AioAccountSelectionStore(context: Context) {
         ?.toList()
         .orEmpty()
 
+    fun removalInFlight(): String? = preferences.getString(KEY_REMOVAL_IN_FLIGHT, null)
+
+    fun manualRemovalRequired(): String? = preferences.getString(KEY_MANUAL_REMOVAL_REQUIRED, null)
+
+    fun markRemovalInFlight(accountName: String) {
+        preferences.edit()
+            .putString(KEY_REMOVAL_IN_FLIGHT, accountName)
+            .remove(KEY_MANUAL_REMOVAL_REQUIRED)
+            .apply()
+    }
+
+    fun markRemovalFailed(accountName: String) {
+        preferences.edit()
+            .remove(KEY_REMOVAL_IN_FLIGHT)
+            .putString(KEY_MANUAL_REMOVAL_REQUIRED, accountName)
+            .apply()
+    }
+
+    fun markRemoved(accountName: String) {
+        val removals = pendingRemoval().toMutableList().apply { remove(accountName) }
+        val readds = pendingReAdd().toMutableList().apply {
+            if (accountName !in this) add(accountName)
+        }
+        preferences.edit()
+            .putString(KEY_PENDING_REMOVAL, removals.joinToString("\n"))
+            .putString(KEY_PENDING_READD, readds.joinToString("\n"))
+            .apply {
+                if (removalInFlight() == accountName) remove(KEY_REMOVAL_IN_FLIGHT)
+                if (manualRemovalRequired() == accountName) remove(KEY_MANUAL_REMOVAL_REQUIRED)
+            }
+            .apply()
+    }
+
     fun markReAdded(accountName: String) {
         val remaining = pendingReAdd().toMutableList().apply { remove(accountName) }
-        if (remaining.isEmpty()) clearPendingReorder()
-        else preferences.edit().putString(KEY_PENDING_READD, remaining.joinToString("\n")).apply()
+        preferences.edit().putString(KEY_PENDING_READD, remaining.joinToString("\n")).apply()
     }
 
     fun clearPendingReorder() {
-        preferences.edit().remove(KEY_REORDER_TARGET).remove(KEY_PENDING_READD).remove(KEY_RESTORE_MANAGEMENT_DISABLED).apply()
+        preferences.edit()
+            .remove(KEY_REORDER_TARGET)
+            .remove(KEY_PENDING_REMOVAL)
+            .remove(KEY_PENDING_READD)
+            .remove(KEY_REMOVAL_IN_FLIGHT)
+            .remove(KEY_MANUAL_REMOVAL_REQUIRED)
+            .remove(KEY_RESTORE_MANAGEMENT_DISABLED)
+            .apply()
     }
 
     private companion object {
         const val PREFS = "google_account_manager"
         const val KEY_SELECTED = "selected_account"
         const val KEY_REORDER_TARGET = "reorder_target"
+        const val KEY_PENDING_REMOVAL = "pending_removal"
         const val KEY_PENDING_READD = "pending_readd"
+        const val KEY_REMOVAL_IN_FLIGHT = "removal_in_flight"
+        const val KEY_MANUAL_REMOVAL_REQUIRED = "manual_removal_required"
         const val KEY_RESTORE_MANAGEMENT_DISABLED = "restore_management_disabled"
     }
 }
