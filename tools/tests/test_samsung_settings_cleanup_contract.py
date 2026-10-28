@@ -6,10 +6,12 @@ text = ACTIVITY.read_text(encoding='utf-8')
 
 assert 'private var stabilityCleanup: Runnable?' in text, \
     'Settings editor must retain delayed stability cleanup so it can be cancelled'
-assert 'status.removeCallbacks(stabilityCleanup' in text, \
-    'Settings editor must cancel a previously scheduled stability cleanup before replacing it'
+assert 'private fun cancelStabilityCleanup()' in text, \
+    'Settings editor must centralize delayed cleanup cancellation'
 assert 'stabilityCleanup?.let(status::removeCallbacks)' in text, \
     'Settings editor must remove delayed cleanup callbacks during Activity teardown'
+assert text.count('cancelStabilityCleanup()') >= 3, \
+    'Settings editor must cancel cleanup before replacement and again during teardown'
 assert 'stabilityCleanup = null' in text, \
     'Settings editor must release its delayed cleanup reference'
 
