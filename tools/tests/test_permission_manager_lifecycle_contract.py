@@ -47,6 +47,12 @@ assert batch.index('if (generation != batchPreviewGeneration) return@postUiIfAli
 assert batch.index('pendingBatchChanges = changes') < batch.index('output.text = text'), \
     'Pending batch state and visible preview must be published together on the UI thread'
 
+apply_batch = function_body('applyPendingBatch', 'restorePreviousDpcStates')
+assert 'targetPackage.text.toString().trim()' not in apply_batch, \
+    'Batch apply must not re-read the package field after preview'
+assert 'val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName' in apply_batch, \
+    'Batch apply must bind package routing to the package captured by the preview plan'
+
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
     'Catalog scan must snapshot query text on the UI thread before starting worker work'
