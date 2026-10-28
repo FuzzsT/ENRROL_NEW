@@ -349,31 +349,38 @@ class OfflineSetupActivity : Activity() {
                     plan
                 }.onFailure { error ->
                     val orphanedPlan = stagedPlan
-                    if (orphanedPlan != null && !stageCheckpointPersisted) {
-                        packageInstaller.abandon(orphanedPlan)
-                    }
-                    runCatching {
-                        workerStore.updateIf(
-                            predicate = { current ->
-                                current.bundleId == manifest.bundleId &&
-                                    (
-                                        (current.stage == OfflineStage.BUNDLE_VERIFIED && stagedCommitSessionId == null) ||
-                                            (current.stage == OfflineStage.PACKAGES_STAGED && current.commitSessionId == stagedCommitSessionId)
-                                    )
-                            },
-                            transform = { current ->
-                                current.copy(
-                                    stage = OfflineStage.FAILED,
-                                    lastError = error.message,
-                                )
-                            },
-                        )
-                    }
-                    if (workerStore.hasPendingPersistence()) {
+                    if (stageCheckpointPersisted) {
                         appContext.sendBroadcast(
                             Intent(appContext, OfflineRecoveryReceiver::class.java)
-                                .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                                .setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE)
                         )
+                    } else {
+                        if (orphanedPlan != null && !stageCheckpointPersisted) {
+                            packageInstaller.abandon(orphanedPlan)
+                        }
+                        runCatching {
+                            workerStore.updateIf(
+                                predicate = { current ->
+                                    current.bundleId == manifest.bundleId &&
+                                        (
+                                            (current.stage == OfflineStage.BUNDLE_VERIFIED && stagedCommitSessionId == null) ||
+                                                (current.stage == OfflineStage.PACKAGES_STAGED && current.commitSessionId == stagedCommitSessionId)
+                                        )
+                                },
+                                transform = { current ->
+                                    current.copy(
+                                        stage = OfflineStage.FAILED,
+                                        lastError = error.message,
+                                    )
+                                },
+                            )
+                        }
+                        if (workerStore.hasPendingPersistence()) {
+                            appContext.sendBroadcast(
+                                Intent(appContext, OfflineRecoveryReceiver::class.java)
+                                    .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                            )
+                        }
                     }
                 }
             } finally {
