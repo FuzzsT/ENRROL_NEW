@@ -38,4 +38,11 @@ for persistence in [
 ]:
     assert persistence in s and s.index(persistence) > thread_index, f'persistence must run off UI thread: {persistence}'
 
+ui_callback = s.index('runOnUiThread {', thread_index)
+release = s.index('persistenceInProgress.set(false)')
+assert release > ui_callback, 'manual enrollment gate must stay held until main-thread completion begins'
+completion_tail = s[ui_callback:]
+assert 'finally {' in completion_tail and completion_tail.index('finally {') < completion_tail.index('persistenceInProgress.set(false)'), \
+    'manual enrollment gate release must run in UI completion finally, including Activity teardown'
+
 print('test_enrollment_manual_ui_contract: PASS')
