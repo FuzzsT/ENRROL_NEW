@@ -48,4 +48,18 @@ toggle_end = launcher.index("private fun recordRecent", toggle_start)
 toggle_body = launcher[toggle_start:toggle_end]
 assert "renderApps(resetLimit = false)" in toggle_body, "favorite updates must preserve the current render limit"
 
+# Returning from another Activity must refresh the package inventory without allowing an older scan to win.
+assert "private var inventoryGeneration" in launcher, "launcher must track installed-inventory scan generations"
+assert "override fun onRestart()" in launcher, "launcher must refresh installed packages when returning after stop"
+restart_start = launcher.index("override fun onRestart()")
+restart_end = launcher.index("override fun onResume()", restart_start)
+restart_body = launcher[restart_start:restart_end]
+assert "discoverInstalledApps" in restart_body, "onRestart must trigger a fresh installed-app inventory"
+discover_start = launcher.index("private fun discoverInstalledApps")
+discover_end = launcher.index("private fun toEntry", discover_start)
+discover_body = launcher[discover_start:discover_end]
+assert "++inventoryGeneration" in discover_body, "each inventory scan must get a monotonically increasing generation"
+assert "generation != inventoryGeneration" in discover_body, "stale installed-app scans must not overwrite newer inventory"
+assert "renderApps(resetLimit = resetLimit)" in discover_body, "restart refresh should be able to preserve already materialized depth"
+
 print("ACTIVITY_LAUNCHER_LAZY_ICONS_CONTRACT: PASS")
