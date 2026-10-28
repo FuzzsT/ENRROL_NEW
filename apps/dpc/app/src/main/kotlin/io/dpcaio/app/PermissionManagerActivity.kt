@@ -27,6 +27,11 @@ import io.dpcaio.policy.ManagedPermissionState
 import io.dpcaio.shizuku.ShizukuUserServiceClient
 
 class PermissionManagerActivity : Activity() {
+    companion object {
+        @Volatile
+        private var lastAppliedBatchChanges: List<PermissionBatchChange> = emptyList()
+    }
+
     private lateinit var output: TextView
     private lateinit var query: EditText
     private lateinit var targetPackage: EditText
@@ -290,10 +295,12 @@ class PermissionManagerActivity : Activity() {
         val plan = pendingBatchPlan ?: run { output.text = "Run Batch Preview first"; return }
         val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName
             ?: run { output.text = "Preview package unavailable; run Batch Preview again"; return }
+        val previewChanges = pendingBatchChanges
         Thread {
             val catalog = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
             val shizukuAvailable = shizuku.identity() != null
             val results = mutableListOf<String>()
+            val appliedRestorable = mutableListOf<PermissionBatchChange>()
             plan.supported.forEach { item ->
                 val entry = catalog[item.permission]
                 val applyDetail = when (item.route) {
@@ -325,16 +332,29 @@ class PermissionManagerActivity : Activity() {
                     }
                     else -> false
                 }
+                if (
+                    verified && item.route in setOf(
+                        PermissionControlRoute.DPC,
+                        PermissionControlRoute.DELEGATED_DPC,
+                    )
+                ) {
+                    previewChanges.firstOrNull { change ->
+                        change.packageName == item.packageName &&
+                            change.permission == item.permission &&
+                            change.userId == item.userId
+                    }?.let(appliedRestorable::add)
+                }
                 results += "${item.permission}: route=${item.route} $applyDetail verified=$verified Actual=${readback.actualGranted} DPC=${readback.dpcState} AppOp=${readback.appOpState}"
             }
+            lastAppliedBatchChanges = appliedRestorable.toList()
             plan.skipped.forEach { results += "${it.permission}: SKIPPED ${it.detail}" }
             postUiIfAlive { output.text = "Apply supported\n${results.joinToString("\n")}" }
         }.start()
     }
 
     private fun restorePreviousDpcStates() {
-        val restore = batchTransaction.restorePlan(pendingBatchChanges)
-        if (restore.isEmpty()) { output.text = "No previous DPC-managed states to restore"; return }
+        val restore = batchTransaction.restorePlan(lastAppliedBatchChanges)
+        if (restore.isEmpty()) { output.text = "No applied DPC-managed states to restore"; return }
         Thread {
             val results = restore.map { change ->
                 val result = manager.setDpcPermissionState(
