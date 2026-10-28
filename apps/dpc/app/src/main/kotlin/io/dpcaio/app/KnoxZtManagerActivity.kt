@@ -16,6 +16,8 @@ class KnoxZtManagerActivity : Activity() {
     private lateinit var url: EditText
     private lateinit var apkSha: EditText
     private lateinit var signerSha: EditText
+    private val operationLock = Any()
+    private var operationRunning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,30 +71,56 @@ class KnoxZtManagerActivity : Activity() {
         }.onFailure { output.text = "Source rejected: ${it.message}" }
     }
 
+    private fun beginOperation(): Boolean = synchronized(operationLock) {
+        if (operationRunning) return@synchronized false
+        operationRunning = true
+        true
+    }
+
+    private fun finishOperation() = synchronized(operationLock) {
+        operationRunning = false
+    }
+
     private fun ensureReady() {
+        if (!beginOperation()) {
+            output.text = "KnoxZT operation already running"
+            return
+        }
         output.text = "Checking KnoxZT..."
         Thread {
-            val result = KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = ShizukuUserServiceClient(this)).ensureReady()
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                output.text = "status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}"
+            try {
+                val result = KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = ShizukuUserServiceClient(this)).ensureReady()
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    output.text = "status=${result.status}\ndetail=${result.detail}\nroutes=${result.attemptedRoutes}"
+                }
+            } finally {
+                finishOperation()
             }
         }.start()
     }
 
     private fun listActivities() {
+        if (!beginOperation()) {
+            output.text = "KnoxZT operation already running"
+            return
+        }
         output.text = "Preparing KnoxZT..."
         Thread {
-            val (recovery, activities) = KnoxZtActivitySupport(this, AioDeviceAdminReceiver.componentName(this))
-                .prepareAndList(Process.myUserHandle())
-            val text = buildString {
-                appendLine("recovery=${recovery.status} ${recovery.detail}")
-                appendLine("activities=${activities.size}")
-                activities.forEach { appendLine("${it.className} exported=${it.exported} enabled=${it.enabled} permission=${it.requiredPermission}") }
-            }
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                output.text = text
+            try {
+                val (recovery, activities) = KnoxZtActivitySupport(this, AioDeviceAdminReceiver.componentName(this))
+                    .prepareAndList(Process.myUserHandle())
+                val text = buildString {
+                    appendLine("recovery=${recovery.status} ${recovery.detail}")
+                    appendLine("activities=${activities.size}")
+                    activities.forEach { appendLine("${it.className} exported=${it.exported} enabled=${it.enabled} permission=${it.requiredPermission}") }
+                }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    output.text = text
+                }
+            } finally {
+                finishOperation()
             }
         }.start()
     }
