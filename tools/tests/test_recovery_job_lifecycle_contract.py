@@ -91,12 +91,32 @@ assert '.apply()' not in store_text, \
     'OfflineDeploymentStore must not use asynchronous apply() for crash-recovery state'
 assert 'private fun commitOrThrow' in store_text, \
     'OfflineDeploymentStore must centralize checked durable commits'
-assert 'check(editor.commit())' in store_text, \
+assert 'check(editor.commit())' in store_text or 'if (editor.commit())' in store_text, \
     'OfflineDeploymentStore must reject commit() == false'
 assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in store_text, \
     'OfflineDeploymentStore commit failures need an explicit diagnostic'
 assert store_text.count('commitOrThrow(') >= 3, \
     'OfflineDeploymentStore save and clear paths must both use checked durable commits'
+
+# A failed commit already mutates SharedPreferences' process-local map. Preserve the desired durable
+# operation separately so a JobScheduler retry can write it before terminal-stage logic trusts the cache.
+for token in [
+    'pendingRecoveryState',
+    'pendingClear',
+    'fun hasPendingPersistence()',
+    'fun retryPendingPersistence()',
+]:
+    assert token in store_text, f'OfflineDeploymentStore pending persistence retry missing: {token}'
+
+pending_check = offline.index('if (store.hasPendingPersistence())')
+terminal_check = offline.index('if (state.stage == OfflineStage.FAILED')
+assert pending_check < terminal_check, \
+    'Pending checkpoint persistence must be retried before terminal-stage early return'
+pending_block = offline[pending_check:terminal_check]
+assert 'store.retryPendingPersistence()' in pending_block, \
+    'Offline recovery must actively retry the pending durable checkpoint'
+assert 'jobFinished(params, retryReschedule)' in pending_block, \
+    'Pending persistence retry must finish/reschedule through JobScheduler'
 
 # Android callback boundaries must not crash the process when the checked persistence layer fails.
 assert 'private fun persistOrStop(' in receiver_text, \
@@ -105,9 +125,9 @@ assert 'runCatching { store.save(state) }' in receiver_text, \
     'Offline install callback must catch checkpoint persistence failures'
 assert receiver_text.count('if (!persistOrStop(') >= 4, \
     'Every install-result state transition must stop when persistence fails'
+assert 'OfflineRecoveryReceiver::class.java' in receiver_text and 'ACTION_PERSISTENCE_RETRY' in receiver_text, \
+    'Receiver persistence failure must schedule recovery of the pending checkpoint'
 
-# Recovery workers must always reach jobFinished. If persisting a failure checkpoint itself fails,
-# JobScheduler must reschedule rather than letting the exception escape the worker thread.
 assert 'runCatching { store.updateIf(' in staged, \
     'Staged-session failure persistence must be exception-safe'
 assert 'jobFinished(params, stagedReschedule)' in staged, \
