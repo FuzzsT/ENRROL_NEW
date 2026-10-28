@@ -115,18 +115,21 @@ class EnrollmentManualActivity : Activity() {
                         EnrollmentSessionStore(appContext).write(session)
                         EnrollmentCoordinator.scheduleResume(appContext, "MANUAL_TOKEN")
                     }
-                    persistenceInProgress.set(false)
                     runOnUiThread {
-                        if (isFinishing || isDestroyed) return@runOnUiThread
-                        result.fold(
-                            onSuccess = {
-                                token.text?.clear()
-                                status.text = "Enrollment scheduled. Open Enrollment Status for progress."
-                            },
-                            onFailure = { error ->
-                                status.text = "Enrollment persistence failed: ${error.message ?: error.javaClass.simpleName}"
-                            },
-                        )
+                        try {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            result.fold(
+                                onSuccess = {
+                                    token.text?.clear()
+                                    status.text = "Enrollment scheduled. Open Enrollment Status for progress."
+                                },
+                                onFailure = { error ->
+                                    status.text = "Enrollment persistence failed: ${error.message ?: error.javaClass.simpleName}"
+                                },
+                            )
+                        } finally {
+                            persistenceInProgress.set(false)
+                        }
                     }
                 }.start()
             }
