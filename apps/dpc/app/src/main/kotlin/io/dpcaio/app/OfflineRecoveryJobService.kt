@@ -27,17 +27,29 @@ class OfflineRecoveryJobService : JobService() {
             val thread = Thread {
                 if (generation != workGeneration.get()) return@Thread
                 val commitSessionId = state.commitSessionId
-                val result = runCatching {
-                    if (commitSessionId == null) {
-                        if (generation != workGeneration.get()) return@runCatching
-                        store.save(
-                            state.copy(
+
+                fun markStagedFailure(detail: String) {
+                    store.updateIf(
+                        predicate = { current ->
+                            current.bundleId == state.bundleId &&
+                                current.stage == OfflineStage.PACKAGES_STAGED &&
+                                current.commitSessionId == commitSessionId
+                        },
+                        transform = { current ->
+                            current.copy(
                                 stage = OfflineStage.FAILED,
                                 parentSessionId = null,
                                 commitSessionId = null,
-                                lastError = "PACKAGE_SESSION_RECOVERY_UNAVAILABLE",
+                                lastError = detail,
                             )
-                        )
+                        },
+                    )
+                }
+
+                val result = runCatching {
+                    if (commitSessionId == null) {
+                        if (generation != workGeneration.get()) return@runCatching
+                        markStagedFailure("PACKAGE_SESSION_RECOVERY_UNAVAILABLE")
                         return@runCatching
                     }
 
@@ -45,14 +57,7 @@ class OfflineRecoveryJobService : JobService() {
                     val committed = packageInstaller.isCommitted(commitSessionId)
                     if (generation != workGeneration.get()) return@runCatching
                     if (committed == null) {
-                        store.save(
-                            state.copy(
-                                stage = OfflineStage.FAILED,
-                                parentSessionId = null,
-                                commitSessionId = null,
-                                lastError = "PACKAGE_SESSION_MISSING:$commitSessionId",
-                            )
-                        )
+                        markStagedFailure("PACKAGE_SESSION_MISSING:$commitSessionId")
                         return@runCatching
                     }
 
@@ -72,15 +77,7 @@ class OfflineRecoveryJobService : JobService() {
                 synchronized(lifecycleLock) {
                     if (generation != workGeneration.get()) return@synchronized
                     result.onFailure { error ->
-                        val latest = store.load() ?: state
-                        store.save(
-                            latest.copy(
-                                stage = OfflineStage.FAILED,
-                                parentSessionId = null,
-                                commitSessionId = null,
-                                lastError = "PACKAGE_SESSION_RECOVERY_FAILED:${error.message}",
-                            )
-                        )
+                        markStagedFailure("PACKAGE_SESSION_RECOVERY_FAILED:${error.message}")
                     }
                     if (generation != workGeneration.get()) return@synchronized
                     worker = null
