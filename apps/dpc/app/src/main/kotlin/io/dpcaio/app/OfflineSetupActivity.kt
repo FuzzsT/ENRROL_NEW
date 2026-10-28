@@ -11,6 +11,7 @@ import io.dpcaio.offline.OfflineMode
 import io.dpcaio.offline.OfflineReadinessInput
 import io.dpcaio.offline.OfflineReadinessPlanner
 import io.dpcaio.offline.OfflineReadinessStatus
+import io.dpcaio.offline.OfflineStage
 import io.dpcaio.offline.android.AndroidOfflineBundleReader
 import io.dpcaio.offline.android.AndroidOfflineBundleStore
 import io.dpcaio.offline.android.AndroidOfflinePackageInstaller
@@ -26,7 +27,6 @@ class OfflineSetupActivity : Activity() {
     private var importGeneration = 0L
     private val bundleStore by lazy { AndroidOfflineBundleStore(this) }
     private val bundleReader by lazy { AndroidOfflineBundleReader(this) }
-    private val packageInstaller by lazy { AndroidOfflinePackageInstaller(this) }
     private val deploymentStore by lazy { OfflineDeploymentStore(this) }
     private val coordinator by lazy { OfflineDeploymentCoordinator(deploymentStore) }
 
@@ -125,8 +125,17 @@ class OfflineSetupActivity : Activity() {
     }
 
     private fun importOfflineBundle(uri: Uri) {
-        if (!importInProgress.compareAndSet(false, true)) {
-            renderState("Offline bundle import already in progress")
+        if (deploymentOwnsBundle()) {
+            renderState("Offline deployment is still using the current bundle")
+            return
+        }
+        if (!bundleIoInProgress.compareAndSet(false, true)) {
+            renderState("Offline bundle I/O already in progress")
+            return
+        }
+        if (deploymentOwnsBundle()) {
+            bundleIoInProgress.set(false)
+            renderState("Offline deployment is still using the current bundle")
             return
         }
         val sourceUri = uri
@@ -142,7 +151,7 @@ class OfflineSetupActivity : Activity() {
                     OfflineBundleImportResult(file, inspected, sha256(file))
                 }
             } finally {
-                importInProgress.set(false)
+                bundleIoInProgress.set(false)
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -166,7 +175,7 @@ class OfflineSetupActivity : Activity() {
             }
         }
         runCatching { worker.start() }.onFailure { error ->
-            importInProgress.set(false)
+            bundleIoInProgress.set(false)
             if (!isFinishing && !isDestroyed) {
                 renderState("OFFLINE_BUNDLE_INVALID\n${error.javaClass.simpleName}: ${error.message}")
             }
@@ -225,65 +234,151 @@ class OfflineSetupActivity : Activity() {
             renderState("OFFLINE_BUNDLE_INVALID\nSigned manifest/package verification must pass before apply")
             return
         }
-        coordinator.startFullOffline(manifest.bundleId)
-        deploymentStore.save(
-            OfflineDeploymentState(
-                bundleId = manifest.bundleId,
-                stage = io.dpcaio.offline.OfflineStage.BUNDLE_VERIFIED,
-                syncPending = mode == OfflineMode.OFFLINE_THEN_SYNC,
-                bundlePath = file.absolutePath,
-            )
-        )
+        if (deploymentOwnsBundle()) {
+            renderState("Offline deployment is already using the current bundle")
+            return
+        }
+        val syncPending = mode == OfflineMode.OFFLINE_THEN_SYNC
         if (manifest.packages.isEmpty()) {
+            startPolicyOnlyDeployment(file, manifest, syncPending)
+            return
+        }
+        stageAndCommitBundle(file, manifest, syncPending)
+    }
+
+    private fun startPolicyOnlyDeployment(
+        file: File,
+        manifest: io.dpcaio.offline.OfflineBundleManifest,
+        syncPending: Boolean,
+    ) {
+        if (!bundleIoInProgress.compareAndSet(false, true)) {
+            renderState("Offline bundle I/O already in progress")
+            return
+        }
+        try {
+            if (deploymentOwnsBundle()) {
+                renderState("Offline deployment is already using the current bundle")
+                return
+            }
+            coordinator.startFullOffline(manifest.bundleId)
             deploymentStore.save(
-                deploymentStore.load()!!.copy(stage = io.dpcaio.offline.OfflineStage.PACKAGES_INSTALLED)
+                OfflineDeploymentState(
+                    bundleId = manifest.bundleId,
+                    stage = OfflineStage.PACKAGES_INSTALLED,
+                    syncPending = syncPending,
+                    bundlePath = file.absolutePath,
+                )
             )
             sendBroadcast(
                 Intent(this, OfflineRecoveryReceiver::class.java)
                     .setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE)
             )
             renderState("PACKAGES_INSTALLED\nNo package payload; policy application scheduled")
+        } finally {
+            bundleIoInProgress.set(false)
+        }
+    }
+
+    private fun stageAndCommitBundle(
+        file: File,
+        manifest: io.dpcaio.offline.OfflineBundleManifest,
+        syncPending: Boolean,
+    ) {
+        if (!bundleIoInProgress.compareAndSet(false, true)) {
+            renderState("Offline bundle I/O already in progress")
             return
         }
-        runCatching {
-            val plan = packageInstaller.stageBundle(file, manifest)
-            deploymentStore.save(
-                deploymentStore.load()!!.copy(
-                    stage = io.dpcaio.offline.OfflineStage.PACKAGES_STAGED,
-                    parentSessionId = plan.parentSessionId,
-                    bundlePath = file.absolutePath,
-                )
-            )
-            val callback = PendingIntent.getBroadcast(
-                this,
-                4101,
-                Intent(this, OfflineInstallStatusReceiver::class.java)
-                    .setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            packageInstaller.commit(plan, callback.intentSender)
-            renderState(buildString {
-                appendLine("PACKAGES_STAGED")
-                appendLine("bundle=${manifest.bundleId}")
-                appendLine("packages=${manifest.packages.size}")
-                appendLine("atomic=${plan.atomic}")
-                appendLine("parentSessionId=${plan.parentSessionId}")
-                appendLine("Waiting for PackageInstaller readback callback")
-            })
-        }.onFailure { error ->
-            deploymentStore.save(
-                deploymentStore.load()!!.copy(
-                    stage = io.dpcaio.offline.OfflineStage.FAILED,
-                    lastError = error.message,
-                )
-            )
-            renderState("OFFLINE_POLICY_PARTIAL\nPACKAGE_STAGE_FAILED: ${error.javaClass.simpleName}: ${error.message}")
+        if (deploymentOwnsBundle()) {
+            bundleIoInProgress.set(false)
+            renderState("Offline deployment is already using the current bundle")
+            return
+        }
+        val appContext = applicationContext
+        renderState("Staging offline package payload...")
+        val worker = Thread {
+            val packageInstaller = AndroidOfflinePackageInstaller(appContext)
+            val workerStore = OfflineDeploymentStore(appContext)
+            val workerCoordinator = OfflineDeploymentCoordinator(workerStore)
+            val result = try {
+                runCatching {
+                    workerCoordinator.startFullOffline(manifest.bundleId)
+                    workerStore.save(
+                        OfflineDeploymentState(
+                            bundleId = manifest.bundleId,
+                            stage = OfflineStage.BUNDLE_VERIFIED,
+                            syncPending = syncPending,
+                            bundlePath = file.absolutePath,
+                        )
+                    )
+                    val plan = packageInstaller.stageBundle(file, manifest)
+                    val commitSessionId = plan.parentSessionId ?: plan.childSessionIds.single()
+                    workerStore.save(
+                        workerStore.load()!!.copy(
+                            stage = OfflineStage.PACKAGES_STAGED,
+                            parentSessionId = plan.parentSessionId,
+                            commitSessionId = commitSessionId,
+                            bundlePath = file.absolutePath,
+                        )
+                    )
+                    val callback = PendingIntent.getBroadcast(
+                        appContext,
+                        4101,
+                        Intent(appContext, OfflineInstallStatusReceiver::class.java)
+                            .setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    )
+                    packageInstaller.commit(plan, callback.intentSender)
+                    plan
+                }.onFailure { error ->
+                    workerStore.load()?.let { state ->
+                        workerStore.save(
+                            state.copy(
+                                stage = OfflineStage.FAILED,
+                                lastError = error.message,
+                            )
+                        )
+                    }
+                }
+            } finally {
+                bundleIoInProgress.set(false)
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                result.onSuccess { plan ->
+                    renderState(buildString {
+                        appendLine("PACKAGES_STAGED")
+                        appendLine("bundle=${manifest.bundleId}")
+                        appendLine("packages=${manifest.packages.size}")
+                        appendLine("atomic=${plan.atomic}")
+                        appendLine("parentSessionId=${plan.parentSessionId}")
+                        appendLine("Waiting for PackageInstaller readback callback")
+                    })
+                }.onFailure { error ->
+                    renderState("OFFLINE_POLICY_PARTIAL\nPACKAGE_STAGE_FAILED: ${error.javaClass.simpleName}: ${error.message}")
+                }
+            }
+        }
+        runCatching { worker.start() }.onFailure { error ->
+            bundleIoInProgress.set(false)
+            if (!isFinishing && !isDestroyed) {
+                renderState("OFFLINE_POLICY_PARTIAL\nPACKAGE_STAGE_FAILED: ${error.javaClass.simpleName}: ${error.message}")
+            }
         }
     }
 
     private fun shizukuAvailable(): Boolean = runCatching {
         io.dpcaio.shizuku.AndroidShizukuRuntime().probe().let { it.binderAlive && it.permissionGranted }
     }.getOrDefault(false)
+
+    private fun deploymentOwnsBundle(): Boolean = when (deploymentStore.load()?.stage) {
+        OfflineStage.PACKAGES_STAGED,
+        OfflineStage.PACKAGES_INSTALLED,
+        OfflineStage.PERMISSIONS_APPLIED,
+        OfflineStage.COMPONENTS_APPLIED,
+        OfflineStage.POLICIES_APPLIED,
+        OfflineStage.READBACK_VERIFIED -> true
+        else -> false
+    }
 
     private fun showPersistedState() {
         val state = deploymentStore.load()
@@ -321,6 +416,6 @@ class OfflineSetupActivity : Activity() {
 
     companion object {
         private const val REQ_IMPORT = 4100
-        private val importInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+        private val bundleIoInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
     }
 }

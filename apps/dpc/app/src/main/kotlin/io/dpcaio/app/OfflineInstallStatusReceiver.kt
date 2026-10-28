@@ -19,10 +19,24 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> {
                 val trust = verifyInstalledPackages(context, state)
                 if (!trust.first) {
-                    store.save(state.copy(stage = OfflineStage.FAILED, parentSessionId = null, lastError = "PACKAGE_TRUST_MISMATCH:${trust.second}"))
+                    store.save(
+                        state.copy(
+                            stage = OfflineStage.FAILED,
+                            parentSessionId = null,
+                            commitSessionId = null,
+                            lastError = "PACKAGE_TRUST_MISMATCH:${trust.second}",
+                        )
+                    )
                     return
                 }
-                store.save(state.copy(stage = OfflineStage.PACKAGES_INSTALLED, parentSessionId = null, lastError = null))
+                store.save(
+                    state.copy(
+                        stage = OfflineStage.PACKAGES_INSTALLED,
+                        parentSessionId = null,
+                        commitSessionId = null,
+                        lastError = null,
+                    )
+                )
                 context.sendBroadcast(Intent(context, OfflineRecoveryReceiver::class.java).setAction(ACTION_PACKAGE_DONE))
             }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
@@ -30,7 +44,14 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
             }
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "PACKAGE_INSTALL_FAILED:$status"
-                store.save(state.copy(stage = OfflineStage.FAILED, lastError = message))
+                store.save(
+                    state.copy(
+                        stage = OfflineStage.FAILED,
+                        parentSessionId = null,
+                        commitSessionId = null,
+                        lastError = message,
+                    )
+                )
             }
         }
     }
