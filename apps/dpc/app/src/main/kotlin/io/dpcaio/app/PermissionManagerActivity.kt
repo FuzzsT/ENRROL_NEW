@@ -25,11 +25,13 @@ import io.dpcaio.permission.android.GlobalRuntimePermissionPolicy
 import io.dpcaio.platform.AndroidUserId
 import io.dpcaio.policy.ManagedPermissionState
 import io.dpcaio.shizuku.ShizukuUserServiceClient
+import java.util.concurrent.atomic.AtomicBoolean
 
 class PermissionManagerActivity : Activity() {
     companion object {
         @Volatile
         private var lastAppliedBatchChanges: List<PermissionBatchChange> = emptyList()
+        private val batchMutationInProgress = AtomicBoolean(false)
     }
 
     private lateinit var output: TextView
@@ -296,76 +298,92 @@ class PermissionManagerActivity : Activity() {
         val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName
             ?: run { output.text = "Preview package unavailable; run Batch Preview again"; return }
         val previewChanges = pendingBatchChanges
+        if (!batchMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Batch permission operation already in progress"
+            return
+        }
         Thread {
-            val catalog = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
-            val shizukuAvailable = shizuku.identity() != null
-            val results = mutableListOf<String>()
-            val appliedRestorable = mutableListOf<PermissionBatchChange>()
-            plan.supported.forEach { item ->
-                val entry = catalog[item.permission]
-                val applyDetail = when (item.route) {
-                    PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC ->
-                        manager.setDpcPermissionState(pkg, item.permission, item.userId, item.requestedState).detail
-                    PermissionControlRoute.SHIZUKU -> when (item.requestedState) {
-                        ManagedPermissionState.GRANTED -> "SHIZUKU_GRANT:${shizuku.grantRuntimePermission(pkg, item.permission, item.userId)}"
-                        ManagedPermissionState.DENIED -> "SHIZUKU_REVOKE:${shizuku.revokeRuntimePermission(pkg, item.permission, item.userId)}"
-                        ManagedPermissionState.DEFAULT -> "SKIPPED:DPC_DEFAULT_REQUIRES_DPC"
+            try {
+                val catalog = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
+                val shizukuAvailable = shizuku.identity() != null
+                val results = mutableListOf<String>()
+                val appliedRestorable = mutableListOf<PermissionBatchChange>()
+                plan.supported.forEach { item ->
+                    val entry = catalog[item.permission]
+                    val applyDetail = when (item.route) {
+                        PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC ->
+                            manager.setDpcPermissionState(pkg, item.permission, item.userId, item.requestedState).detail
+                        PermissionControlRoute.SHIZUKU -> when (item.requestedState) {
+                            ManagedPermissionState.GRANTED -> "SHIZUKU_GRANT:${shizuku.grantRuntimePermission(pkg, item.permission, item.userId)}"
+                            ManagedPermissionState.DENIED -> "SHIZUKU_REVOKE:${shizuku.revokeRuntimePermission(pkg, item.permission, item.userId)}"
+                            ManagedPermissionState.DEFAULT -> "SKIPPED:DPC_DEFAULT_REQUIRES_DPC"
+                        }
+                        PermissionControlRoute.SYSTEM_PRIVILEGED -> "SKIPPED:SYSTEM_PRIVILEGED_ROUTE_NOT_ACTIVE"
+                        PermissionControlRoute.USER_ACTION -> "SKIPPED:USER_ACTION_REQUIRED"
+                        PermissionControlRoute.UNAVAILABLE -> "SKIPPED:UNAVAILABLE"
                     }
-                    PermissionControlRoute.SYSTEM_PRIVILEGED -> "SKIPPED:SYSTEM_PRIVILEGED_ROUTE_NOT_ACTIVE"
-                    PermissionControlRoute.USER_ACTION -> "SKIPPED:USER_ACTION_REQUIRED"
-                    PermissionControlRoute.UNAVAILABLE -> "SKIPPED:UNAVAILABLE"
-                }
-                val readback = manager.inspectPermission(
-                    packageName = pkg,
-                    permission = item.permission,
-                    targetUserId = item.userId,
-                    group = entry?.group,
-                    protection = entry?.protection ?: PermissionProtection.UNKNOWN,
-                    shizukuAvailable = shizukuAvailable
-                )
-                val verified = when (item.route) {
-                    PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC -> readback.dpcState == item.requestedState
-                    PermissionControlRoute.SHIZUKU -> when (item.requestedState) {
-                        ManagedPermissionState.GRANTED -> readback.actualGranted
-                        ManagedPermissionState.DENIED -> !readback.actualGranted
-                        ManagedPermissionState.DEFAULT -> false
-                    }
-                    else -> false
-                }
-                if (
-                    verified && item.route in setOf(
-                        PermissionControlRoute.DPC,
-                        PermissionControlRoute.DELEGATED_DPC,
+                    val readback = manager.inspectPermission(
+                        packageName = pkg,
+                        permission = item.permission,
+                        targetUserId = item.userId,
+                        group = entry?.group,
+                        protection = entry?.protection ?: PermissionProtection.UNKNOWN,
+                        shizukuAvailable = shizukuAvailable
                     )
-                ) {
-                    previewChanges.firstOrNull { change ->
-                        change.packageName == item.packageName &&
-                            change.permission == item.permission &&
-                            change.userId == item.userId
-                    }?.let(appliedRestorable::add)
+                    val verified = when (item.route) {
+                        PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC -> readback.dpcState == item.requestedState
+                        PermissionControlRoute.SHIZUKU -> when (item.requestedState) {
+                            ManagedPermissionState.GRANTED -> readback.actualGranted
+                            ManagedPermissionState.DENIED -> !readback.actualGranted
+                            ManagedPermissionState.DEFAULT -> false
+                        }
+                        else -> false
+                    }
+                    if (
+                        verified && item.route in setOf(
+                            PermissionControlRoute.DPC,
+                            PermissionControlRoute.DELEGATED_DPC,
+                        )
+                    ) {
+                        previewChanges.firstOrNull { change ->
+                            change.packageName == item.packageName &&
+                                change.permission == item.permission &&
+                                change.userId == item.userId
+                        }?.let(appliedRestorable::add)
+                    }
+                    results += "${item.permission}: route=${item.route} $applyDetail verified=$verified Actual=${readback.actualGranted} DPC=${readback.dpcState} AppOp=${readback.appOpState}"
                 }
-                results += "${item.permission}: route=${item.route} $applyDetail verified=$verified Actual=${readback.actualGranted} DPC=${readback.dpcState} AppOp=${readback.appOpState}"
+                lastAppliedBatchChanges = appliedRestorable.toList()
+                plan.skipped.forEach { results += "${it.permission}: SKIPPED ${it.detail}" }
+                postUiIfAlive { output.text = "Apply supported\n${results.joinToString("\n")}" }
+            } finally {
+                batchMutationInProgress.set(false)
             }
-            lastAppliedBatchChanges = appliedRestorable.toList()
-            plan.skipped.forEach { results += "${it.permission}: SKIPPED ${it.detail}" }
-            postUiIfAlive { output.text = "Apply supported\n${results.joinToString("\n")}" }
         }.start()
     }
 
     private fun restorePreviousDpcStates() {
         val restore = batchTransaction.restorePlan(lastAppliedBatchChanges)
         if (restore.isEmpty()) { output.text = "No applied DPC-managed states to restore"; return }
+        if (!batchMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Batch permission operation already in progress"
+            return
+        }
         Thread {
-            val results = restore.map { change ->
-                val result = manager.setDpcPermissionState(
-                    change.packageName,
-                    change.permission,
-                    change.userId,
-                    change.requestedState
-                )
-                "${change.permission}: restore=${change.requestedState} observed=${result.observedDpcState} ${result.detail}"
+            try {
+                val results = restore.map { change ->
+                    val result = manager.setDpcPermissionState(
+                        change.packageName,
+                        change.permission,
+                        change.userId,
+                        change.requestedState
+                    )
+                    "${change.permission}: restore=${change.requestedState} observed=${result.observedDpcState} ${result.detail}"
+                }
+                postUiIfAlive { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
+            } finally {
+                batchMutationInProgress.set(false)
             }
-            postUiIfAlive { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
         }.start()
     }
 
