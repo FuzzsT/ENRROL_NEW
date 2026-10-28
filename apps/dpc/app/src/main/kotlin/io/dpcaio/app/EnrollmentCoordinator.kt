@@ -22,7 +22,11 @@ class EnrollmentCoordinator(private val context: Context) {
     private val sessionStore = EnrollmentSessionStore(context)
     private val secretStore = EnrollmentSecretStore(context)
 
-    fun resumeOrCreate(intent: Intent): EnrollmentOutcome {
+    fun resumeOrCreate(intent: Intent): EnrollmentOutcome = synchronized(enrollmentRunLock) {
+        resumeOrCreateLocked(intent)
+    }
+
+    private fun resumeOrCreateLocked(intent: Intent): EnrollmentOutcome {
         val extras = adminExtras(intent)
         val parsed = EnrollmentConfigParser.parse(extras)
         var session = sessionStore.read()?.takeIf { existing ->
@@ -168,6 +172,7 @@ class EnrollmentCoordinator(private val context: Context) {
         }
 
     companion object {
+        private val enrollmentRunLock = Any()
         const val KEY_SESSION_ID = "io.dpcaio.extra.ENROLLMENT_SESSION_ID"
         const val KEY_TRIGGER = "io.dpcaio.extra.ENROLLMENT_TRIGGER"
         fun scheduleResume(context: Context, trigger: String) {
