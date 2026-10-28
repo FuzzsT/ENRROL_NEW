@@ -145,13 +145,13 @@ class PermissionManagerActivity : Activity() {
 
     private fun scanAppPermissions(anomaliesOnly: Boolean) {
         val pkg = targetPackage.text.toString().trim()
+        val q = query.text.toString().trim().lowercase()
+        val targetUserId = targetUserId()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
         output.text = "Scanning $pkg..."
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan()
             val byName = snapshot.permissions.associateBy { it.name }
-            val q = query.text.toString().trim().lowercase()
-            val targetUserId = targetUserId()
             val shizukuAvailable = shizuku.identity() != null
             val rows = requestedPermissions(pkg).map { permission ->
                 val entry = byName[permission]
@@ -193,9 +193,9 @@ class PermissionManagerActivity : Activity() {
         val pkg = targetPackage.text.toString().trim()
         val permission = query.text.toString().trim()
         if (pkg.isBlank() || permission.isBlank()) { output.text = "Target package and exact permission required"; return }
+        val targetUserId = targetUserId()
         Thread {
             val entry = catalogEntry(permission)
-            val targetUserId = targetUserId()
             val shizukuAvailable = shizuku.identity() != null
             val decision = manager.resolveDecision(
                 permission,
@@ -236,9 +236,9 @@ class PermissionManagerActivity : Activity() {
     private fun batchPreview(state: ManagedPermissionState) {
         val pkg = targetPackage.text.toString().trim()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
+        val userId = targetUserId()
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
-            val userId = targetUserId()
             val shizukuAvailable = shizuku.identity() != null
             val changes = requestedPermissions(pkg).map { permission ->
                 val entry = snapshot[permission]
@@ -344,10 +344,10 @@ class PermissionManagerActivity : Activity() {
     }
 
     private fun scanCatalog() {
+        val q = query.text.toString().trim().lowercase()
         output.text = "Scanning..."
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan()
-            val q = query.text.toString().trim().lowercase()
             val groups = snapshot.groups.filter { q.isBlank() || it.name.lowercase().contains(q) }
             val perms = snapshot.permissions.filter {
                 q.isBlank() || it.name.lowercase().contains(q) || it.group?.lowercase()?.contains(q) == true || it.declaringPackage?.lowercase()?.contains(q) == true
@@ -371,6 +371,7 @@ class PermissionManagerActivity : Activity() {
     private fun autoRequestedPermissions() {
         val pkg = targetPackage.text.toString().trim()
         if (pkg.isBlank()) { output.text = "Target package required"; return }
+        val userId = targetUserId()
         output.text = "Planning/applying verified routes..."
         Thread {
             val snapshot = AndroidPermissionCatalog(this).scan()
@@ -378,7 +379,7 @@ class PermissionManagerActivity : Activity() {
             val requested = requestedPermissions(pkg)
             val entries = requested.mapNotNull(byName::get)
             val coordinator = AndroidPermissionGrantCoordinator(this, admin, shizuku = shizuku)
-            val results = coordinator.grantAllAuto(pkg, targetUserId(), entries, systemPrivilegedAvailable = false)
+            val results = coordinator.grantAllAuto(pkg, userId, entries, systemPrivilegedAvailable = false)
             val text = buildString {
                 appendLine("AUTO permission result for $pkg")
                 appendLine("requested=${requested.size} catalog-matched=${entries.size}")
