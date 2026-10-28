@@ -78,8 +78,14 @@ class AndroidOfflinePackageInstaller(context: Context) {
 
     fun commit(plan: OfflineInstallSession, statusReceiver: IntentSender) {
         val id = plan.parentSessionId ?: plan.childSessionIds.single()
-        installer.openSession(id).use { it.commit(statusReceiver) }
+        commitSession(id, statusReceiver)
+    }
+
+    fun commitSession(sessionId: Int, statusReceiver: IntentSender) {
+        installer.openSession(sessionId).use { it.commit(statusReceiver) }
     }
 
     fun readback(sessionId: Int): PackageInstaller.SessionInfo? = installer.getSessionInfo(sessionId)
+
+    fun isCommitted(sessionId: Int): Boolean? = readback(sessionId)?.isCommitted
 }
