@@ -151,6 +151,10 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.action', 'ModernUi.scrollPage',
 ]:
     assert token in policy, token
+assert 'isFinishing || isDestroyed' in policy, \
+    'Policy compliance callback must ignore enrollment results after Activity teardown'
+assert 'return@runOnUiThread' in policy, \
+    'Policy compliance lifecycle guard must exit before rendering or finishing a destroyed Activity'
 
 settings = (APP / 'SamsungSettingsEditorActivity.kt').read_text(encoding='utf-8')
 for token in [
