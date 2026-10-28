@@ -299,6 +299,7 @@ class OfflineSetupActivity : Activity() {
             val packageInstaller = AndroidOfflinePackageInstaller(appContext)
             val workerStore = OfflineDeploymentStore(appContext)
             val workerCoordinator = OfflineDeploymentCoordinator(workerStore)
+            var stagedCommitSessionId: Int? = null
             val result = try {
                 runCatching {
                     workerCoordinator.startFullOffline(manifest.bundleId)
@@ -320,6 +321,7 @@ class OfflineSetupActivity : Activity() {
                             bundlePath = file.absolutePath,
                         )
                     )
+                    stagedCommitSessionId = commitSessionId
                     val callback = PendingIntent.getBroadcast(
                         appContext,
                         4101,
@@ -330,14 +332,21 @@ class OfflineSetupActivity : Activity() {
                     packageInstaller.commit(plan, callback.intentSender)
                     plan
                 }.onFailure { error ->
-                    workerStore.load()?.let { state ->
-                        workerStore.save(
-                            state.copy(
+                    workerStore.updateIf(
+                        predicate = { current ->
+                            current.bundleId == manifest.bundleId &&
+                                (
+                                    (current.stage == OfflineStage.BUNDLE_VERIFIED && stagedCommitSessionId == null) ||
+                                        (current.stage == OfflineStage.PACKAGES_STAGED && current.commitSessionId == stagedCommitSessionId)
+                                )
+                        },
+                        transform = { current ->
+                            current.copy(
                                 stage = OfflineStage.FAILED,
                                 lastError = error.message,
                             )
-                        )
-                    }
+                        },
+                    )
                 }
             } finally {
                 bundleIoInProgress.set(false)
