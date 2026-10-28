@@ -23,20 +23,16 @@ for name, text in services.items():
     stale_guard = text.rfind('generation != workGeneration.get()', 0, finished)
     assert stale_guard != -1, f'{name}: jobFinished must be preceded by a stale-generation guard'
 
-# Enrollment retry scheduling must not be emitted by a worker that JobScheduler already stopped/rescheduled.
 enrollment = services['EnrollmentRecoveryJobService.kt']
 schedule = enrollment.index('EnrollmentResumeScheduler.schedule')
 assert enrollment.rfind('generation != workGeneration.get()', 0, schedule) != -1, \
     'Enrollment retry scheduling must be guarded against stale workers'
 
-# An unexpected coordinator exception must not strand JobScheduler in a permanently-running job.
 assert 'runCatching' in enrollment and 'EnrollmentCoordinator(this).resumeOrCreate' in enrollment, \
     'Enrollment recovery must capture unexpected coordinator failures'
 assert 'jobFinished(params, true)' in enrollment, \
     'Enrollment recovery exceptions must finish the active job and request reschedule'
 
-# Offline policy application persists intermediate stages as it progresses. A process death at
-# any of these points must remain recoverable instead of permanently blocking both Apply and Import.
 offline = services['OfflineRecoveryJobService.kt']
 for stage in [
     'OfflineStage.PACKAGES_INSTALLED',
@@ -49,7 +45,6 @@ for stage in [
 assert 'OfflinePolicyApplier(this).apply(File(path))' in offline, \
     'Offline recovery must resume policy application from persisted intermediate stages'
 
-# A crash after PACKAGES_STAGED but before Session.commit() must not permanently strand the bundle.
 for token in [
     'OfflineStage.PACKAGES_STAGED',
     'state.commitSessionId',
@@ -63,9 +58,6 @@ assert 'PACKAGE_SESSION_RECOVERY_UNAVAILABLE' in offline, \
 assert 'PACKAGE_SESSION_MISSING' in offline, \
     'Missing PackageInstaller session must fail explicitly instead of blocking forever'
 
-# PackageInstaller session inspection/commit can cross binder and storage boundaries. JobService callbacks
-# run on the main thread, so staged-session recovery must enter the same generation-guarded worker model
-# before touching the PackageInstaller session and must finish the job from that worker.
 staged_start = offline.index('if (state.stage == OfflineStage.PACKAGES_STAGED)')
 staged_end = offline.index('val policyRecoveryStage', staged_start)
 staged = offline[staged_start:staged_end]
@@ -82,9 +74,6 @@ assert 'jobFinished(params, false)' in staged, \
 assert 'return true' in staged, \
     'PACKAGES_STAGED asynchronous recovery must report ongoing work to JobScheduler'
 
-# The install-result receiver may complete while the worker is inspecting the PackageInstaller session.
-# Failure transitions therefore need an atomic read-check-write against the latest persisted state so an
-# already persisted PACKAGES_INSTALLED success cannot be overwritten by a stale PACKAGES_STAGED snapshot.
 assert 'fun updateIf(' in store_text, \
     'OfflineDeploymentStore must expose an atomic conditional update for recovery ownership checks'
 assert 'synchronized(stateLock)' in store_text, \
@@ -98,11 +87,20 @@ for token in [
 ]:
     assert token in staged, f'PACKAGES_STAGED ownership predicate missing: {token}'
 
-# Recovery checkpoints must be durable before callers proceed. SharedPreferences.apply() only schedules
-# an asynchronous disk write and can lose the latest stage if the process dies immediately afterward.
 assert '.commit()' in store_text, \
     'OfflineDeploymentStore recovery checkpoints must use synchronous SharedPreferences.commit()'
 assert '.apply()' not in store_text, \
     'OfflineDeploymentStore must not use asynchronous apply() for crash-recovery state'
+
+# SharedPreferences.commit() reports persistence failure with false. Recovery state must fail closed
+# instead of letting callers continue as if a checkpoint had reached disk.
+assert 'private fun commitOrThrow' in store_text, \
+    'OfflineDeploymentStore must centralize checked durable commits'
+assert 'check(editor.commit())' in store_text, \
+    'OfflineDeploymentStore must reject commit() == false'
+assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in store_text, \
+    'OfflineDeploymentStore commit failures need an explicit diagnostic'
+assert store_text.count('commitOrThrow(') >= 3, \
+    'OfflineDeploymentStore save and clear paths must both use checked durable commits'
 
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
