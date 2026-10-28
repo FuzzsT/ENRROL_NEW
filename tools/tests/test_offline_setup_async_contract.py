@@ -2,7 +2,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/OfflineSetupActivity.kt'
+POLICY_ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PolicyComplianceActivity.kt'
 text = ACTIVITY.read_text(encoding='utf-8')
+policy_activity = POLICY_ACTIVITY.read_text(encoding='utf-8')
 
 helper_start = text.index('private fun importOfflineBundle')
 helper_end = text.index('\n    private fun preview()', helper_start)
@@ -89,6 +91,17 @@ persistence_retry = stage_body.index('OfflineInstallStatusReceiver.ACTION_PERSIS
 ui_callback = stage_body.index('runOnUiThread', pending_check)
 assert pending_check < persistence_retry < ui_callback, \
     'Package staging persistence retry must be scheduled from the worker before UI completion'
+
+assert 'runCatching { EnrollmentExecutionRouter(this).execute(intent) }' in policy_activity, \
+    'Policy compliance worker must catch enrollment execution failures'
+assert 'OfflineDeploymentStore(applicationContext)' in policy_activity, \
+    'Policy compliance persistence recovery must inspect the device-protected offline store'
+assert 'hasPendingPersistence()' in policy_activity, \
+    'Policy compliance must distinguish pending checkpoint durability failures'
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in policy_activity, \
+    'Policy compliance pending checkpoint failure must schedule offline persistence recovery'
+assert 'EnrollmentExecutionOutcome.Retryable' in policy_activity, \
+    'Policy compliance persistence failure must render a retryable enrollment result'
 
 assert 'file.inputStream().buffered().use' in text, \
     'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle in memory'
