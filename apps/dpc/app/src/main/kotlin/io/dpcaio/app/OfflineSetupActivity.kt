@@ -260,15 +260,26 @@ class OfflineSetupActivity : Activity() {
                 renderState("Offline deployment is already using the current bundle")
                 return
             }
-            coordinator.startFullOffline(manifest.bundleId)
-            deploymentStore.save(
-                OfflineDeploymentState(
-                    bundleId = manifest.bundleId,
-                    stage = OfflineStage.PACKAGES_INSTALLED,
-                    syncPending = syncPending,
-                    bundlePath = file.absolutePath,
+            val persistResult = runCatching {
+                coordinator.startFullOffline(manifest.bundleId)
+                deploymentStore.save(
+                    OfflineDeploymentState(
+                        bundleId = manifest.bundleId,
+                        stage = OfflineStage.PACKAGES_INSTALLED,
+                        syncPending = syncPending,
+                        bundlePath = file.absolutePath,
+                    )
                 )
-            )
+            }
+            if (persistResult.isFailure) {
+                val error = persistResult.exceptionOrNull()
+                sendBroadcast(
+                    Intent(this, OfflineRecoveryReceiver::class.java)
+                        .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                )
+                renderState("OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED\n${error?.javaClass?.simpleName}: ${error?.message}")
+                return
+            }
             sendBroadcast(
                 Intent(this, OfflineRecoveryReceiver::class.java)
                     .setAction(OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE)
@@ -332,21 +343,29 @@ class OfflineSetupActivity : Activity() {
                     packageInstaller.commit(plan, callback.intentSender)
                     plan
                 }.onFailure { error ->
-                    workerStore.updateIf(
-                        predicate = { current ->
-                            current.bundleId == manifest.bundleId &&
-                                (
-                                    (current.stage == OfflineStage.BUNDLE_VERIFIED && stagedCommitSessionId == null) ||
-                                        (current.stage == OfflineStage.PACKAGES_STAGED && current.commitSessionId == stagedCommitSessionId)
+                    runCatching {
+                        workerStore.updateIf(
+                            predicate = { current ->
+                                current.bundleId == manifest.bundleId &&
+                                    (
+                                        (current.stage == OfflineStage.BUNDLE_VERIFIED && stagedCommitSessionId == null) ||
+                                            (current.stage == OfflineStage.PACKAGES_STAGED && current.commitSessionId == stagedCommitSessionId)
+                                    )
+                            },
+                            transform = { current ->
+                                current.copy(
+                                    stage = OfflineStage.FAILED,
+                                    lastError = error.message,
                                 )
-                        },
-                        transform = { current ->
-                            current.copy(
-                                stage = OfflineStage.FAILED,
-                                lastError = error.message,
-                            )
-                        },
-                    )
+                            },
+                        )
+                    }
+                    if (workerStore.hasPendingPersistence()) {
+                        appContext.sendBroadcast(
+                            Intent(appContext, OfflineRecoveryReceiver::class.java)
+                                .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                        )
+                    }
                 }
             } finally {
                 bundleIoInProgress.set(false)

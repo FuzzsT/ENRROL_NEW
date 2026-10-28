@@ -2,7 +2,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/OfflineSetupActivity.kt'
+POLICY_ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PolicyComplianceActivity.kt'
 text = ACTIVITY.read_text(encoding='utf-8')
+policy_activity = POLICY_ACTIVITY.read_text(encoding='utf-8')
 
 helper_start = text.index('private fun importOfflineBundle')
 helper_end = text.index('\n    private fun preview()', helper_start)
@@ -27,7 +29,6 @@ assert 'return@runOnUiThread' in helper_body, \
 assert 'generation != importGeneration' in helper_body, \
     'Offline bundle import must reject stale completion from an older selection'
 
-# Import and package staging share one private bundle path, so both use the same process-wide I/O gate.
 assert 'bundleIoInProgress.compareAndSet(false, true)' in helper_body, \
     'Offline bundle import must acquire the shared process-wide bundle I/O gate'
 assert 'importedBundle = null' in helper_body and 'bundleInspection = null' in helper_body, \
@@ -47,6 +48,25 @@ assert 'bundleReader.inspect(' not in result_body, \
 assert 'sha256(' not in result_body, \
     'onActivityResult must not hash bundle contents on the UI thread'
 
+policy_start = text.index('private fun startPolicyOnlyDeployment')
+policy_end = text.index('\n    private fun stageAndCommitBundle', policy_start)
+policy_body = text[policy_start:policy_end]
+assert 'val persistResult = runCatching {' in policy_body, \
+    'Policy-only deployment must catch persistence failures before sending recovery broadcast'
+assert 'if (persistResult.isFailure)' in policy_body, \
+    'Policy-only deployment must stop when its checkpoint cannot be persisted'
+assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in policy_body, \
+    'Policy-only deployment must surface a clear persistence failure diagnostic'
+failure_start = policy_body.index('if (persistResult.isFailure)')
+package_done = policy_body.index('OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE')
+failure_body = policy_body[failure_start:package_done]
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in failure_body, \
+    'Policy-only persistence failure must schedule recovery of the pending durable checkpoint'
+assert 'sendBroadcast(' in failure_body, \
+    'Policy-only persistence failure must notify OfflineRecoveryReceiver before returning'
+assert failure_body.index('sendBroadcast(') < failure_body.index('return'), \
+    'Policy-only persistence retry must be scheduled before the failure path returns'
+
 stage_start = text.index('private fun stageAndCommitBundle')
 stage_end = text.index('\n    private fun shizukuAvailable()', stage_start)
 stage_body = text[stage_start:stage_end]
@@ -60,6 +80,37 @@ for token in [
     assert token in stage_body, f'Package staging failure ownership predicate missing: {token}'
 assert 'workerStore.load()?.let { state ->' not in stage_body, \
     'Package staging failure must not use a non-atomic load/save transition that can overwrite receiver success'
+assert 'runCatching {\n                        workerStore.updateIf(' in stage_body, \
+    'Package staging failure bookkeeping must not let a persistence exception escape the worker'
+assert 'workerStore.hasPendingPersistence()' in stage_body, \
+    'Package staging failure must detect a pending durable checkpoint after commit failure'
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in stage_body, \
+    'Package staging persistence failure must schedule pending-checkpoint recovery'
+pending_check = stage_body.index('workerStore.hasPendingPersistence()')
+persistence_retry = stage_body.index('OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY', pending_check)
+ui_callback = stage_body.index('runOnUiThread', pending_check)
+assert pending_check < persistence_retry < ui_callback, \
+    'Package staging persistence retry must be scheduled from the worker before UI completion'
+
+assert 'runCatching { EnrollmentExecutionRouter(this).execute(intent) }' in policy_activity, \
+    'Policy compliance worker must catch enrollment execution failures'
+assert 'OfflineDeploymentStore(applicationContext)' in policy_activity, \
+    'Policy compliance persistence recovery must inspect the device-protected offline store'
+assert 'hasPendingPersistence()' in policy_activity, \
+    'Policy compliance must distinguish pending checkpoint durability failures'
+assert 'retryPendingPersistence()' in policy_activity, \
+    'Policy compliance must retry a pending durable checkpoint before enrollment execution'
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in policy_activity, \
+    'Policy compliance pending checkpoint failure must schedule offline persistence recovery'
+assert 'EnrollmentExecutionOutcome.Retryable' in policy_activity, \
+    'Policy compliance persistence failure must render a retryable enrollment result'
+router_index = policy_activity.index('EnrollmentExecutionRouter(this).execute(intent)')
+pending_index = policy_activity.index('hasPendingPersistence()')
+retry_index = policy_activity.index('retryPendingPersistence()')
+assert pending_index < retry_index < router_index, \
+    'Policy compliance must establish durable pending checkpoint recovery before invoking enrollment router'
+assert 'if (!offlineStore.retryPendingPersistence())' in policy_activity, \
+    'Policy compliance must keep enrollment retryable while pending checkpoint persistence still fails'
 
 assert 'file.inputStream().buffered().use' in text, \
     'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'

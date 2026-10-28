@@ -16,6 +16,36 @@ class OfflineRecoveryJobService : JobService() {
 
     override fun onStartJob(params: JobParameters?): Boolean {
         val store = OfflineDeploymentStore(this)
+
+        if (store.hasPendingPersistence()) {
+            val generation = synchronized(lifecycleLock) {
+                worker?.interrupt()
+                workGeneration.incrementAndGet()
+            }
+            val thread = Thread {
+                if (generation != workGeneration.get()) return@Thread
+                val persisted = store.retryPendingPersistence()
+                synchronized(lifecycleLock) {
+                    if (generation != workGeneration.get()) return@synchronized
+                    val current = store.load()
+                    val terminalStages = setOf(
+                        OfflineStage.FAILED,
+                        OfflineStage.OFFLINE_VERIFIED,
+                        OfflineStage.SYNCED,
+                    )
+                    val retryReschedule = !persisted || (current != null && current.stage !in terminalStages)
+                    worker = null
+                    jobFinished(params, retryReschedule)
+                }
+            }
+            synchronized(lifecycleLock) {
+                if (generation != workGeneration.get()) return true
+                worker = thread
+            }
+            thread.start()
+            return true
+        }
+
         val state = store.load() ?: return false
         if (state.stage == OfflineStage.FAILED || state.stage == OfflineStage.OFFLINE_VERIFIED || state.stage == OfflineStage.SYNCED) return false
 
@@ -28,28 +58,28 @@ class OfflineRecoveryJobService : JobService() {
                 if (generation != workGeneration.get()) return@Thread
                 val commitSessionId = state.commitSessionId
 
-                fun markStagedFailure(detail: String) {
-                    store.updateIf(
-                        predicate = { current ->
-                            current.bundleId == state.bundleId &&
-                                current.stage == OfflineStage.PACKAGES_STAGED &&
-                                current.commitSessionId == commitSessionId
-                        },
-                        transform = { current ->
-                            current.copy(
-                                stage = OfflineStage.FAILED,
-                                parentSessionId = null,
-                                commitSessionId = null,
-                                lastError = detail,
-                            )
-                        },
-                    )
-                }
+                fun markStagedFailure(detail: String): Boolean = runCatching { store.updateIf(
+                    predicate = { current ->
+                        current.bundleId == state.bundleId &&
+                            current.stage == OfflineStage.PACKAGES_STAGED &&
+                            current.commitSessionId == commitSessionId
+                    },
+                    transform = { current ->
+                        current.copy(
+                            stage = OfflineStage.FAILED,
+                            parentSessionId = null,
+                            commitSessionId = null,
+                            lastError = detail,
+                        )
+                    },
+                ) }.getOrDefault(false)
 
                 val result = runCatching {
                     if (commitSessionId == null) {
                         if (generation != workGeneration.get()) return@runCatching
-                        markStagedFailure("PACKAGE_SESSION_RECOVERY_UNAVAILABLE")
+                        check(markStagedFailure("PACKAGE_SESSION_RECOVERY_UNAVAILABLE")) {
+                            "OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED"
+                        }
                         return@runCatching
                     }
 
@@ -57,7 +87,9 @@ class OfflineRecoveryJobService : JobService() {
                     val committed = packageInstaller.isCommitted(commitSessionId)
                     if (generation != workGeneration.get()) return@runCatching
                     if (committed == null) {
-                        markStagedFailure("PACKAGE_SESSION_MISSING:$commitSessionId")
+                        check(markStagedFailure("PACKAGE_SESSION_MISSING:$commitSessionId")) {
+                            "OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED"
+                        }
                         return@runCatching
                     }
 
@@ -76,12 +108,13 @@ class OfflineRecoveryJobService : JobService() {
 
                 synchronized(lifecycleLock) {
                     if (generation != workGeneration.get()) return@synchronized
+                    var stagedReschedule = false
                     result.onFailure { error ->
-                        markStagedFailure("PACKAGE_SESSION_RECOVERY_FAILED:${error.message}")
+                        stagedReschedule = !markStagedFailure("PACKAGE_SESSION_RECOVERY_FAILED:${error.message}")
                     }
                     if (generation != workGeneration.get()) return@synchronized
                     worker = null
-                    jobFinished(params, false)
+                    jobFinished(params, stagedReschedule)
                 }
             }
             synchronized(lifecycleLock) {
@@ -110,13 +143,16 @@ class OfflineRecoveryJobService : JobService() {
                 val result = runCatching { OfflinePolicyApplier(this).apply(File(path)) }
                 synchronized(lifecycleLock) {
                     if (generation != workGeneration.get()) return@synchronized
+                    var policyReschedule = false
                     result.onFailure { error ->
                         val latest = store.load() ?: state
-                        store.save(latest.copy(stage = OfflineStage.FAILED, lastError = "OFFLINE_POLICY_PARTIAL:${error.message}"))
+                        policyReschedule = runCatching { store.save(
+                            latest.copy(stage = OfflineStage.FAILED, lastError = "OFFLINE_POLICY_PARTIAL:${error.message}")
+                        ) }.isFailure
                     }
                     if (generation != workGeneration.get()) return@synchronized
                     worker = null
-                    jobFinished(params, false)
+                    jobFinished(params, policyReschedule)
                 }
             }
             synchronized(lifecycleLock) {
