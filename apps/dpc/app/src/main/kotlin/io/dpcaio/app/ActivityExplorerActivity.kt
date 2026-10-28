@@ -454,6 +454,7 @@ class ActivityExplorerActivity : Activity() {
     }
 
     private fun changeState(activity: DiscoveredActivity, desired: ComponentOverrideState, launchAfter: Boolean) {
+        val operationUserId = targetUserId()
         val decision = decision(activity, desired)
         if (!decision.allowed) {
             status.text = "${decision.status}\n${decision.detail}\nRisk=${decision.risk}\nPROTECTED_DPC_COMPONENT=${decision.status == ComponentControlStatus.PROTECTED_DPC_COMPONENT}"
@@ -461,7 +462,7 @@ class ActivityExplorerActivity : Activity() {
         }
         snapshotStore.save(
             ComponentStateSnapshot(
-                targetUserId(),
+                operationUserId,
                 activity.packageName,
                 activity.className,
                 activity.overrideState,
@@ -482,7 +483,7 @@ class ActivityExplorerActivity : Activity() {
                     val result = ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
                         activity.packageName,
                         activity.className,
-                        targetUserId(),
+                        operationUserId,
                         desired,
                     )
                     "route=SHIZUKU requested=$desired ${result.detail}; SUBMITTED, cross-user readback not claimed"
@@ -491,11 +492,12 @@ class ActivityExplorerActivity : Activity() {
                 ComponentControlRoute.UNAVAILABLE -> decision.detail
             }
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 status.text = detail
                 if (launchAfter && decision.route == ComponentControlRoute.OWN_UID && detail.contains("VERIFIED")) {
-                    launch(activity)
+                    launch(activity, operationUserId)
                 } else if (launchAfter && decision.route == ComponentControlRoute.SHIZUKU && detail.contains("SUBMITTED")) {
-                    val exit = shizuku.startActivity(activity.packageName, activity.className, targetUserId())
+                    val exit = shizuku.startActivity(activity.packageName, activity.className, operationUserId)
                     status.append("\nlaunch exit=$exit")
                 }
                 scan()
@@ -523,16 +525,18 @@ class ActivityExplorerActivity : Activity() {
             status.text = "Run Batch Preview first"
             return
         }
-        val allowed = pendingBatch.filter { it.second.allowed }
+        val batch = pendingBatch.toList()
+        val operationUserId = targetUserId()
+        val allowed = batch.filter { it.second.allowed }
         if (allowed.isEmpty()) {
             status.text = "Apply batch\nNo supported component changes"
             return
         }
-        val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, pendingBatch.map { it.second })
+        val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, batch.map { it.second })
         allowed.forEach { (activity, _) ->
             snapshotStore.save(
                 ComponentStateSnapshot(
-                    targetUserId(),
+                    operationUserId,
                     activity.packageName,
                     activity.className,
                     activity.overrideState,
@@ -570,7 +574,7 @@ class ActivityExplorerActivity : Activity() {
                             val result = ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
                                 activity.packageName,
                                 activity.className,
-                                targetUserId(),
+                                operationUserId,
                                 desired,
                             )
                             "${activity.className}: route=SHIZUKU requested=$desired ${result.detail}; readback via rescan"
@@ -581,10 +585,11 @@ class ActivityExplorerActivity : Activity() {
                     results += line
                 }
             }
-            pendingBatch.filterNot { it.second.allowed }.forEach { (activity, decision) ->
+            batch.filterNot { it.second.allowed }.forEach { (activity, decision) ->
                 results += "${activity.className}: SKIPPED ${decision.status} ${decision.detail}"
             }
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 status.text = "Apply batch\n${results.joinToString("\n")}"
                 scan()
             }
@@ -630,7 +635,7 @@ class ActivityExplorerActivity : Activity() {
         scan()
     }
 
-    private fun launch(activity: DiscoveredActivity) {
+    private fun launch(activity: DiscoveredActivity, targetUserId: Int = targetUserId()) {
         val shizukuState = AndroidShizukuRuntime().probe()
         val input = ActivityAccessInput(
             packageName = activity.packageName,
@@ -645,9 +650,9 @@ class ActivityExplorerActivity : Activity() {
         val executor = ActivityExecutorRouter(
             AndroidActivityRouteExecutor(
                 this,
-                UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId())),
+                UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
             ),
-            mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId())),
+            mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId)),
         )
         val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
         status.text = "selected=${result.selectedRoute}\nblockers=${result.blockers}\nattempts=${result.attempts.joinToString { "${it.route}:${it.success}" }}"

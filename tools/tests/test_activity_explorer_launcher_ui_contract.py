@@ -42,6 +42,36 @@ assert 'val generation = ++scanGeneration' in scan, \
 assert 'generation != scanGeneration' in scan, \
     'Activity Explorer must discard results from superseded scans'
 
+# Component mutations run on worker threads. They must snapshot View-backed
+# inputs before starting work and must never update a torn-down Activity.
+change_start = text.index('private fun changeState(')
+change_end = text.index('\n    private fun batchPreviewFiltered(', change_start)
+change = text[change_start:change_end]
+assert 'val operationUserId = targetUserId()' in change, \
+    'Activity Explorer changeState must snapshot target user before its worker thread'
+change_worker = change[change.index('Thread {'):]
+assert 'targetUserId()' not in change_worker, \
+    'Activity Explorer changeState worker must not read EditText-backed target user state'
+assert 'isFinishing || isDestroyed' in change_worker, \
+    'Activity Explorer changeState callback must ignore Activity teardown'
+
+apply_start = text.index('private fun applyBatch()')
+apply_end = text.index('\n    private fun restoreSnapshot()', apply_start)
+apply_batch = text[apply_start:apply_end]
+assert 'val batch = pendingBatch.toList()' in apply_batch, \
+    'Activity Explorer applyBatch must snapshot pendingBatch before worker execution'
+assert 'val operationUserId = targetUserId()' in apply_batch, \
+    'Activity Explorer applyBatch must snapshot target user before worker execution'
+apply_worker = apply_batch[apply_batch.index('Thread {'):]
+assert 'targetUserId()' not in apply_worker, \
+    'Activity Explorer applyBatch worker must not read EditText-backed target user state'
+assert 'pendingBatch.filterNot' not in apply_worker, \
+    'Activity Explorer applyBatch worker must use its immutable batch snapshot'
+assert 'batch.filterNot' in apply_worker, \
+    'Activity Explorer applyBatch skipped results must come from the captured batch'
+assert 'isFinishing || isDestroyed' in apply_worker, \
+    'Activity Explorer applyBatch callback must ignore Activity teardown'
+
 # Compact rows must keep launch dominant while component-state changes stay
 # available as secondary/advanced actions.
 for token in [
