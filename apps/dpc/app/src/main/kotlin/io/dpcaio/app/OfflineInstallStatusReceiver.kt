@@ -20,6 +20,7 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
                 val trust = verifyInstalledPackages(context, state)
                 if (!trust.first) {
                     if (!persistOrStop(
+                            context,
                             store,
                             state.copy(
                                 stage = OfflineStage.FAILED,
@@ -31,6 +32,7 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
                     return
                 }
                 if (!persistOrStop(
+                        context,
                         store,
                         state.copy(
                             stage = OfflineStage.PACKAGES_INSTALLED,
@@ -42,11 +44,12 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
                 context.sendBroadcast(Intent(context, OfflineRecoveryReceiver::class.java).setAction(ACTION_PACKAGE_DONE))
             }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                if (!persistOrStop(store, state.copy(lastError = "USER_ACTION_REQUIRED"))) return
+                if (!persistOrStop(context, store, state.copy(lastError = "USER_ACTION_REQUIRED"))) return
             }
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "PACKAGE_INSTALL_FAILED:$status"
                 if (!persistOrStop(
+                        context,
                         store,
                         state.copy(
                             stage = OfflineStage.FAILED,
@@ -59,8 +62,20 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun persistOrStop(store: OfflineDeploymentStore, state: OfflineDeploymentState): Boolean =
-        runCatching { store.save(state) }.isSuccess
+    private fun persistOrStop(
+        context: Context,
+        store: OfflineDeploymentStore,
+        state: OfflineDeploymentState,
+    ): Boolean {
+        val persisted = runCatching { store.save(state) }.isSuccess
+        if (!persisted) {
+            context.sendBroadcast(
+                Intent(context, OfflineRecoveryReceiver::class.java)
+                    .setAction(ACTION_PERSISTENCE_RETRY)
+            )
+        }
+        return persisted
+    }
 
     private fun verifyInstalledPackages(context: Context, state: OfflineDeploymentState): Pair<Boolean, String> {
         val bundlePath = state.bundlePath ?: return false to "BUNDLE_PATH_MISSING"
@@ -99,5 +114,6 @@ class OfflineInstallStatusReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_INSTALL_RESULT = "io.dpcaio.offline.INSTALL_RESULT"
         const val ACTION_PACKAGE_DONE = "io.dpcaio.offline.PACKAGES_INSTALLED"
+        const val ACTION_PERSISTENCE_RETRY = "io.dpcaio.offline.PERSISTENCE_RETRY"
     }
 }
