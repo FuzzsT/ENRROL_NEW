@@ -288,7 +288,8 @@ class PermissionManagerActivity : Activity() {
 
     private fun applyPendingBatch() {
         val plan = pendingBatchPlan ?: run { output.text = "Run Batch Preview first"; return }
-        val pkg = targetPackage.text.toString().trim()
+        val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName
+            ?: run { output.text = "Preview package unavailable; run Batch Preview again"; return }
         Thread {
             val catalog = AndroidPermissionCatalog(this).scan().permissions.associateBy { it.name }
             val shizukuAvailable = shizuku.identity() != null
