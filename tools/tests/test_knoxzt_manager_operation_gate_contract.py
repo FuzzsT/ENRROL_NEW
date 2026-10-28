@@ -13,6 +13,15 @@ for token in [
 ]:
     assert token in text, f'KnoxZT manager missing serialized manual operation gate: {token}'
 
+assert 'companion object {' in text, 'KnoxZT manual-operation gate must be process-wide across Activity recreation'
+companion_start = text.index('companion object {')
+companion_end = text.index('\n    override fun onCreate', companion_start)
+companion = text[companion_start:companion_end]
+assert 'private val operationLock = Any()' in companion, \
+    'KnoxZT operation lock must survive Activity recreation'
+assert 'private var operationRunning = false' in companion, \
+    'KnoxZT running state must survive Activity recreation'
+
 ensure_start = text.index('private fun ensureReady()')
 ensure_end = text.index('private fun listActivities()', ensure_start)
 ensure_body = text[ensure_start:ensure_end]
