@@ -47,6 +47,7 @@ class ActivityLauncherHubActivity : Activity() {
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
     private var renderGeneration = 0L
+    private var visibleAppLimit = INITIAL_RENDER_LIMIT
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
     }
@@ -73,7 +74,7 @@ class ActivityLauncherHubActivity : Activity() {
         super.onResume()
         if (::appList.isInitialized && installedApps.isNotEmpty()) {
             renderTabs()
-            renderApps()
+            renderApps(resetLimit = false)
         }
     }
 
@@ -344,8 +345,9 @@ class ActivityLauncherHubActivity : Activity() {
         }
     }
 
-    private fun renderApps() {
+    private fun renderApps(resetLimit: Boolean = true) {
         if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        if (resetLimit) visibleAppLimit = INITIAL_RENDER_LIMIT
         val generation = ++renderGeneration
         val shown = filteredApps()
         appList.removeAllViews()
@@ -361,7 +363,31 @@ class ActivityLauncherHubActivity : Activity() {
             )
             return
         }
-        shown.forEach { app -> appList.addView(renderApp(app, generation)) }
+
+        shown.take(visibleAppLimit).forEach { app -> appList.addView(renderApp(app, generation)) }
+        addLoadMoreControl(shown, generation)
+    }
+
+    private fun addLoadMoreControl(shown: List<AppEntry>, generation: Long) {
+        if (visibleAppLimit >= shown.size) return
+        val remaining = shown.size - visibleAppLimit
+        val control = ModernUi.action(this, "Load more ($remaining remaining)") {
+            appendNextPage(shown, generation)
+        }
+        control.tag = LOAD_MORE_TAG
+        appList.addView(control)
+    }
+
+    private fun appendNextPage(shown: List<AppEntry>, generation: Long) {
+        if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        if (generation != renderGeneration) return
+        val start = visibleAppLimit.coerceAtMost(shown.size)
+        val nextLimit = (visibleAppLimit + RENDER_PAGE_SIZE).coerceAtMost(shown.size)
+        val last = if (appList.childCount > 0) appList.getChildAt(appList.childCount - 1) else null
+        if (last?.tag == LOAD_MORE_TAG) appList.removeView(last)
+        shown.subList(start, nextLimit).forEach { app -> appList.addView(renderApp(app, generation)) }
+        visibleAppLimit = nextLimit
+        addLoadMoreControl(shown, generation)
     }
 
     private fun renderStats(shown: List<AppEntry>) {
@@ -471,7 +497,7 @@ class ActivityLauncherHubActivity : Activity() {
         if (!next.add(packageName)) next.remove(packageName)
         preferences.edit().putStringSet(KEY_FAVORITES, next).apply()
         renderTabs()
-        renderApps()
+        renderApps(resetLimit = false)
         status.text = if (packageName in next) "Added to favorites: $packageName" else "Removed from favorites: $packageName"
     }
 
@@ -500,5 +526,8 @@ class ActivityLauncherHubActivity : Activity() {
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
         private const val ICON_WORKER_COUNT = 2
+        private const val INITIAL_RENDER_LIMIT = 40
+        private const val RENDER_PAGE_SIZE = 40
+        private const val LOAD_MORE_TAG = "activity_launcher_load_more"
     }
 }
