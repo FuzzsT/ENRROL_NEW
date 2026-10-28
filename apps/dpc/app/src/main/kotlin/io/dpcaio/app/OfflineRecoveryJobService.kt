@@ -20,54 +20,79 @@ class OfflineRecoveryJobService : JobService() {
         if (state.stage == OfflineStage.FAILED || state.stage == OfflineStage.OFFLINE_VERIFIED || state.stage == OfflineStage.SYNCED) return false
 
         if (state.stage == OfflineStage.PACKAGES_STAGED) {
-            val commitSessionId = state.commitSessionId
-            if (commitSessionId == null) {
-                store.save(
-                    state.copy(
-                        stage = OfflineStage.FAILED,
-                        parentSessionId = null,
-                        commitSessionId = null,
-                        lastError = "PACKAGE_SESSION_RECOVERY_UNAVAILABLE",
-                    )
-                )
-                return false
+            val generation = synchronized(lifecycleLock) {
+                worker?.interrupt()
+                workGeneration.incrementAndGet()
             }
-            val packageInstaller = AndroidOfflinePackageInstaller(this)
-            val committed = packageInstaller.isCommitted(commitSessionId)
-            if (committed == null) {
-                store.save(
-                    state.copy(
-                        stage = OfflineStage.FAILED,
-                        parentSessionId = null,
-                        commitSessionId = null,
-                        lastError = "PACKAGE_SESSION_MISSING:$commitSessionId",
-                    )
-                )
-                return false
-            }
-            if (!committed) {
-                val callback = PendingIntent.getBroadcast(
-                    this,
-                    4101,
-                    Intent(this, OfflineInstallStatusReceiver::class.java)
-                        .setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
+            val thread = Thread {
+                if (generation != workGeneration.get()) return@Thread
+                val commitSessionId = state.commitSessionId
                 val result = runCatching {
-                    packageInstaller.commitSession(commitSessionId, callback.intentSender)
-                }
-                result.onFailure { error ->
-                    store.save(
-                        state.copy(
-                            stage = OfflineStage.FAILED,
-                            parentSessionId = null,
-                            commitSessionId = null,
-                            lastError = "PACKAGE_SESSION_RECOVERY_FAILED:${error.message}",
+                    if (commitSessionId == null) {
+                        if (generation != workGeneration.get()) return@runCatching
+                        store.save(
+                            state.copy(
+                                stage = OfflineStage.FAILED,
+                                parentSessionId = null,
+                                commitSessionId = null,
+                                lastError = "PACKAGE_SESSION_RECOVERY_UNAVAILABLE",
+                            )
                         )
-                    )
+                        return@runCatching
+                    }
+
+                    val packageInstaller = AndroidOfflinePackageInstaller(this)
+                    val committed = packageInstaller.isCommitted(commitSessionId)
+                    if (generation != workGeneration.get()) return@runCatching
+                    if (committed == null) {
+                        store.save(
+                            state.copy(
+                                stage = OfflineStage.FAILED,
+                                parentSessionId = null,
+                                commitSessionId = null,
+                                lastError = "PACKAGE_SESSION_MISSING:$commitSessionId",
+                            )
+                        )
+                        return@runCatching
+                    }
+
+                    if (!committed) {
+                        val callback = PendingIntent.getBroadcast(
+                            this,
+                            4101,
+                            Intent(this, OfflineInstallStatusReceiver::class.java)
+                                .setAction(OfflineInstallStatusReceiver.ACTION_INSTALL_RESULT),
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                        )
+                        if (generation != workGeneration.get()) return@runCatching
+                        packageInstaller.commitSession(commitSessionId, callback.intentSender)
+                    }
+                }
+
+                synchronized(lifecycleLock) {
+                    if (generation != workGeneration.get()) return@synchronized
+                    result.onFailure { error ->
+                        val latest = store.load() ?: state
+                        store.save(
+                            latest.copy(
+                                stage = OfflineStage.FAILED,
+                                parentSessionId = null,
+                                commitSessionId = null,
+                                lastError = "PACKAGE_SESSION_RECOVERY_FAILED:${error.message}",
+                            )
+                        )
+                    }
+                    if (generation != workGeneration.get()) return@synchronized
+                    worker = null
+                    jobFinished(params, false)
                 }
             }
-            return false
+            synchronized(lifecycleLock) {
+                if (generation != workGeneration.get()) return true
+                worker = thread
+            }
+            thread.start()
+            return true
         }
 
         val policyRecoveryStage = state.stage in setOf(
