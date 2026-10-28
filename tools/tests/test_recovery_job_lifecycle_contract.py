@@ -8,6 +8,7 @@ services = {
     'OfflineRecoveryJobService.kt': (APP / 'OfflineRecoveryJobService.kt').read_text(encoding='utf-8'),
 }
 store_text = (APP / 'OfflineDeploymentStore.kt').read_text(encoding='utf-8')
+receiver_text = (APP / 'OfflineInstallStatusReceiver.kt').read_text(encoding='utf-8')
 
 for name, text in services.items():
     assert 'AtomicLong' in text, f'{name}: recovery job needs a generation token'
@@ -27,7 +28,6 @@ enrollment = services['EnrollmentRecoveryJobService.kt']
 schedule = enrollment.index('EnrollmentResumeScheduler.schedule')
 assert enrollment.rfind('generation != workGeneration.get()', 0, schedule) != -1, \
     'Enrollment retry scheduling must be guarded against stale workers'
-
 assert 'runCatching' in enrollment and 'EnrollmentCoordinator(this).resumeOrCreate' in enrollment, \
     'Enrollment recovery must capture unexpected coordinator failures'
 assert 'jobFinished(params, true)' in enrollment, \
@@ -69,8 +69,6 @@ assert staged.index('val thread = Thread {') < staged.index('packageInstaller.is
     'PackageInstaller session inspection must execute inside the staged-session worker'
 assert 'generation != workGeneration.get()' in staged, \
     'PACKAGES_STAGED recovery worker must reject stale completion'
-assert 'jobFinished(params, false)' in staged, \
-    'PACKAGES_STAGED recovery worker must finish the active JobScheduler job'
 assert 'return true' in staged, \
     'PACKAGES_STAGED asynchronous recovery must report ongoing work to JobScheduler'
 
@@ -91,9 +89,6 @@ assert '.commit()' in store_text, \
     'OfflineDeploymentStore recovery checkpoints must use synchronous SharedPreferences.commit()'
 assert '.apply()' not in store_text, \
     'OfflineDeploymentStore must not use asynchronous apply() for crash-recovery state'
-
-# SharedPreferences.commit() reports persistence failure with false. Recovery state must fail closed
-# instead of letting callers continue as if a checkpoint had reached disk.
 assert 'private fun commitOrThrow' in store_text, \
     'OfflineDeploymentStore must centralize checked durable commits'
 assert 'check(editor.commit())' in store_text, \
@@ -102,5 +97,26 @@ assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in store_text, \
     'OfflineDeploymentStore commit failures need an explicit diagnostic'
 assert store_text.count('commitOrThrow(') >= 3, \
     'OfflineDeploymentStore save and clear paths must both use checked durable commits'
+
+# Android callback boundaries must not crash the process when the checked persistence layer fails.
+assert 'private fun persistOrStop(' in receiver_text, \
+    'Offline install callback must centralize safe persistence handling'
+assert 'runCatching { store.save(state) }' in receiver_text, \
+    'Offline install callback must catch checkpoint persistence failures'
+assert receiver_text.count('if (!persistOrStop(') >= 4, \
+    'Every install-result state transition must stop when persistence fails'
+
+# Recovery workers must always reach jobFinished. If persisting a failure checkpoint itself fails,
+# JobScheduler must reschedule rather than letting the exception escape the worker thread.
+assert 'runCatching { store.updateIf(' in staged, \
+    'Staged-session failure persistence must be exception-safe'
+assert 'jobFinished(params, stagedReschedule)' in staged, \
+    'Staged-session persistence failure must request JobScheduler reschedule'
+policy_start = offline.index('if (policyRecoveryStage)')
+policy = offline[policy_start:]
+assert 'runCatching { store.save(' in policy, \
+    'Policy recovery failure checkpoint must be exception-safe'
+assert 'jobFinished(params, policyReschedule)' in policy, \
+    'Policy persistence failure must request JobScheduler reschedule'
 
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
