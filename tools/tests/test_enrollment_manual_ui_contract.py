@@ -13,6 +13,8 @@ for forbidden in ['Log.d', 'println(token', 'appendLine(token']:
     assert forbidden not in s, f'token logging forbidden: {forbidden}'
 
 assert 'AtomicBoolean' in s, 'manual enrollment must prevent duplicate persistence submissions'
+assert 'companion object' in s and 'private val persistenceInProgress = AtomicBoolean(false)' in s[s.index('companion object'):], \
+    'manual enrollment persistence gate must survive Activity recreation while a worker is running'
 assert 'Thread {' in s, 'AndroidKeyStore/session persistence must not run on the UI thread'
 assert 'isFinishing || isDestroyed' in s and 'return@runOnUiThread' in s, \
     'manual enrollment completion must ignore Activity teardown'
