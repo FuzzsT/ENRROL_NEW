@@ -364,17 +364,30 @@ class ActivityLauncherHubActivity : Activity() {
             return
         }
 
-        val rendered = shown.take(visibleAppLimit)
-        rendered.forEach { app -> appList.addView(renderApp(app, generation)) }
-        if (rendered.size < shown.size) {
-            val remaining = shown.size - rendered.size
-            appList.addView(
-                ModernUi.action(this, "Load more ($remaining remaining)") {
-                    visibleAppLimit = (visibleAppLimit + RENDER_PAGE_SIZE).coerceAtMost(shown.size)
-                    renderApps(resetLimit = false)
-                }
-            )
+        shown.take(visibleAppLimit).forEach { app -> appList.addView(renderApp(app, generation)) }
+        addLoadMoreControl(shown, generation)
+    }
+
+    private fun addLoadMoreControl(shown: List<AppEntry>, generation: Long) {
+        if (visibleAppLimit >= shown.size) return
+        val remaining = shown.size - visibleAppLimit
+        val control = ModernUi.action(this, "Load more ($remaining remaining)") {
+            appendNextPage(shown, generation)
         }
+        control.tag = LOAD_MORE_TAG
+        appList.addView(control)
+    }
+
+    private fun appendNextPage(shown: List<AppEntry>, generation: Long) {
+        if (!::appList.isInitialized || isFinishing || isDestroyed) return
+        if (generation != renderGeneration) return
+        val start = visibleAppLimit.coerceAtMost(shown.size)
+        val nextLimit = (visibleAppLimit + RENDER_PAGE_SIZE).coerceAtMost(shown.size)
+        val last = if (appList.childCount > 0) appList.getChildAt(appList.childCount - 1) else null
+        if (last?.tag == LOAD_MORE_TAG) appList.removeView(last)
+        shown.subList(start, nextLimit).forEach { app -> appList.addView(renderApp(app, generation)) }
+        visibleAppLimit = nextLimit
+        addLoadMoreControl(shown, generation)
     }
 
     private fun renderStats(shown: List<AppEntry>) {
@@ -484,7 +497,7 @@ class ActivityLauncherHubActivity : Activity() {
         if (!next.add(packageName)) next.remove(packageName)
         preferences.edit().putStringSet(KEY_FAVORITES, next).apply()
         renderTabs()
-        renderApps()
+        renderApps(resetLimit = false)
         status.text = if (packageName in next) "Added to favorites: $packageName" else "Removed from favorites: $packageName"
     }
 
@@ -515,5 +528,6 @@ class ActivityLauncherHubActivity : Activity() {
         private const val ICON_WORKER_COUNT = 2
         private const val INITIAL_RENDER_LIMIT = 40
         private const val RENDER_PAGE_SIZE = 40
+        private const val LOAD_MORE_TAG = "activity_launcher_load_more"
     }
 }
