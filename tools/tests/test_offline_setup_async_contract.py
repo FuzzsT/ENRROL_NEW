@@ -3,8 +3,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/OfflineSetupActivity.kt'
 POLICY_ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PolicyComplianceActivity.kt'
+INSTALLER = ROOT / 'apps/dpc/modules/offline/android/src/main/kotlin/io/dpcaio/offline/android/AndroidOfflinePackageInstaller.kt'
 text = ACTIVITY.read_text(encoding='utf-8')
 policy_activity = POLICY_ACTIVITY.read_text(encoding='utf-8')
+installer_text = INSTALLER.read_text(encoding='utf-8')
 
 helper_start = text.index('private fun importOfflineBundle')
 helper_end = text.index('\n    private fun preview()', helper_start)
@@ -91,6 +93,36 @@ persistence_retry = stage_body.index('OfflineInstallStatusReceiver.ACTION_PERSIS
 ui_callback = stage_body.index('runOnUiThread', pending_check)
 assert pending_check < persistence_retry < ui_callback, \
     'Package staging persistence retry must be scheduled from the worker before UI completion'
+
+# A staged PackageInstaller session must not be orphaned when the PACKAGES_STAGED
+# checkpoint itself cannot be made durable. Preserve the plan before persistence,
+# remember whether the checkpoint committed, and abandon only the uncommitted plan.
+assert 'var stagedPlan:' in stage_body, \
+    'Package staging must retain the created install plan for cleanup if checkpoint persistence fails'
+assert 'var stageCheckpointPersisted = false' in stage_body, \
+    'Package staging must track whether the PACKAGES_STAGED checkpoint became durable'
+assert 'stagedPlan = plan' in stage_body, \
+    'Package staging must retain the install plan before persisting PACKAGES_STAGED'
+assert 'stageCheckpointPersisted = true' in stage_body, \
+    'Package staging must mark the staged checkpoint durable only after save succeeds'
+assert 'val orphanedPlan = stagedPlan' in stage_body, \
+    'Package staging failure must snapshot the staged plan before cleanup'
+assert 'if (orphanedPlan != null && !stageCheckpointPersisted)' in stage_body, \
+    'Package staging failure must distinguish an orphanable staged plan from a durable recovery plan'
+assert 'packageInstaller.abandon(orphanedPlan)' in stage_body, \
+    'Package staging must abandon sessions whose PACKAGES_STAGED checkpoint never became durable'
+plan_capture = stage_body.index('stagedPlan = plan')
+staged_save = stage_body.index('workerStore.save(', stage_body.index('val plan = packageInstaller.stageBundle'))
+persisted_mark = stage_body.index('stageCheckpointPersisted = true')
+abandon_guard = stage_body.index('if (orphanedPlan != null && !stageCheckpointPersisted)')
+failure_update = stage_body.index('workerStore.updateIf(', abandon_guard)
+assert plan_capture < staged_save < persisted_mark < abandon_guard < failure_update, \
+    'Staged-session cleanup ordering must capture plan, persist checkpoint, then abandon before failure bookkeeping'
+
+assert 'fun abandon(plan: OfflineInstallSession)' in installer_text, \
+    'AndroidOfflinePackageInstaller must expose bounded cleanup for a staged install plan'
+assert 'installer.abandonSession' in installer_text, \
+    'Offline install-plan cleanup must use PackageInstaller.abandonSession'
 
 assert 'runCatching { EnrollmentExecutionRouter(this).execute(intent) }' in policy_activity, \
     'Policy compliance worker must catch enrollment execution failures'
