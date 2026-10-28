@@ -133,6 +133,7 @@ jobs:
           python3 tools/tests/test_scenario_android_contract.py
           python3 tools/tests/test_permission_manager_lifecycle_contract.py
           python3 tools/tests/test_emergency_runtime_image_contract.py
+          python3 tools/tests/test_recovery_job_lifecycle_contract.py
           python3 tools/tests/test_gradle_source_completeness.py
           python3 tools/tests/test_app_android_classpath_114_contract.py
           python3 tools/tests/test_installer_android_compile_114_contract.py

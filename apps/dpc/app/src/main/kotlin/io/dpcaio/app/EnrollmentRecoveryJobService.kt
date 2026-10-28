@@ -4,23 +4,49 @@ import android.app.job.JobParameters
 import android.app.job.JobService
 import android.content.Intent
 import io.dpcaio.core.model.EnrollmentRetryPolicy
+import java.util.concurrent.atomic.AtomicLong
 
 class EnrollmentRecoveryJobService : JobService() {
+    private val lifecycleLock = Any()
+    private val workGeneration = AtomicLong(0)
+    @Volatile private var worker: Thread? = null
+
     override fun onStartJob(params: JobParameters): Boolean {
         val trigger = params.extras.getString(EnrollmentCoordinator.KEY_TRIGGER) ?: "JOB"
-        Thread {
+        val generation = synchronized(lifecycleLock) {
+            worker?.interrupt()
+            workGeneration.incrementAndGet()
+        }
+        val thread = Thread {
+            if (generation != workGeneration.get()) return@Thread
             val outcome = EnrollmentCoordinator(this).resumeOrCreate(
                 Intent().putExtra(EnrollmentCoordinator.KEY_TRIGGER, trigger)
             )
-            if (outcome is EnrollmentOutcome.Retryable) {
-                EnrollmentRetryPolicy.delayMillis(outcome.session.retryCount)?.let { delay ->
-                    EnrollmentResumeScheduler.schedule(this, "RETRY_${outcome.session.retryCount}", delay)
+            synchronized(lifecycleLock) {
+                if (generation != workGeneration.get()) return@synchronized
+                if (outcome is EnrollmentOutcome.Retryable) {
+                    EnrollmentRetryPolicy.delayMillis(outcome.session.retryCount)?.let { delay ->
+                        if (generation != workGeneration.get()) return@synchronized
+                        EnrollmentResumeScheduler.schedule(this, "RETRY_${outcome.session.retryCount}", delay)
+                    }
                 }
+                if (generation != workGeneration.get()) return@synchronized
+                worker = null
+                jobFinished(params, false)
             }
-            jobFinished(params, false)
-        }.start()
+        }
+        synchronized(lifecycleLock) {
+            if (generation != workGeneration.get()) return true
+            worker = thread
+        }
+        thread.start()
         return true
     }
 
-    override fun onStopJob(params: JobParameters): Boolean = true
+    override fun onStopJob(params: JobParameters): Boolean = synchronized(lifecycleLock) {
+        workGeneration.incrementAndGet()
+        worker?.interrupt()
+        worker = null
+        true
+    }
 }
