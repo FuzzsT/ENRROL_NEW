@@ -15,7 +15,14 @@ class OfflineRecoveryJobService : JobService() {
         val store = OfflineDeploymentStore(this)
         val state = store.load() ?: return false
         if (state.stage == OfflineStage.FAILED || state.stage == OfflineStage.OFFLINE_VERIFIED || state.stage == OfflineStage.SYNCED) return false
-        if (state.stage == OfflineStage.PACKAGES_INSTALLED) {
+        val policyRecoveryStage = state.stage in setOf(
+            OfflineStage.PACKAGES_INSTALLED,
+            OfflineStage.PERMISSIONS_APPLIED,
+            OfflineStage.COMPONENTS_APPLIED,
+            OfflineStage.POLICIES_APPLIED,
+            OfflineStage.READBACK_VERIFIED,
+        )
+        if (policyRecoveryStage) {
             val path = state.bundlePath ?: return false
             val generation = synchronized(lifecycleLock) {
                 worker?.interrupt()
@@ -27,7 +34,8 @@ class OfflineRecoveryJobService : JobService() {
                 synchronized(lifecycleLock) {
                     if (generation != workGeneration.get()) return@synchronized
                     result.onFailure { error ->
-                        store.save(state.copy(stage = OfflineStage.FAILED, lastError = "OFFLINE_POLICY_PARTIAL:${error.message}"))
+                        val latest = store.load() ?: state
+                        store.save(latest.copy(stage = OfflineStage.FAILED, lastError = "OFFLINE_POLICY_PARTIAL:${error.message}"))
                     }
                     if (generation != workGeneration.get()) return@synchronized
                     worker = null
