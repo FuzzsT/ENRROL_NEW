@@ -47,6 +47,20 @@ assert 'bundleReader.inspect(' not in result_body, \
 assert 'sha256(' not in result_body, \
     'onActivityResult must not hash bundle contents on the UI thread'
 
+stage_start = text.index('private fun stageAndCommitBundle')
+stage_end = text.index('\n    private fun shizukuAvailable()', stage_start)
+stage_body = text[stage_start:stage_end]
+assert 'workerStore.updateIf(' in stage_body, \
+    'Package staging failure must use an atomic persisted ownership check'
+for token in [
+    'current.bundleId == manifest.bundleId',
+    'current.stage == OfflineStage.PACKAGES_STAGED',
+    'current.commitSessionId == stagedCommitSessionId',
+]:
+    assert token in stage_body, f'Package staging failure ownership predicate missing: {token}'
+assert 'workerStore.load()?.let { state ->' not in stage_body, \
+    'Package staging failure must not use a non-atomic load/save transition that can overwrite receiver success'
+
 assert 'file.inputStream().buffered().use' in text, \
     'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'
 assert 'file.readBytes()' not in text, \
