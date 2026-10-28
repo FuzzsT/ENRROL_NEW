@@ -16,6 +16,36 @@ class OfflineRecoveryJobService : JobService() {
 
     override fun onStartJob(params: JobParameters?): Boolean {
         val store = OfflineDeploymentStore(this)
+
+        if (store.hasPendingPersistence()) {
+            val generation = synchronized(lifecycleLock) {
+                worker?.interrupt()
+                workGeneration.incrementAndGet()
+            }
+            val thread = Thread {
+                if (generation != workGeneration.get()) return@Thread
+                val persisted = store.retryPendingPersistence()
+                synchronized(lifecycleLock) {
+                    if (generation != workGeneration.get()) return@synchronized
+                    val current = store.load()
+                    val terminalStages = setOf(
+                        OfflineStage.FAILED,
+                        OfflineStage.OFFLINE_VERIFIED,
+                        OfflineStage.SYNCED,
+                    )
+                    val retryReschedule = !persisted || (current != null && current.stage !in terminalStages)
+                    worker = null
+                    jobFinished(params, retryReschedule)
+                }
+            }
+            synchronized(lifecycleLock) {
+                if (generation != workGeneration.get()) return true
+                worker = thread
+            }
+            thread.start()
+            return true
+        }
+
         val state = store.load() ?: return false
         if (state.stage == OfflineStage.FAILED || state.stage == OfflineStage.OFFLINE_VERIFIED || state.stage == OfflineStage.SYNCED) return false
 
