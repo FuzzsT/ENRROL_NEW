@@ -55,8 +55,15 @@ assert 'if (persistResult.isFailure)' in policy_body, \
     'Policy-only deployment must stop when its checkpoint cannot be persisted'
 assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in policy_body, \
     'Policy-only deployment must surface a clear persistence failure diagnostic'
-assert policy_body.index('if (persistResult.isFailure)') < policy_body.index('sendBroadcast('), \
-    'Policy-only deployment must not schedule recovery after a failed checkpoint write'
+failure_start = policy_body.index('if (persistResult.isFailure)')
+package_done = policy_body.index('OfflineInstallStatusReceiver.ACTION_PACKAGE_DONE')
+failure_body = policy_body[failure_start:package_done]
+assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in failure_body, \
+    'Policy-only persistence failure must schedule recovery of the pending durable checkpoint'
+assert 'sendBroadcast(' in failure_body, \
+    'Policy-only persistence failure must notify OfflineRecoveryReceiver before returning'
+assert failure_body.index('sendBroadcast(') < failure_body.index('return'), \
+    'Policy-only persistence retry must be scheduled before the failure path returns'
 
 stage_start = text.index('private fun stageAndCommitBundle')
 stage_end = text.index('\n    private fun shizukuAvailable()', stage_start)
