@@ -13,6 +13,7 @@ class NetworkControlActivity : Activity() {
     private lateinit var endpoint: EditText
     private lateinit var queryHex: EditText
     private lateinit var output: TextView
+    private var operationGeneration = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,34 +59,47 @@ class NetworkControlActivity : Activity() {
 
     private fun controller() = DeviceOwnerPrivateDnsController(this, AioDeviceAdminReceiver.componentName(this))
 
+    private fun runNetworkOperation(
+        progress: String,
+        errorPrefix: String? = null,
+        operation: () -> String,
+    ) {
+        val generation = ++operationGeneration
+        output.text = progress
+        Thread {
+            val result = runCatching(operation)
+            val text = result.fold(
+                onSuccess = { it },
+                onFailure = { error -> if (errorPrefix == null) error.toString() else "$errorPrefix\n$error" },
+            )
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != operationGeneration) return@runOnUiThread
+                output.text = text
+            }
+        }.start()
+    }
+
     private fun applyPrivateDns() {
-        output.text = runCatching {
-            "Private DNS\nresult=${controller().applySpecifiedHost(host.text.toString().trim())}\nreadback=${controller().readHost()}"
-        }.getOrElse { it.toString() }
+        val hostValue = host.text.toString().trim()
+        runNetworkOperation("Applying Private DNS...") {
+            "Private DNS\nresult=${controller().applySpecifiedHost(hostValue)}\nreadback=${controller().readHost()}"
+        }
     }
 
     private fun opportunistic() {
-        output.text = runCatching {
+        runNetworkOperation("Applying opportunistic Private DNS...") {
             "Private DNS opportunistic\nresult=${controller().applyOpportunistic()}"
-        }.getOrElse { it.toString() }
+        }
     }
 
     private fun doh() {
-        output.text = "Querying DNS over HTTPS..."
         val endpointValue = endpoint.text.toString().trim()
         val queryHexValue = queryHex.text.toString()
-        Thread {
-            val result = runCatching {
-                DohDiagnosticClient().query(endpointValue, hex(queryHexValue))
-            }
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                output.text = result.fold(
-                    { bytes -> "DoH response\n${bytes.joinToString("") { b -> "%02X".format(b) }}" },
-                    { error -> "DoH error\n$error" },
-                )
-            }
-        }.start()
+        runNetworkOperation("Querying DNS over HTTPS...", errorPrefix = "DoH error") {
+            val bytes = DohDiagnosticClient().query(endpointValue, hex(queryHexValue))
+            "DoH response\n${bytes.joinToString("") { b -> "%02X".format(b) }}"
+        }
     }
 
     private fun hex(text: String): ByteArray {
