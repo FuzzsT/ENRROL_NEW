@@ -143,6 +143,10 @@ for token in [
     'fun saveReorderRecovery(',
     'fun pendingRemoval(): List<String>',
     'fun markRemoved(accountName: String)',
+    'fun removalInFlight(): String?',
+    'fun markRemovalInFlight(accountName: String)',
+    'fun markRemovalFailed(accountName: String)',
+    'fun manualRemovalRequired(): String?',
 ]:
     assert token in account_store, f'Google account recovery store missing phase API: {token}'
 mark_readded_start = account_store.index('fun markReAdded(accountName: String)')
@@ -150,27 +154,37 @@ mark_readded_end = account_store.index('fun clearPendingReorder()', mark_readded
 assert 'clearPendingReorder()' not in account_store[mark_readded_start:mark_readded_end], \
     'markReAdded must not clear target/restore metadata before Activity restores policy'
 execute_start = google.index('private fun executeRemovalPhase')
-execute_end = google.index('private fun removeSequentially', execute_start)
+execute_end = google.index('private fun requestRemoval', execute_start)
 execute_body = google[execute_start:execute_end]
 persist_recovery = 'selectionStore.saveReorderRecovery(targetName, accountNames, emptyList(), restoreManagementDisabled)'
 assert persist_recovery in execute_body, \
     'Google account recovery must persist the removal phase before automatic removal starts'
 assert execute_body.index(persist_recovery) < execute_body.index('setGoogleAccountManagementDisabled(false)'), \
     'Google account recovery must be durable before management restrictions are relaxed'
-callback_start = google.index('reorderGateway.requestRemoveGoogleAccount')
-callback_end = google.index('private fun resumePendingReorderIfPossible', callback_start)
-callback_body = google[callback_start:callback_end]
+request_start = google.index('private fun requestRemoval')
+request_end = google.index('private fun resumePendingReorderIfPossible', request_start)
+request_body = google[request_start:request_end]
+assert 'selectionStore.markRemovalInFlight(name)' in request_body and request_body.index('selectionStore.markRemovalInFlight(name)') < request_body.index('requestRemoveGoogleAccount'), \
+    'Google account removal must persist in-flight state before issuing the request'
 mark_removed = 'if (removed) selectionStore.markRemoved(name)'
-assert mark_removed in callback_body and callback_body.index(mark_removed) < callback_body.index('runOnUiThread'), \
+assert mark_removed in request_body and request_body.index(mark_removed) < request_body.index('runOnUiThread'), \
     'Confirmed removal must transition recovery state before lifecycle-gated UI work'
+assert 'if (!removed) selectionStore.markRemovalFailed(name)' in request_body and request_body.index('if (!removed) selectionStore.markRemovalFailed(name)') < request_body.index('runOnUiThread'), \
+    'Failed removal must persist manual fallback before lifecycle-gated UI work'
 assert 'accountNames.drop(index)' not in google, \
     'Google account removal failure must not discard accounts removed earlier in the sequence'
 assert 'val pendingRemoval = selectionStore.pendingRemoval()' in google, \
     'Google account resume must inspect the distinct removal phase'
 assert 'pendingRemoval.filterNot { it in visibleNames }.forEach { selectionStore.markRemoved(it) }' in google, \
     'Google account resume must reconcile removals from observed account absence'
-assert 'if (selectionStore.pendingRemoval().isNotEmpty())' in google, \
-    'Google account resume must not enter re-add phase while removals remain pending'
+assert 'selectionStore.removalInFlight()' in google and 'scheduleRecoveryPoll()' in google, \
+    'Google account resume must wait for in-flight removal and poll recovery state without duplicate requests'
+assert 'selectionStore.manualRemovalRequired()' in google, \
+    'Google account resume must persistently expose manual fallback after removal failure'
+assert 'requestRemoval(selectionStore.pendingRemoval().first())' in google, \
+    'Google account resume must continue the next automatic removal when no request is in flight'
+assert 'private val recoveryPoll = Runnable' in google and 'override fun onPause()' in google, \
+    'Google account recovery poll must be lifecycle-scoped'
 assert 'reorderGateway.setGoogleAccountManagementDisabled(true)' in google, \
     'Google account recovery must restore the previous management restriction after recovery completes'
 
