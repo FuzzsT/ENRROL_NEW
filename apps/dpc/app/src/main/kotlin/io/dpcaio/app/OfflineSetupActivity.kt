@@ -273,6 +273,10 @@ class OfflineSetupActivity : Activity() {
             }
             if (persistResult.isFailure) {
                 val error = persistResult.exceptionOrNull()
+                sendBroadcast(
+                    Intent(this, OfflineRecoveryReceiver::class.java)
+                        .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                )
                 renderState("OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED\n${error?.javaClass?.simpleName}: ${error?.message}")
                 return
             }
