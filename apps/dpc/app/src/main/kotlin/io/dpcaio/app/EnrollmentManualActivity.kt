@@ -14,7 +14,9 @@ import io.dpcaio.core.model.NormalizedEnrollmentConfig
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnrollmentManualActivity : Activity() {
-    private val persistenceInProgress = AtomicBoolean(false)
+    companion object {
+        private val persistenceInProgress = AtomicBoolean(false)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
