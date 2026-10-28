@@ -27,7 +27,6 @@ assert 'return@runOnUiThread' in helper_body, \
 assert 'generation != importGeneration' in helper_body, \
     'Offline bundle import must reject stale completion from an older selection'
 
-# Import and package staging share one private bundle path, so both use the same process-wide I/O gate.
 assert 'bundleIoInProgress.compareAndSet(false, true)' in helper_body, \
     'Offline bundle import must acquire the shared process-wide bundle I/O gate'
 assert 'importedBundle = null' in helper_body and 'bundleInspection = null' in helper_body, \
@@ -47,6 +46,18 @@ assert 'bundleReader.inspect(' not in result_body, \
 assert 'sha256(' not in result_body, \
     'onActivityResult must not hash bundle contents on the UI thread'
 
+policy_start = text.index('private fun startPolicyOnlyDeployment')
+policy_end = text.index('\n    private fun stageAndCommitBundle', policy_start)
+policy_body = text[policy_start:policy_end]
+assert 'val persistResult = runCatching {' in policy_body, \
+    'Policy-only deployment must catch persistence failures before sending recovery broadcast'
+assert 'if (persistResult.isFailure)' in policy_body, \
+    'Policy-only deployment must stop when its checkpoint cannot be persisted'
+assert 'OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED' in policy_body, \
+    'Policy-only deployment must surface a clear persistence failure diagnostic'
+assert policy_body.index('if (persistResult.isFailure)') < policy_body.index('sendBroadcast('), \
+    'Policy-only deployment must not schedule recovery after a failed checkpoint write'
+
 stage_start = text.index('private fun stageAndCommitBundle')
 stage_end = text.index('\n    private fun shizukuAvailable()', stage_start)
 stage_body = text[stage_start:stage_end]
@@ -60,6 +71,8 @@ for token in [
     assert token in stage_body, f'Package staging failure ownership predicate missing: {token}'
 assert 'workerStore.load()?.let { state ->' not in stage_body, \
     'Package staging failure must not use a non-atomic load/save transition that can overwrite receiver success'
+assert 'runCatching {\n                        workerStore.updateIf(' in stage_body, \
+    'Package staging failure bookkeeping must not let a persistence exception escape the worker'
 
 assert 'file.inputStream().buffered().use' in text, \
     'Offline bundle SHA-256 must stream file contents instead of reading the entire bundle into memory'
