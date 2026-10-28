@@ -32,6 +32,7 @@ class PolicyComplianceActivity : Activity() {
         Thread {
             val outcome = EnrollmentExecutionRouter(this).execute(intent)
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 when (outcome) {
                     is EnrollmentExecutionOutcome.Complete -> {
                         setResult(RESULT_OK)
