@@ -39,6 +39,8 @@ mutate = function_body('mutateSelected', 'setGlobalPolicy')
 assert mutate.index('val targetUserId = targetUserId()') < mutate.index('Thread {'), \
     'Permission mutation must snapshot target user on the UI thread before starting worker work'
 
+global_policy = function_body('setGlobalPolicy', 'batchPreview')
+
 batch = function_body('batchPreview', 'applyPendingBatch')
 assert batch.index('val userId = targetUserId()') < batch.index('Thread {'), \
     'Batch preview must snapshot target user on the UI thread before starting worker work'
@@ -81,6 +83,7 @@ assert 'batchMutationInProgress' not in companion, \
 
 for name, body in [
     ('single permission mutation', mutate),
+    ('global runtime policy mutation', global_policy),
     ('batch apply', apply_batch),
 ]:
     assert 'permissionMutationInProgress.compareAndSet(false, true)' in body, \
