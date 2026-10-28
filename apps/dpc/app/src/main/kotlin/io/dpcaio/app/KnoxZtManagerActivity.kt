@@ -16,8 +16,11 @@ class KnoxZtManagerActivity : Activity() {
     private lateinit var url: EditText
     private lateinit var apkSha: EditText
     private lateinit var signerSha: EditText
-    private val operationLock = Any()
-    private var operationRunning = false
+
+    companion object {
+        private val operationLock = Any()
+        private var operationRunning = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
