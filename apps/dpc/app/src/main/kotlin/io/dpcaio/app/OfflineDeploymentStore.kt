@@ -17,6 +17,8 @@ data class OfflineDeploymentState(
 class OfflineDeploymentStore(context: Context) {
     companion object {
         private val stateLock = Any()
+        private var pendingRecoveryState: OfflineDeploymentState? = null
+        private var pendingClear = false
     }
 
     private val prefs = context.createDeviceProtectedStorageContext()
@@ -42,8 +44,25 @@ class OfflineDeploymentStore(context: Context) {
 
     fun clear() {
         synchronized(stateLock) {
-            commitOrThrow(prefs.edit().clear())
+            clearUnlocked()
         }
+    }
+
+    fun hasPendingPersistence(): Boolean = synchronized(stateLock) {
+        pendingRecoveryState != null || pendingClear
+    }
+
+    fun retryPendingPersistence(): Boolean = synchronized(stateLock) {
+        val pendingState = pendingRecoveryState
+        when {
+            pendingClear -> runCatching { clearUnlocked() }.isSuccess
+            pendingState != null -> runCatching { saveUnlocked(pendingState) }.isSuccess
+            else -> true
+        }
+    }
+
+    private fun clearUnlocked() {
+        commitOrThrow(prefs.edit().clear(), state = null, clearing = true)
     }
 
     private fun saveUnlocked(state: OfflineDeploymentState) {
@@ -55,12 +74,25 @@ class OfflineDeploymentStore(context: Context) {
                 .putInt("commitSessionId", state.commitSessionId ?: -1)
                 .putBoolean("syncPending", state.syncPending)
                 .putString("lastError", state.lastError)
-                .putString("bundlePath", state.bundlePath)
+                .putString("bundlePath", state.bundlePath),
+            state = state,
+            clearing = false,
         )
     }
 
-    private fun commitOrThrow(editor: SharedPreferences.Editor) {
-        check(editor.commit()) { "OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED" }
+    private fun commitOrThrow(
+        editor: SharedPreferences.Editor,
+        state: OfflineDeploymentState?,
+        clearing: Boolean,
+    ) {
+        if (editor.commit()) {
+            pendingRecoveryState = null
+            pendingClear = false
+            return
+        }
+        pendingRecoveryState = state
+        pendingClear = clearing
+        error("OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED")
     }
 
     private fun loadUnlocked(): OfflineDeploymentState? {
