@@ -105,14 +105,16 @@ assert 'stagedPlan = plan' in stage_body, \
     'Package staging must retain the install plan before persisting PACKAGES_STAGED'
 assert 'stageCheckpointPersisted = true' in stage_body, \
     'Package staging must mark the staged checkpoint durable only after save succeeds'
-assert 'if (stagedPlan != null && !stageCheckpointPersisted)' in stage_body, \
+assert 'val orphanedPlan = stagedPlan' in stage_body, \
+    'Package staging failure must snapshot the staged plan before cleanup'
+assert 'if (orphanedPlan != null && !stageCheckpointPersisted)' in stage_body, \
     'Package staging failure must distinguish an orphanable staged plan from a durable recovery plan'
-assert 'packageInstaller.abandon(stagedPlan)' in stage_body, \
+assert 'packageInstaller.abandon(orphanedPlan)' in stage_body, \
     'Package staging must abandon sessions whose PACKAGES_STAGED checkpoint never became durable'
 plan_capture = stage_body.index('stagedPlan = plan')
 staged_save = stage_body.index('workerStore.save(', stage_body.index('val plan = packageInstaller.stageBundle'))
 persisted_mark = stage_body.index('stageCheckpointPersisted = true')
-abandon_guard = stage_body.index('if (stagedPlan != null && !stageCheckpointPersisted)')
+abandon_guard = stage_body.index('if (orphanedPlan != null && !stageCheckpointPersisted)')
 failure_update = stage_body.index('workerStore.updateIf(', abandon_guard)
 assert plan_capture < staged_save < persisted_mark < abandon_guard < failure_update, \
     'Staged-session cleanup ordering must capture plan, persist checkpoint, then abandon before failure bookkeeping'
