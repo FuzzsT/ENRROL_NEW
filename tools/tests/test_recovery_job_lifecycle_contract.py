@@ -98,4 +98,11 @@ for token in [
 ]:
     assert token in staged, f'PACKAGES_STAGED ownership predicate missing: {token}'
 
+# Recovery checkpoints must be durable before callers proceed. SharedPreferences.apply() only schedules
+# an asynchronous disk write and can lose the latest stage if the process dies immediately afterward.
+assert '.commit()' in store_text, \
+    'OfflineDeploymentStore recovery checkpoints must use synchronous SharedPreferences.commit()'
+assert '.apply()' not in store_text, \
+    'OfflineDeploymentStore must not use asynchronous apply() for crash-recovery state'
+
 print('RECOVERY_JOB_LIFECYCLE_CONTRACT: PASS')
