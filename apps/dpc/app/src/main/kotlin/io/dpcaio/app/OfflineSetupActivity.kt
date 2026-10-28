@@ -311,10 +311,12 @@ class OfflineSetupActivity : Activity() {
                         )
                     )
                     val plan = packageInstaller.stageBundle(file, manifest)
+                    val commitSessionId = plan.parentSessionId ?: plan.childSessionIds.single()
                     workerStore.save(
                         workerStore.load()!!.copy(
                             stage = OfflineStage.PACKAGES_STAGED,
                             parentSessionId = plan.parentSessionId,
+                            commitSessionId = commitSessionId,
                             bundlePath = file.absolutePath,
                         )
                     )
