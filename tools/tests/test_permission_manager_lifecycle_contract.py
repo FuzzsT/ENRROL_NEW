@@ -52,6 +52,28 @@ assert 'targetPackage.text.toString().trim()' not in apply_batch, \
     'Batch apply must not re-read the package field after preview'
 assert 'val pkg = plan.supported.firstOrNull()?.packageName ?: pendingBatchChanges.firstOrNull()?.packageName' in apply_batch, \
     'Batch apply must bind package routing to the package captured by the preview plan'
+assert 'val previewChanges = pendingBatchChanges' in apply_batch, \
+    'Batch apply must snapshot preview changes before worker execution'
+assert 'val appliedRestorable = mutableListOf<PermissionBatchChange>()' in apply_batch, \
+    'Batch apply must track verified DPC changes that can be restored'
+assert 'verified && item.route in setOf(' in apply_batch, \
+    'Only verified DPC/delegated-DPC writes may become restore candidates'
+assert 'lastAppliedBatchChanges = appliedRestorable.toList()' in apply_batch, \
+    'Batch apply must publish the verified restorable batch after execution'
+
+assert 'lastAppliedBatchChanges' in text, \
+    'Permission Manager must retain the last applied DPC batch independently from pending preview state'
+companion_start = text.index('companion object')
+companion_end = text.index('private lateinit var output', companion_start)
+companion = text[companion_start:companion_end]
+assert '@Volatile' in companion and 'lastAppliedBatchChanges' in companion, \
+    'Applied restore state must survive Activity recreation and be visible across worker/main threads'
+
+restore = function_body('restorePreviousDpcStates', 'scanCatalog')
+assert 'restorePlan(lastAppliedBatchChanges)' in restore, \
+    'Restore must target the last verified applied DPC batch, not the latest preview'
+assert 'restorePlan(pendingBatchChanges)' not in restore, \
+    'Restore must not be redirected by a newer preview'
 
 catalog = function_body('scanCatalog', 'autoRequestedPermissions')
 assert catalog.index('val q = query.text.toString().trim().lowercase()') < catalog.index('Thread {'), \
