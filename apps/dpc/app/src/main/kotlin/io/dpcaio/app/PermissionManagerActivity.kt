@@ -379,6 +379,7 @@ class PermissionManagerActivity : Activity() {
         }
         Thread {
             try {
+                val remainingRestoreChanges = mutableListOf<PermissionBatchChange>()
                 val results = restore.map { change ->
                     val result = manager.setDpcPermissionState(
                         change.packageName,
@@ -386,8 +387,12 @@ class PermissionManagerActivity : Activity() {
                         change.userId,
                         change.requestedState
                     )
+                    if (result.observedDpcState != change.requestedState) {
+                        remainingRestoreChanges += change
+                    }
                     "${change.permission}: restore=${change.requestedState} observed=${result.observedDpcState} ${result.detail}"
                 }
+                lastAppliedBatchChanges = remainingRestoreChanges.toList()
                 postUiIfAlive { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
             } finally {
                 permissionMutationInProgress.set(false)
