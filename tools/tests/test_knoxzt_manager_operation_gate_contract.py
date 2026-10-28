@@ -26,11 +26,17 @@ ensure_start = text.index('private fun ensureReady()')
 ensure_end = text.index('private fun listActivities()', ensure_start)
 ensure_body = text[ensure_start:ensure_end]
 assert 'if (!beginOperation())' in ensure_body, 'ensureReady must reject overlapping manual operations'
+assert 'catch (error: Throwable)' in ensure_body, 'ensureReady worker exceptions must be converted into a safe UI result'
+assert 'KnoxZT recovery error' in ensure_body, 'ensureReady must expose a clear recovery error message'
+assert 'isFinishing || isDestroyed' in ensure_body, 'ensureReady error callback must respect Activity teardown'
 assert 'finally {' in ensure_body and 'finishOperation()' in ensure_body, 'ensureReady must always release the operation gate'
 
 list_start = text.index('private fun listActivities()')
 list_body = text[list_start:]
 assert 'if (!beginOperation())' in list_body, 'listActivities must share the manual operation gate'
+assert 'catch (error: Throwable)' in list_body, 'listActivities worker exceptions must be converted into a safe UI result'
+assert 'KnoxZT activity inventory error' in list_body, 'listActivities must expose a clear inventory error message'
+assert 'isFinishing || isDestroyed' in list_body, 'listActivities error callback must respect Activity teardown'
 assert 'finally {' in list_body and 'finishOperation()' in list_body, 'listActivities must always release the operation gate'
 
 print('KNOXZT_MANAGER_OPERATION_GATE_CONTRACT: PASS')
