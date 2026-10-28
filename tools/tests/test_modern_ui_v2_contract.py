@@ -134,6 +134,10 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in google, token
+assert 'isFinishing || isDestroyed' in google, \
+    'Google account removal callback must ignore Activity teardown'
+assert 'return@runOnUiThread' in google, \
+    'Google account lifecycle guard must exit before recursive UI workflow'
 
 knoxzt = (APP / 'KnoxZtManagerActivity.kt').read_text(encoding='utf-8')
 for token in [
@@ -141,6 +145,10 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in knoxzt, token
+assert 'isFinishing || isDestroyed' in knoxzt, \
+    'KnoxZT async callbacks must ignore Activity teardown'
+assert 'return@runOnUiThread' in knoxzt, \
+    'KnoxZT lifecycle guard must exit before touching output'
 
 nfc = (APP / 'NfcLabActivity.kt').read_text(encoding='utf-8')
 for token in [
@@ -148,6 +156,10 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in nfc, token
+assert 'isFinishing || isDestroyed' in nfc, \
+    'NFC reader callback must ignore Activity teardown'
+assert 'return@runOnUiThread' in nfc, \
+    'NFC lifecycle guard must exit before touching output'
 
 policy = (APP / 'PolicyComplianceActivity.kt').read_text(encoding='utf-8')
 for token in [
@@ -166,6 +178,14 @@ for token in [
     'ModernUi.hero', 'ModernUi.card', 'ModernUi.field', 'ModernUi.action', 'ModernUi.outputCard', 'ModernUi.scrollPage',
 ]:
     assert token in settings, token
+assert 'isFinishing || isDestroyed' in settings, \
+    'Settings editor async callbacks must ignore Activity teardown'
+assert 'return@runOnUiThread' in settings, \
+    'Settings editor lifecycle guard must exit before touching status'
+assert 'private var activeStabilityMonitor: AutoCloseable?' in settings, \
+    'Settings editor must retain the active stability monitor for lifecycle cleanup'
+assert 'override fun onDestroy()' in settings and 'activeStabilityMonitor?.close()' in settings, \
+    'Settings editor must close the active stability monitor during Activity teardown'
 
 scenario = (APP / 'ScenarioLabActivity.kt').read_text(encoding='utf-8')
 for token in [
