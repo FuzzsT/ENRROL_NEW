@@ -77,6 +77,7 @@ class NetworkControlActivity : Activity() {
                 DohDiagnosticClient().query(endpoint.text.toString().trim(), hex(queryHex.text.toString()))
             }
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 output.text = result.fold(
                     { bytes -> "DoH response\n${bytes.joinToString("") { b -> "%02X".format(b) }}" },
                     { error -> "DoH error\n$error" },
