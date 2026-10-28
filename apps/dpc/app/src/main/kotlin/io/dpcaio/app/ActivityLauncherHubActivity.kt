@@ -47,6 +47,7 @@ class ActivityLauncherHubActivity : Activity() {
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
     private var renderGeneration = 0L
+    private var inventoryGeneration = 0L
     private var visibleAppLimit = INITIAL_RENDER_LIMIT
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -70,6 +71,11 @@ class ActivityLauncherHubActivity : Activity() {
         discoverInstalledApps()
     }
 
+    override fun onRestart() {
+        super.onRestart()
+        discoverInstalledApps(resetLimit = false)
+    }
+
     override fun onResume() {
         super.onResume()
         if (::appList.isInitialized && installedApps.isNotEmpty()) {
@@ -84,6 +90,7 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     override fun onDestroy() {
+        inventoryGeneration++
         renderGeneration++
         iconExecutor.shutdownNow()
         iconCache.evictAll()
@@ -232,7 +239,8 @@ class ActivityLauncherHubActivity : Activity() {
         }
     }
 
-    private fun discoverInstalledApps() {
+    private fun discoverInstalledApps(resetLimit: Boolean = true) {
+        val generation = ++inventoryGeneration
         status.text = "Reading installed application inventory…"
         Thread {
             val applications = runCatching {
@@ -249,11 +257,12 @@ class ActivityLauncherHubActivity : Activity() {
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != inventoryGeneration) return@runOnUiThread
                 installedApps = mapped
                 status.text = "Installed app inventory loaded: ${mapped.size} packages"
                 renderTabs()
                 renderSortBar()
-                renderApps()
+                renderApps(resetLimit = resetLimit)
             }
         }.start()
     }
