@@ -248,10 +248,18 @@ class PermissionManagerActivity : Activity() {
     }
 
     private fun setGlobalPolicy(policy: GlobalRuntimePermissionPolicy) {
+        if (!permissionMutationInProgress.compareAndSet(false, true)) {
+            output.text = "Permission mutation already in progress"
+            return
+        }
         Thread {
-            val ok = manager.setGlobalPermissionPolicy(policy)
-            val observed = runCatching { manager.getGlobalPermissionPolicy() }.getOrNull()
-            postUiIfAlive { output.text = "Global policy requested=$policy observed=$observed verified=${ok && observed == policy}" }
+            try {
+                val ok = manager.setGlobalPermissionPolicy(policy)
+                val observed = runCatching { manager.getGlobalPermissionPolicy() }.getOrNull()
+                postUiIfAlive { output.text = "Global policy requested=$policy observed=$observed verified=${ok && observed == policy}" }
+            } finally {
+                permissionMutationInProgress.set(false)
+            }
         }.start()
     }
 
