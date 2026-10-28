@@ -30,7 +30,22 @@ class PolicyComplianceActivity : Activity() {
         setContentView(ModernUi.scrollPage(this, body))
 
         Thread {
-            val outcome = EnrollmentExecutionRouter(this).execute(intent)
+            val outcome = runCatching { EnrollmentExecutionRouter(this).execute(intent) }.getOrElse { error ->
+                val offlineStore = OfflineDeploymentStore(applicationContext)
+                if (offlineStore.hasPendingPersistence()) {
+                    applicationContext.sendBroadcast(
+                        Intent(applicationContext, OfflineRecoveryReceiver::class.java)
+                            .setAction(OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY)
+                    )
+                    EnrollmentExecutionOutcome.Retryable(
+                        "OFFLINE_DEPLOYMENT_STATE_PERSIST_FAILED: ${error.message ?: error.javaClass.simpleName}"
+                    )
+                } else {
+                    EnrollmentExecutionOutcome.Failed(
+                        "ENROLLMENT_EXECUTION_FAILED: ${error.message ?: error.javaClass.simpleName}"
+                    )
+                }
+            }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 when (outcome) {
