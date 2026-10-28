@@ -127,6 +127,13 @@ class PermissionManagerActivity : Activity() {
     private fun action(label: String, destructive: Boolean = false, action: () -> Unit): Button =
         ModernUi.action(this, label, destructive, action)
 
+    private fun postUiIfAlive(block: () -> Unit) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            block()
+        }
+    }
+
     private fun targetUserId(): Int = targetUser.text.toString().trim().toIntOrNull() ?: AndroidUserId.fromUid(Process.myUid())
 
     @Suppress("DEPRECATION")
@@ -178,7 +185,7 @@ class PermissionManagerActivity : Activity() {
                     appendLine("  Group: ${r.group ?: "-"} protection=${r.protection}")
                 }
             }
-            runOnUiThread { output.text = text }
+            postUiIfAlive { output.text = text }
         }.start()
     }
 
@@ -212,7 +219,7 @@ class PermissionManagerActivity : Activity() {
                 PermissionControlRoute.UNAVAILABLE -> "${decision.capability}: ${decision.reason}"
             }
             val readback = manager.inspectPermission(pkg, permission, targetUserId, entry?.group, entry?.protection ?: PermissionProtection.UNKNOWN, shizukuAvailable = shizukuAvailable)
-            runOnUiThread {
+            postUiIfAlive {
                 output.text = "$text\n\nReadback\nActual=${readback.actualGranted}\nDPC=${readback.dpcState}\nAppOp=${readback.appOpState}\nRoute=${readback.route}"
             }
         }.start()
@@ -222,7 +229,7 @@ class PermissionManagerActivity : Activity() {
         Thread {
             val ok = manager.setGlobalPermissionPolicy(policy)
             val observed = runCatching { manager.getGlobalPermissionPolicy() }.getOrNull()
-            runOnUiThread { output.text = "Global policy requested=$policy observed=$observed verified=${ok && observed == policy}" }
+            postUiIfAlive { output.text = "Global policy requested=$policy observed=$observed verified=${ok && observed == policy}" }
         }.start()
     }
 
@@ -270,7 +277,7 @@ class PermissionManagerActivity : Activity() {
                     appendLine("× ${item.permission}: ${item.previousState} -> ${item.requestedState} SKIPPED ${item.detail}")
                 }
             }
-            runOnUiThread { output.text = text }
+            postUiIfAlive { output.text = text }
         }.start()
     }
 
@@ -315,7 +322,7 @@ class PermissionManagerActivity : Activity() {
                 results += "${item.permission}: route=${item.route} $applyDetail verified=$verified Actual=${readback.actualGranted} DPC=${readback.dpcState} AppOp=${readback.appOpState}"
             }
             plan.skipped.forEach { results += "${it.permission}: SKIPPED ${it.detail}" }
-            runOnUiThread { output.text = "Apply supported\n${results.joinToString("\n")}" }
+            postUiIfAlive { output.text = "Apply supported\n${results.joinToString("\n")}" }
         }.start()
     }
 
@@ -332,7 +339,7 @@ class PermissionManagerActivity : Activity() {
                 )
                 "${change.permission}: restore=${change.requestedState} observed=${result.observedDpcState} ${result.detail}"
             }
-            runOnUiThread { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
+            postUiIfAlive { output.text = "Restore previous DPC states\n${results.joinToString("\n")}" }
         }.start()
     }
 
@@ -356,7 +363,7 @@ class PermissionManagerActivity : Activity() {
                     appendLine("${it.name}\n  group=${it.group} pkg=${it.declaringPackage} protection=${it.protection} raw=0x${it.rawProtectionLevel.toString(16)} flags=0x${it.permissionFlags.toString(16)} public=${it.publicSdkConstant}")
                 }
             }
-            runOnUiThread { output.text = text }
+            postUiIfAlive { output.text = text }
         }.start()
     }
 
@@ -377,21 +384,25 @@ class PermissionManagerActivity : Activity() {
                 appendLine("requested=${requested.size} catalog-matched=${entries.size}")
                 results.forEach { appendLine("${it.permission}: ${it.route} verified=${it.verified} ${it.detail}") }
             }
-            runOnUiThread { output.text = text }
+            postUiIfAlive { output.text = text }
         }.start()
     }
 
     private fun scanSystemConfigs() {
         shizuku.bind()
         output.postDelayed({
-            val permissions = shizuku.listPermissionConfigFiles() ?: "permission config unavailable"
-            val sysconfig = shizuku.listSysconfigFiles() ?: "sysconfig unavailable"
-            output.text = "PERMISSIONS XML\n$permissions\n\nSYSCONFIG XML\n$sysconfig"
+            postUiIfAlive {
+                val permissions = shizuku.listPermissionConfigFiles() ?: "permission config unavailable"
+                val sysconfig = shizuku.listSysconfigFiles() ?: "sysconfig unavailable"
+                output.text = "PERMISSIONS XML\n$permissions\n\nSYSCONFIG XML\n$sysconfig"
+            }
         }, 500)
     }
 
     private fun scanShizuku() {
         shizuku.bind()
-        output.postDelayed({ output.text = shizuku.listPermissions() ?: "Shizuku not ready/authorized" }, 500)
+        output.postDelayed({
+            postUiIfAlive { output.text = shizuku.listPermissions() ?: "Shizuku not ready/authorized" }
+        }, 500)
     }
 }
