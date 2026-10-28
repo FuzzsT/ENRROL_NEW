@@ -135,6 +135,7 @@ jobs:
           python3 tools/tests/test_permission_manager_shizuku_async_contract.py
           python3 tools/tests/test_network_doh_input_snapshot_contract.py
           python3 tools/tests/test_network_control_async_contract.py
+          python3 tools/tests/test_offline_setup_async_contract.py
           python3 tools/tests/test_emergency_runtime_image_contract.py
           python3 tools/tests/test_recovery_job_lifecycle_contract.py
           python3 tools/tests/test_knoxzt_startup_coalescing_contract.py
