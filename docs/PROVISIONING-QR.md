@@ -1,6 +1,6 @@
 # DPC-AIO Android Enterprise QR provisioning
 
-DPC-AIO 1.0.1 generates two explicit enrollment artifacts from the final APK:
+DPC-AIO 1.1.4 generates two explicit enrollment artifacts from the final APK:
 
 - `work-profile-*` for managed-profile / Profile Owner enrollment;
 - `device-owner-*` for fully managed / Device Owner enrollment.
@@ -66,7 +66,7 @@ python3 tools/provisioning/verify_provisioning_qr.py \
   --expected-mode fully-managed
 ```
 
-Validation covers the DPC component, HTTPS download URL, optional exact release-URL binding, exactly one checksum, requested mode, QR-to-JSON equality and APK checksum/signature agreement. The release workflow also downloads the published APK and requires it to be byte-identical to the APK used to generate the QR, for both continuous and tag releases.
+Validation covers the DPC component, HTTPS download URL, optional exact release-URL binding, exactly one checksum, requested mode, QR-to-JSON equality and APK checksum/signature agreement. The unified release workflow also downloads the published APK and requires it to be byte-identical to the APK used to generate the QR for stable and emergency modes.
 
 ## Android 12+ admin-integrated provisioning
 
