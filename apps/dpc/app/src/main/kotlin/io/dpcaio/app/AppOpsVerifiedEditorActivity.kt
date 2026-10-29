@@ -35,6 +35,13 @@ class AppOpsVerifiedEditorActivity : Activity() {
         val detail: String,
     )
 
+    private data class AppOpRead(
+        val canonicalName: String?,
+        val uidMode: String?,
+        val packageMode: String?,
+        val defaultMode: String?,
+    )
+
     private lateinit var packageNameField: EditText
     private lateinit var userIdField: EditText
     private lateinit var opField: EditText
@@ -140,7 +147,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@AppOpsVerifiedEditorActivity,
-                        "The editor uses the existing typed Shizuku AppOps API. It does not expose arbitrary shell execution. A command exit code alone is not considered success; the post-write AppOps snapshot must match the requested mode. If verification fails after a successful command, the editor attempts to restore the previously observed mode and verifies that rollback too.",
+                        "The editor uses typed Shizuku AppOps APIs only. Before a mutation it performs an operation-specific read; unreadable state or a UID-level override aborts the transaction. A command exit code alone is not considered success; post-write effective state must match the request, and rollback is verified against the captured package-level state.",
                     )
                 )
             }
@@ -299,45 +306,69 @@ class AppOpsVerifiedEditorActivity : Activity() {
         output.text = "Applying $op=$mode..."
         Thread {
             try {
-                val before = shizuku.getAppOps(pkg, userId)
-                val beforeMode = effectiveMode(before, op)
+                val before = shizuku.getAppOp(pkg, op, userId)
+                if (!snapshotReadable(before)) {
+                    postUi { output.text = "Initial AppOps snapshot unreadable; mutation aborted: ${before ?: "<null>"}" }
+                    return@Thread
+                }
+                val beforeState = parseSingleAppOp(before)
+                if (beforeState == null || effectiveMode(beforeState) == null) {
+                    postUi { output.text = "Initial AppOps snapshot could not be parsed; mutation aborted\n\n$before" }
+                    return@Thread
+                }
+                if (beforeState.uidMode != null) {
+                    postUi {
+                        output.text = "UID-level AppOps override present (${beforeState.uidMode}); package-level mutation aborted\n\n$before"
+                    }
+                    return@Thread
+                }
+
+                val beforeMode = effectiveMode(beforeState)
+                val rollbackMode = beforeState.packageMode?.takeUnless { it == "default" } ?: "default"
                 val exit = shizuku.setAppOp(pkg, op, mode, userId)
-                val after = shizuku.getAppOps(pkg, userId)
-                val observed = effectiveMode(after, op)
-                val verified = exit == 0 && observed == mode
+                val after = shizuku.getAppOp(pkg, op, userId)
+                val afterState = parseSingleAppOp(after)
+                val observed = effectiveMode(afterState)
+                val verified = exit == 0 && snapshotReadable(after) && requestedModeMatches(afterState, mode)
 
                 var rollbackExit: Int? = null
                 var rollbackVerified: Boolean? = null
                 var rollbackSnapshot: String? = null
-                if (!verified && exit == 0 && beforeMode != null && beforeMode in allowedModes) {
-                    rollbackExit = shizuku.setAppOp(pkg, op, beforeMode, userId)
-                    rollbackSnapshot = shizuku.getAppOps(pkg, userId)
-                    rollbackVerified = rollbackExit == 0 && effectiveMode(rollbackSnapshot, op) == beforeMode
+                if (!verified && exit == 0) {
+                    rollbackExit = shizuku.setAppOp(pkg, op, rollbackMode, userId)
+                    rollbackSnapshot = shizuku.getAppOp(pkg, op, userId)
+                    val rollbackState = parseSingleAppOp(rollbackSnapshot)
+                    rollbackVerified = rollbackExit == 0 && snapshotReadable(rollbackSnapshot) && requestedModeMatches(rollbackState, rollbackMode)
                 }
 
-                val finalSnapshot = rollbackSnapshot ?: after
-                val parsedFinal = parseAppOps(finalSnapshot)
+                val discoverySnapshot = shizuku.getAppOps(pkg, userId)
+                val parsedFinal = parseAppOps(discoverySnapshot)
                 val report = buildString {
                     appendLine("package=$pkg")
                     appendLine("user=$userId")
                     appendLine("op=$op")
+                    appendLine("canonicalOp=${afterState?.canonicalName ?: beforeState.canonicalName ?: "<unparsed>"}")
                     appendLine("beforeMode=${beforeMode ?: "<unparsed>"}")
+                    appendLine("beforePackageMode=${beforeState.packageMode ?: "<implicit-default>"}")
+                    appendLine("defaultMode=${beforeState.defaultMode ?: afterState?.defaultMode ?: "<unparsed>"}")
                     appendLine("requested=$mode")
                     appendLine("exit=$exit")
                     appendLine("observed=${observed ?: "<unparsed>"}")
                     appendLine("verified=$verified")
                     if (rollbackExit != null) {
-                        appendLine("rollbackMode=$beforeMode")
+                        appendLine("rollbackMode=$rollbackMode")
                         appendLine("rollbackExit=$rollbackExit")
                         appendLine("rollbackVerified=$rollbackVerified")
                     }
-                    appendLine("before=${before ?: "<unavailable>"}")
+                    appendLine("before=$before")
                     appendLine("after=${after ?: "<unavailable>"}")
                     if (rollbackSnapshot != null) appendLine("rollbackAfter=$rollbackSnapshot")
                 }
                 postUi {
-                    discoveredOps = parsedFinal
-                    renderDiscoveredOps()
+                    if (snapshotReadable(discoverySnapshot)) {
+                        discoveredOps = parsedFinal
+                        renderDiscoveredOps()
+                    }
                     output.text = report
                 }
             } finally {
@@ -351,22 +382,65 @@ class AppOpsVerifiedEditorActivity : Activity() {
         return normalized.isNotEmpty() && normalized !in unreadableSnapshots
     }
 
-    private fun effectiveMode(snapshot: String?, op: String): String? {
-        extractMode(snapshot, op)?.let { return it }
-        if (!snapshotReadable(snapshot) || op.isBlank()) return null
-        return "default"
+    private fun parseSingleAppOp(snapshot: String?): AppOpRead? {
+        if (!snapshotReadable(snapshot)) return null
+        var canonicalName: String? = null
+        var uidMode: String? = null
+        var packageMode: String? = null
+        var defaultMode: String? = null
+
+        snapshot.orEmpty().lineSequence().map { it.trim() }.forEach { line ->
+            when {
+                line.startsWith("Uid mode:", ignoreCase = true) -> {
+                    parseNamedMode(line.substringAfter("Uid mode:").trim())?.let { (name, mode) ->
+                        canonicalName = name
+                        uidMode = mode
+                    }
+                }
+                line.startsWith("Default mode:", ignoreCase = true) -> {
+                    defaultMode = line.substringAfter("Default mode:").trim().lowercase().takeIf { it in allowedModes }
+                }
+                else -> {
+                    parseNamedMode(line)?.let { (name, mode) ->
+                        canonicalName = canonicalName ?: name
+                        packageMode = mode
+                    }
+                }
+            }
+        }
+
+        if (uidMode == null && packageMode == null && defaultMode == null) return null
+        return AppOpRead(
+            canonicalName = canonicalName,
+            uidMode = uidMode,
+            packageMode = packageMode,
+            defaultMode = defaultMode,
+        )
     }
 
-    private fun extractMode(snapshot: String?, op: String): String? {
-        val wanted = op.trim()
-        if (!snapshotReadable(snapshot) || wanted.isBlank()) return null
-        return snapshot.orEmpty().lineSequence().map { it.trim() }.firstNotNullOfOrNull { line ->
-            val colon = line.indexOf(':')
-            if (colon <= 0) return@firstNotNullOfOrNull null
-            val name = line.substring(0, colon).trim()
-            if (!name.equals(wanted, ignoreCase = true)) return@firstNotNullOfOrNull null
-            val tail = line.substring(colon + 1).trim()
-            tail.substringBefore(' ').substringBefore(';').trim().lowercase().takeIf { it in allowedModes }
+    private fun parseNamedMode(line: String): Pair<String, String>? {
+        val colon = line.indexOf(':')
+        if (colon <= 0) return null
+        val name = line.substring(0, colon).trim()
+        val tail = line.substring(colon + 1).trim()
+        val mode = tail.substringBefore(' ').substringBefore(';').trim().lowercase()
+        if (name.isBlank() || mode !in allowedModes) return null
+        return name to mode
+    }
+
+    private fun effectiveMode(read: AppOpRead?): String? {
+        if (read == null) return null
+        read.uidMode?.let { return it }
+        read.packageMode?.takeUnless { it == "default" }?.let { return it }
+        return read.defaultMode
+    }
+
+    private fun requestedModeMatches(read: AppOpRead?, requested: String): Boolean {
+        if (read == null || read.uidMode != null) return false
+        return if (requested == "default") {
+            (read.packageMode == null || read.packageMode == "default") && read.defaultMode != null
+        } else {
+            effectiveMode(read) == requested
         }
     }
 
