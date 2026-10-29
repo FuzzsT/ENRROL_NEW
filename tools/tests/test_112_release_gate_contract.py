@@ -28,10 +28,19 @@ for marker in [
   'ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d',
   'tools/runtime/android_device_owner_smoke.py',
   'dist/android-runtime-smoke.json',
-  'Publish continuous enrollment assets',
-  'Publish tag release assets',
 ]:
     if marker not in workflow: errors.append(f'workflow missing {marker}')
+
+# Publishing may be represented by the consolidated release job or by the
+# historical continuous/tag split, but one complete publication strategy is required.
+unified_publish='Publish release assets' in workflow
+legacy_publish=(
+    'Publish continuous enrollment assets' in workflow
+    and 'Publish tag release assets' in workflow
+)
+if not (unified_publish or legacy_publish):
+    errors.append('workflow missing consolidated or complete legacy release publication step')
+
 report=json.loads(read('RELEASE-VERIFICATION.json'))
 rv=tuple(map(int,report.get('version','0.0.0').split('.')))
 if rv < (1,1,2): errors.append('release report version <1.1.2')
