@@ -70,6 +70,12 @@ class ShizukuUserServiceClient(context: Context) {
     fun installExistingPackage(packageName: String, userId: Int): Int? =
         runCatching { remote?.installExistingPackage(packageName, userId) }.getOrNull()
 
+    fun listPackagesForUser(userId: Int): String? =
+        runCatching { remote?.listPackagesForUser(userId) }.getOrNull()
+
+    fun uninstallPackageForUser(packageName: String, userId: Int): Int? =
+        runCatching { remote?.uninstallPackageForUser(packageName, userId) }.getOrNull()
+
     fun listUsers(): String? = runCatching { remote?.listUsers() }.getOrNull()
 
     fun createProfile(name: String, cloneProfile: Boolean): String? =
