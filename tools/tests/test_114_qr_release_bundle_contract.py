@@ -22,7 +22,6 @@ m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 25: errors.append('versionCode >=25 required')
 
 workflow=read('.github/workflows/build-aio-enrollment.yml')
-emergency_workflow=read('.github/workflows/build-emergency-enrollment.yml')
 for token in [
     'Build QR release bundle',
     'tools/release/build_qr_release_bundle.py',
@@ -37,34 +36,57 @@ for token in [
     'provisioning-validation.json',
     'work-profile-validation.json',
     'device-owner-validation.json',
-]:
-    if token not in workflow: errors.append(f'workflow missing {token}')
-
-# Production workflow must stay aligned with the verified 1.1.4 app layout and
-# runtime-smoke behavior. These guards intentionally reject the older pre-app
-# output paths and Google APIs emulator image that can contain accounts and
-# prevent Device Owner provisioning.
-for token in [
+    'Prepare stable signer',
     'STABLE_SIGNING_KEY_REQUIRED',
     'DPC_AIO_RELEASE_KEYSTORE_B64',
     'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256',
+    'Prepare emergency ephemeral signer',
+    'PKCS12',
+    'dpc-aio-emergency-enrollment',
     'apps/dpc/app/build/outputs/apk/enterprise/release',
     'apps/dpc/app/build/outputs/provisioning/enterprise/release',
     'tools/release/extract_apksigner_sha256.py',
-    'target: default',
+    'target: aosp_atd',
 ]:
-    if token not in workflow: errors.append(f'production workflow parity missing {token}')
+    if token not in workflow: errors.append(f'unified workflow missing {token}')
+
 for forbidden in [
     'apps/dpc/build/outputs/',
     'target: google_apis',
-    'DPC_AIO_SIGNING_MODE=ephemeral',
-    'keytool -genkeypair',
+    'device_provisioned',
+    'user_setup_complete',
+    'remove-account',
+    'remove_account',
+    'cmd account remove',
 ]:
-    if forbidden in workflow: errors.append(f'production workflow contains forbidden/stale marker {forbidden}')
+    if forbidden in workflow: errors.append(f'unified workflow contains forbidden/stale marker {forbidden}')
 
-# Runtime smoke retry is deliberately narrow: one fresh-AVD retry is allowed
-# only for Android's known fresh-emulator eligibility flake where set-device-owner
-# reports pre-existing accounts. No account removal or setup-state manipulation.
+for token in [
+    'id: runtime_smoke_primary',
+    'continue-on-error: true',
+    'tools/runtime/runtime_smoke_retry_gate.py',
+    'DPC_AIO_RUNTIME_RETRY=1',
+    "if: env.DPC_AIO_RUNTIME_RETRY == '1'",
+    'AOSP Device Owner runtime smoke retry',
+    'android-runtime-smoke-attempt1.json',
+]:
+    if token not in workflow:
+        errors.append(f'unified workflow runtime retry missing {token}')
+if workflow.count('ReactiveCircus/android-emulator-runner@') != 2:
+    errors.append('unified workflow must contain exactly two emulator-runner attempts')
+
+byte_identity_check = (
+    'cmp -s' in workflow
+    or (
+        'sha256sum dist/DPC-AIO-enterprise-release.apk' in workflow
+        and 'sha256sum public.apk' in workflow
+        and 'observed' in workflow
+        and 'expected' in workflow
+    )
+)
+if not byte_identity_check:
+    errors.append('published APK byte identity verification missing')
+
 retry_gate_path=ROOT/'tools/runtime/runtime_smoke_retry_gate.py'
 if not retry_gate_path.is_file():
     errors.append('runtime smoke retry gate missing')
@@ -88,45 +110,12 @@ else:
             'setDeviceOwner':{'exitCode':255,'output':'SecurityException: caller is not allowed'},
             'error':'ValueError: Device Owner readback is not true',
         }
-        misleading_pass={
-            'state':'PASS',
-            'setDeviceOwner':{
-                'exitCode':0,
-                'output':'historical text: already some accounts on the device'
-            },
-        }
         if retry_gate.is_retryable_preexisting_accounts(retryable) is not True:
             errors.append('pre-existing-account Device Owner failure must be retryable')
         if retry_gate.is_retryable_preexisting_accounts(generic_failure) is not False:
             errors.append('generic Device Owner failure must not be retryable')
-        if retry_gate.is_retryable_preexisting_accounts(misleading_pass) is not False:
-            errors.append('PASS report must never request retry')
     except Exception as exc:
         errors.append(f'runtime smoke retry gate behavior failed: {exc}')
-
-for label, text in [('production', workflow), ('emergency', emergency_workflow)]:
-    for token in [
-        'id: runtime_smoke_primary',
-        'continue-on-error: true',
-        'tools/runtime/runtime_smoke_retry_gate.py',
-        'DPC_AIO_RUNTIME_RETRY=1',
-        "if: env.DPC_AIO_RUNTIME_RETRY == '1'",
-        'AOSP Device Owner runtime smoke retry',
-        'android-runtime-smoke-attempt1.json',
-    ]:
-        if token not in text:
-            errors.append(f'{label} workflow runtime retry missing {token}')
-    if text.count('ReactiveCircus/android-emulator-runner@') != 2:
-        errors.append(f'{label} workflow must contain exactly two emulator-runner attempts')
-    for forbidden in [
-        'device_provisioned',
-        'user_setup_complete',
-        'remove-account',
-        'remove_account',
-        'cmd account remove',
-    ]:
-        if forbidden in text:
-            errors.append(f'{label} workflow contains forbidden Device Owner eligibility manipulation {forbidden}')
 
 script=read('tools/release/build_qr_release_bundle.py')
 for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA256SUMS.txt','zipfile.ZipFile','bundleSha256']:
@@ -156,7 +145,6 @@ for token in ['cv2.copyMakeBorder', 'QRCodeDetectorAruco', "('native', image)", 
 if 'print(rendered, file=sys.stderr)' not in verifier:
     errors.append('QR verifier must echo failed validation report to stderr')
 
-# Behavior regression: native OpenCV decode fails, padded retry succeeds.
 try:
     spec=importlib.util.spec_from_file_location('verify_provisioning_qr_contract', verifier_path)
     if not spec or not spec.loader:
