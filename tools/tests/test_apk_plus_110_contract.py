@@ -51,4 +51,32 @@ dashboard=(ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity
 for needle in ['APK / APKS Installer','App Updater','AppPackageManagerActivity']:
     assert needle in dashboard, needle
 
+# ShizukuPlus/OpenLoader-inspired clean-room improvements: capability doctor + local operation history.
+doctor_model=ROOT/'apps/dpc/modules/installer/core/src/main/kotlin/io/dpcaio/installer/InstallerDoctorModels.kt'
+assert doctor_model.exists(), 'InstallerDoctorModels missing'
+dm=doctor_model.read_text('utf-8')
+for needle in ['enum class InstallerBackendKind','PACKAGE_INSTALLER','DEVICE_OWNER_CONTEXT','SHIZUKU_DIAGNOSTIC','data class InstallerDoctorSnapshot','enum class InstallHistoryStatus','PENDING_USER_ACTION','SUCCEEDED','FAILED']:
+    assert needle in dm, needle
+
+doctor=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallerDoctor.kt'
+assert doctor.exists(), 'InstallerDoctor missing'
+d=doctor.read_text('utf-8')
+for needle in ['canRequestPackageInstalls','DevicePolicyManager','AndroidShizukuRuntime','binderAlive','permissionGranted','DIAGNOSTIC_ONLY']:
+    assert needle in d, needle
+for forbidden in ['Runtime.getRuntime().exec','ProcessBuilder','pm install','su -c']:
+    assert forbidden not in d, forbidden
+
+history=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppInstallHistoryStore.kt'
+assert history.exists(), 'AppInstallHistoryStore missing'
+h=history.read_text('utf-8')
+for needle in ['class AppInstallHistoryStore','SharedPreferences','InstallHistoryRecord','fun append','fun recent']:
+    assert needle in h, needle
+
+for needle in ['Installer Doctor','Installation history','InstallerDoctor','AppInstallHistoryStore']:
+    assert needle in a, needle
+
+receiver=(ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppInstallStatusReceiver.kt').read_text('utf-8')
+for needle in ['InstallHistoryStatus.PENDING_USER_ACTION','InstallHistoryStatus.SUCCEEDED','InstallHistoryStatus.FAILED','AppInstallHistoryStore']:
+    assert needle in receiver, needle
+
 print('test_apk_plus_110_contract: PASS')
