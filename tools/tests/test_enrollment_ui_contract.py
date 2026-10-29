@@ -5,10 +5,13 @@ APP = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app'
 manifest = (ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml').read_text('utf-8')
 activity = APP / 'EnrollmentStatusActivity.kt'
 snapshot = APP / 'EnrollmentDiagnosticsSnapshot.kt'
+policy = APP / 'PolicyComplianceActivity.kt'
 assert activity.is_file(), 'EnrollmentStatusActivity.kt missing'
 assert snapshot.is_file(), 'EnrollmentDiagnosticsSnapshot.kt missing'
+assert policy.is_file(), 'PolicyComplianceActivity.kt missing'
 a = activity.read_text('utf-8')
 s = snapshot.read_text('utf-8')
+p = policy.read_text('utf-8')
 assert 'EnrollmentStatusActivity' in manifest
 for marker in ['Stage:', 'Source:', 'Retry', 'Export enrollment-diagnostics.json', 'EnrollmentSessionStore']:
     assert marker in a, f'status UI missing {marker}'
@@ -17,4 +20,8 @@ for marker in ['tokenFingerprint', 'serverUri', 'retryCount', 'lastError', 'toJs
 for forbidden in ['enrollmentToken', 'password', 'authHeader', 'kpeKey']:
     assert f'put("{forbidden}"' not in s, f'diagnostics must not export {forbidden}'
 assert 'Ignore and finish' not in a
+assert 'EnrollmentExecutionRouter(applicationContext).execute(intent)' in p, \
+    'background enrollment must not retain PolicyComplianceActivity through its router Context'
+assert 'EnrollmentExecutionRouter(this).execute(intent)' not in p, \
+    'background enrollment must use applicationContext, not Activity context'
 print('test_enrollment_ui_contract: PASS')
