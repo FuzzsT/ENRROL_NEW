@@ -86,9 +86,15 @@ class ActivityLauncherHubActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        savedInstanceState?.getStringArrayList(STATE_SELECTED_PACKAGES)?.let { selectedPackages.addAll(it) }
         title = "Activity Launcher"
         renderShell()
         discoverInstalledApps()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putStringArrayList(STATE_SELECTED_PACKAGES, ArrayList(selectedPackages))
+        super.onSaveInstanceState(outState)
     }
 
     override fun onRestart() {
@@ -749,6 +755,7 @@ class ActivityLauncherHubActivity : Activity() {
         private const val PREFS_NAME = "activity_launcher_hub"
         private const val KEY_FAVORITES = "favoritePackages"
         private const val KEY_RECENTS = "recentPackages"
+        private const val STATE_SELECTED_PACKAGES = "selectedPackages"
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
         private const val ICON_WORKER_COUNT = 2
