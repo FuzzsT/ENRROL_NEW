@@ -155,6 +155,11 @@ assert 'isFinishing || isDestroyed' in policy, \
     'Policy compliance callback must ignore enrollment results after Activity teardown'
 assert 'return@runOnUiThread' in policy, \
     'Policy compliance lifecycle guard must exit before rendering or finishing a destroyed Activity'
+policy_callback_start = policy.index('runOnUiThread {')
+policy_guard = policy.index('if (isFinishing || isDestroyed)', policy_callback_start)
+policy_outcome = policy.index('when (outcome)', policy_callback_start)
+assert policy_guard < policy_outcome, \
+    'Policy compliance lifecycle guard must run before handling the enrollment outcome'
 
 settings = (APP / 'SamsungSettingsEditorActivity.kt').read_text(encoding='utf-8')
 for token in [
