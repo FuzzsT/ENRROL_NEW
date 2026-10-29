@@ -46,7 +46,7 @@ class PolicyComplianceActivity : Activity() {
             } else {
                 null
             }
-            val outcome = preflightFailure ?: runCatching { EnrollmentExecutionRouter(this).execute(intent) }.getOrElse { error ->
+            val outcome = preflightFailure ?: runCatching { EnrollmentExecutionRouter(applicationContext).execute(intent) }.getOrElse { error ->
                 if (offlineStore.hasPendingPersistence()) {
                     applicationContext.sendBroadcast(
                         Intent(applicationContext, OfflineRecoveryReceiver::class.java)
