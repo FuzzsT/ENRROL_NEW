@@ -152,6 +152,7 @@ class ControlCenterActivity : Activity() {
         content.addView(ModernUi.section(this, "Functions"))
         val functions = listOf(
             FunctionEntry("Activity Launcher", "Browse installed apps, favorites, recent packages and guarded activities.", ActivityLauncherHubActivity::class.java, ModernUi.Tone.SUCCESS),
+            FunctionEntry("Self Update", "Verified DPC-AIO updates with silent install when Android policy allows it.", SelfUpdateActivity::class.java, ModernUi.Tone.SUCCESS),
             FunctionEntry("Enterprise Policy Hub", "Device-owner policy capabilities and explicit apply/readback flows.", EnterprisePolicyHubActivity::class.java),
             FunctionEntry("Permission Manager", "Runtime permissions, AppOps and effective capability inspection.", PermissionManagerActivity::class.java),
             FunctionEntry("Module Center", "Full compile-time module registry and capability visibility.", ModuleCenterActivity::class.java),
