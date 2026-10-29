@@ -20,15 +20,13 @@ for needle in [
     'packageManager.getInstallSourceInfo',
     'currentStateFilter',
     'selectedPackages',
-    'renderSelectionBar()',
     'Select visible',
     'Clear selection',
     'Copy selected packages',
     'Favorite selected',
-    'toggleSelected(',
-    'SELECTED',
     'AppOps',
     'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
+    'filteredApps().take(visibleAppLimit)',
 ]:
     assert needle in hub, f'ActivityLauncherHubActivity.kt missing {needle}'
 
