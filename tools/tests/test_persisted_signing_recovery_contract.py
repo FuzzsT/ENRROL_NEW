@@ -49,6 +49,7 @@ for marker in (
     "--historical-apk-file",
     "HISTORICAL_APK_SIGNER_MISMATCH",
     "apksigner",
+    '"signing_mode=stable"',
 ):
     assert marker in source, marker
 assert 'add_argument("--password"' not in source
