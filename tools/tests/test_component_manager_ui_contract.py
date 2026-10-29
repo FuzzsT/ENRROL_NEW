@@ -17,6 +17,16 @@ for n in [
     'AppSort.UPDATE_DATE -> filtered.sortedByDescending { it.lastUpdateTime }',
     'formatInstallDate(app.firstInstallTime)',
     'formatInstallDate(app.lastUpdateTime)',
+    'selectedPackages',
+    'renderSelectionBar()',
+    'Select visible',
+    'Clear selection',
+    'Copy selected packages',
+    'Favorite selected',
+    'toggleSelected(',
+    'SELECTED',
+    'AppOps',
+    'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
 ]:
     assert n in ht,n
 assert 'createDeviceProtectedStorageContext' in st
