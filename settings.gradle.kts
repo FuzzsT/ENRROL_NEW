@@ -39,6 +39,7 @@ include(
     ":installer-core",
     ":installer-android",
     ":self-update-core",
+    ":self-update-android",
     ":delegation-core",
     ":dhizuku-compat",
     ":shizuku-adapter",
@@ -86,6 +87,7 @@ project(":activity-android").projectDir = file("apps/dpc/modules/activity/androi
 project(":installer-core").projectDir = file("apps/dpc/modules/installer/core")
 project(":installer-android").projectDir = file("apps/dpc/modules/installer/android")
 project(":self-update-core").projectDir = file("apps/dpc/modules/self-update/core")
+project(":self-update-android").projectDir = file("apps/dpc/modules/self-update/android")
 project(":delegation-core").projectDir = file("apps/dpc/modules/delegation/core")
 project(":dhizuku-compat").projectDir = file("apps/dpc/integrations/dhizuku")
 project(":shizuku-adapter").projectDir = file("apps/dpc/integrations/shizuku")
