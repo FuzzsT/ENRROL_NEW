@@ -76,6 +76,30 @@ def main():
 
     findings = verify_android_contracts(ROOT)
     assert_true(not findings, f"project Android contracts should pass: {findings}")
+
+    source_reader_path = ROOT / "apps/dpc/modules/installer/android/src/main/kotlin/io/dpcaio/installer/android/InstallSourceDetails.kt"
+    assert_true(source_reader_path.is_file(), "shared InstallSourceDetails.kt missing")
+    source_reader = source_reader_path.read_text(encoding="utf-8")
+    for token in [
+        "data class InstallSourceDetails",
+        "class AndroidInstallSourceReader",
+        "getInstallSourceInfo",
+        "getInstallerPackageName",
+        "installingPackageName",
+        "installingPackageLabel",
+        "initiatingPackageName",
+        "originatingPackageName",
+        "packageSource",
+        "updateOwnerPackageName",
+    ]:
+        assert_true(token in source_reader, f"install source reader missing: {token}")
+
+    hub = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt").read_text(encoding="utf-8")
+    package_manager = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppPackageManagerActivity.kt").read_text(encoding="utf-8")
+    assert_true("AndroidInstallSourceReader" in hub, "Activity Launcher must use shared install source reader")
+    for token in ["AndroidInstallSourceReader", "Installed by", "installingPackageName", "installingPackageLabel"]:
+        assert_true(token in package_manager, f"App Package Manager source UI missing: {token}")
+
     print("test_android_contracts: PASS")
 
 
