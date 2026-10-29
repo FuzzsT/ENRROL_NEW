@@ -28,10 +28,18 @@ Production signing recovery remains tracked separately in Issue #33.
 
 Repository target: `FuzzsT/ENRROL_NEW`.
 
-Two CI enrollment paths are intentionally separate:
+Enrollment is handled by one workflow: `.github/workflows/build-aio-enrollment.yml`.
 
-- **Build AIO + enrollment QR** (`.github/workflows/build-aio-enrollment.yml`) — production path. Requires a stable signing keystore/fingerprint in GitHub Secrets/Variables, runs the Android Device Owner smoke test, publishes the exact APK + QR bundle, and verifies the public APK bytes after release.
-- **Emergency enrollment (ephemeral signing)** (`.github/workflows/build-emergency-enrollment.yml`) — first-run/lab path when stable signing secrets are not configured yet. It creates a run-specific PKCS12 signer, builds `enterpriseRelease`, generates Work Profile + Device Owner QR codes bound to that exact APK, publishes them to the `dpc-aio-emergency-enrollment` prerelease, and verifies the public APK bytes. The resulting APK can be enrolled, but a later build signed with a different key cannot update it in place.
+- **Stable mode** — production path. Uses the configured stable signing keystore/fingerprint, runs the Android Device Owner smoke test, publishes the exact APK + QR bundle, and verifies the public APK bytes after release.
+- **Emergency mode** — first-run/lab path when stable signing secrets are not configured yet. It creates a run-specific PKCS12 signer, builds `enterpriseRelease`, generates Work Profile + Device Owner QR codes bound to that exact APK, publishes them to the `dpc-aio-emergency-enrollment` prerelease, and verifies the public APK bytes. A later build signed with a different key cannot update it in place.
+
+Trigger mapping:
+
+- push to `main` -> emergency mode;
+- tag `v*` -> stable mode;
+- manual run -> choose `auto`, `stable` or `emergency` via `signing_mode`.
+
+The helper scripts `START-EMERGENCY-ENROLLMENT.sh` and `START-EMERGENCY-ENROLLMENT.ps1` now invoke the unified workflow with `signing_mode=emergency`.
 
 For a **Device Owner** QR, use a clean/factory-reset test device and scan `device-owner-qr.png` during Android Setup. For a **Work Profile**, use `work-profile-qr.png` in a supported managed-profile provisioning flow. Do not treat QR generation alone as runtime proof; use the CI validation JSON and Device Owner smoke evidence attached to the run/release.
 
