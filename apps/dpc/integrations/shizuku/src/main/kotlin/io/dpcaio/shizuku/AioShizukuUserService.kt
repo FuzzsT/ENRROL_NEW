@@ -42,6 +42,11 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))
     }
 
+    override fun getAppOp(packageName: String, op: String, userId: Int): String {
+        if (!validPackage(packageName) || !validOp(op) || userId < 0) return "INVALID_ARGUMENT"
+        return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName, op))
+    }
+
     override fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int {
         if (!validPackage(packageName) || userId < 0) return RESULT_INVALID_ARGUMENT
         return runTyped(listOf("/system/bin/pm", if (enabled) "enable" else "disable-user", "--user", userId.toString(), packageName))
