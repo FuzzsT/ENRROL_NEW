@@ -61,6 +61,9 @@ class ShizukuUserServiceClient(context: Context) {
     fun getAppOps(packageName: String, userId: Int): String? =
         runCatching { remote?.getAppOps(packageName, userId) }.getOrNull()
 
+    fun getAppOp(packageName: String, op: String, userId: Int): String? =
+        runCatching { remote?.getAppOp(packageName, op, userId) }.getOrNull()
+
     fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int? =
         runCatching { remote?.setPackageEnabled(packageName, enabled, userId) }.getOrNull()
 
