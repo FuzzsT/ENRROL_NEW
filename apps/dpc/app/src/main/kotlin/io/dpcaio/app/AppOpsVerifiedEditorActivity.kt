@@ -24,6 +24,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
         private const val AUTO_DISCOVERY_DELAY_MS = 450L
         private val mutationInProgress = AtomicBoolean(false)
         private val allowedModes = listOf("allow", "ignore", "deny", "default", "foreground")
+        private val unreadableSnapshots = setOf("INVALID_ARGUMENT", "TIMEOUT", "EXECUTION_ERROR")
     }
 
     private enum class ModeFilter { ALL, ALLOW, IGNORE, DENY, DEFAULT, FOREGROUND }
@@ -139,7 +140,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@AppOpsVerifiedEditorActivity,
-                        "The editor uses the existing typed Shizuku AppOps API. It does not expose arbitrary shell execution. A command exit code alone is not considered success; the post-write AppOps snapshot must contain the requested mode for the selected operation.",
+                        "The editor uses the existing typed Shizuku AppOps API. It does not expose arbitrary shell execution. A command exit code alone is not considered success; the post-write AppOps snapshot must match the requested mode. If verification fails after a successful command, the editor attempts to restore the previously observed mode and verifies that rollback too.",
                     )
                 )
             }
@@ -206,18 +207,18 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 if (generation != discoveryGeneration) return@postUi
                 discoveredOps = parsed
                 renderDiscoveredOps()
-                output.text = if (snapshot == null) {
-                    "Shizuku unavailable or AppOps read failed"
+                output.text = if (!snapshotReadable(snapshot)) {
+                    "Shizuku unavailable or AppOps read failed: ${snapshot ?: "<null>"}"
                 } else {
-                    "Discovered ${parsed.size} AppOps for $pkg\n\n$snapshot"
+                    "Discovered ${parsed.size} explicit AppOps for $pkg\n\n$snapshot"
                 }
             }
         }.start()
     }
 
     private fun parseAppOps(snapshot: String?): List<AppOpEntry> {
-        if (snapshot.isNullOrBlank()) return emptyList()
-        return snapshot.lineSequence().mapNotNull { rawLine ->
+        if (!snapshotReadable(snapshot)) return emptyList()
+        return snapshot.orEmpty().lineSequence().mapNotNull { rawLine ->
             val line = rawLine.trim()
             val colon = line.indexOf(':')
             if (colon <= 0) return@mapNotNull null
@@ -240,7 +241,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
         }
         discoveredContainer.removeAllViews()
         if (rows.isEmpty()) {
-            discoveredContainer.addView(ModernUi.body(this, if (discoveredOps.isEmpty()) "No AppOps discovered" else "No matching AppOps"))
+            discoveredContainer.addView(ModernUi.body(this, if (discoveredOps.isEmpty()) "No explicit AppOps discovered" else "No matching AppOps"))
             return
         }
         rows.forEach { entry ->
@@ -291,24 +292,43 @@ class AppOpsVerifiedEditorActivity : Activity() {
         Thread {
             try {
                 val before = shizuku.getAppOps(pkg, userId)
+                val beforeMode = effectiveMode(before, op)
                 val exit = shizuku.setAppOp(pkg, op, mode, userId)
                 val after = shizuku.getAppOps(pkg, userId)
-                val observed = extractMode(after, op)
+                val observed = effectiveMode(after, op)
                 val verified = exit == 0 && observed == mode
-                val parsedAfter = parseAppOps(after)
+
+                var rollbackExit: Int? = null
+                var rollbackVerified: Boolean? = null
+                var rollbackSnapshot: String? = null
+                if (!verified && exit == 0 && beforeMode != null && beforeMode in allowedModes) {
+                    rollbackExit = shizuku.setAppOp(pkg, op, beforeMode, userId)
+                    rollbackSnapshot = shizuku.getAppOps(pkg, userId)
+                    rollbackVerified = rollbackExit == 0 && effectiveMode(rollbackSnapshot, op) == beforeMode
+                }
+
+                val finalSnapshot = rollbackSnapshot ?: after
+                val parsedFinal = parseAppOps(finalSnapshot)
                 val report = buildString {
                     appendLine("package=$pkg")
                     appendLine("user=$userId")
                     appendLine("op=$op")
+                    appendLine("beforeMode=${beforeMode ?: "<unparsed>"}")
                     appendLine("requested=$mode")
                     appendLine("exit=$exit")
                     appendLine("observed=${observed ?: "<unparsed>"}")
                     appendLine("verified=$verified")
+                    if (rollbackExit != null) {
+                        appendLine("rollbackMode=$beforeMode")
+                        appendLine("rollbackExit=$rollbackExit")
+                        appendLine("rollbackVerified=$rollbackVerified")
+                    }
                     appendLine("before=${before ?: "<unavailable>"}")
                     appendLine("after=${after ?: "<unavailable>"}")
+                    if (rollbackSnapshot != null) appendLine("rollbackAfter=$rollbackSnapshot")
                 }
                 postUi {
-                    discoveredOps = parsedAfter
+                    discoveredOps = parsedFinal
                     renderDiscoveredOps()
                     output.text = report
                 }
@@ -318,10 +338,21 @@ class AppOpsVerifiedEditorActivity : Activity() {
         }.start()
     }
 
+    private fun snapshotReadable(snapshot: String?): Boolean {
+        val normalized = snapshot?.trim().orEmpty()
+        return normalized.isNotEmpty() && normalized !in unreadableSnapshots
+    }
+
+    private fun effectiveMode(snapshot: String?, op: String): String? {
+        extractMode(snapshot, op)?.let { return it }
+        if (!snapshotReadable(snapshot) || op.isBlank()) return null
+        return "default"
+    }
+
     private fun extractMode(snapshot: String?, op: String): String? {
         val wanted = op.trim()
-        if (snapshot.isNullOrBlank() || wanted.isBlank()) return null
-        return snapshot.lineSequence().map { it.trim() }.firstNotNullOfOrNull { line ->
+        if (!snapshotReadable(snapshot) || wanted.isBlank()) return null
+        return snapshot.orEmpty().lineSequence().map { it.trim() }.firstNotNullOfOrNull { line ->
             val colon = line.indexOf(':')
             if (colon <= 0) return@firstNotNullOfOrNull null
             val name = line.substring(0, colon).trim()
