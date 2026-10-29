@@ -104,8 +104,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           requested="${{ inputs.signing_mode || 'auto' }}"
+
           if [[ "$requested" == "auto" ]]; then
             if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
               mode="stable"
@@ -128,6 +128,7 @@ jobs:
             artifact_name="DPC-AIO-emergency-enrollment"
             should_publish="true"
           else
+            artifact_name="DPC-AIO-enterpriseRelease-enrollment"
             if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
               release_tag="$GITHUB_REF_NAME"
               should_publish="true"
@@ -139,7 +140,6 @@ jobs:
                 should_publish="false"
               fi
             fi
-            artifact_name="DPC-AIO-enterpriseRelease-enrollment"
           fi
 
           {
@@ -154,6 +154,7 @@ jobs:
             echo "DPC_AIO_RELEASE_TAG=$release_tag"
             echo "DPC_AIO_ARTIFACT_NAME=$artifact_name"
             echo "DPC_AIO_GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+            echo "DPC_AIO_SIGNING_ENV=$RUNNER_TEMP/dpc-aio-signing.env"
           } >> "$GITHUB_ENV"
 
           echo "Pipeline mode: $mode"
@@ -273,14 +274,15 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
           test -s "$keystore"
 
-          {
-            echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$keystore"
-            echo "DPC_AIO_RELEASE_STORE_PASSWORD=$STORE_PASSWORD"
-            echo "DPC_AIO_RELEASE_KEY_ALIAS=$KEY_ALIAS"
-            echo "DPC_AIO_RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
-            echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$EXPECTED_CERT"
-            echo "DPC_AIO_SIGNING_MODE=stable"
-          } >> "$GITHUB_ENV"
+          cat > "$DPC_AIO_SIGNING_ENV" <<EOF
+          DPC_AIO_RELEASE_KEYSTORE_PATH='$keystore'
+          DPC_AIO_RELEASE_STORE_PASSWORD='$STORE_PASSWORD'
+          DPC_AIO_RELEASE_KEY_ALIAS='$KEY_ALIAS'
+          DPC_AIO_RELEASE_KEY_PASSWORD='$KEY_PASSWORD'
+          DPC_AIO_EXPECTED_SIGNING_CERT_SHA256='$EXPECTED_CERT'
+          DPC_AIO_SIGNING_MODE='stable'
+          EOF
+          chmod 600 "$DPC_AIO_SIGNING_ENV"
 
       - name: Prepare emergency ephemeral signer
         if: env.DPC_AIO_PIPELINE_MODE == 'emergency'
@@ -292,6 +294,7 @@ jobs:
           password="$(openssl rand -hex 24)"
           echo "::add-mask::$password"
           umask 077
+
           keytool -genkeypair \
             -storetype PKCS12 \
             -keystore "$keystore" \
@@ -308,19 +311,24 @@ jobs:
           fingerprint="$(keytool -list -v -keystore "$keystore" -storetype PKCS12 -storepass "$password" -alias "$alias" | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           test -n "$fingerprint"
 
-          {
-            echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$keystore"
-            echo "DPC_AIO_RELEASE_STORE_PASSWORD=$password"
-            echo "DPC_AIO_RELEASE_KEY_ALIAS=$alias"
-            echo "DPC_AIO_RELEASE_KEY_PASSWORD=$password"
-            echo "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=$fingerprint"
-            echo "DPC_AIO_SIGNING_MODE=ephemeral"
-          } >> "$GITHUB_ENV"
+          cat > "$DPC_AIO_SIGNING_ENV" <<EOF
+          DPC_AIO_RELEASE_KEYSTORE_PATH='$keystore'
+          DPC_AIO_RELEASE_STORE_PASSWORD='$password'
+          DPC_AIO_RELEASE_KEY_ALIAS='$alias'
+          DPC_AIO_RELEASE_KEY_PASSWORD='$password'
+          DPC_AIO_EXPECTED_SIGNING_CERT_SHA256='$fingerprint'
+          DPC_AIO_SIGNING_MODE='ephemeral'
+          EOF
+          chmod 600 "$DPC_AIO_SIGNING_ENV"
 
       - name: Verify Android build environment
         shell: bash
         run: |
           set -euo pipefail
+          test -s "$DPC_AIO_SIGNING_ENV"
+          set -a
+          source "$DPC_AIO_SIGNING_ENV"
+          set +a
           mkdir -p dist
           python3 tools/android_build_preflight.py --require-signing --json-out dist/build-environment.json
 
@@ -352,6 +360,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -s "$DPC_AIO_SIGNING_ENV"
+          set -a
+          source "$DPC_AIO_SIGNING_ENV"
+          set +a
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app-dpc:assembleEnterpriseRelease
 
@@ -359,6 +371,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -s "$DPC_AIO_SIGNING_ENV"
+          set -a
+          source "$DPC_AIO_SIGNING_ENV"
+          set +a
+
           mkdir -p dist
           apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
           test -n "$apk"
@@ -400,7 +417,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}"
+          if [[ -f "$DPC_AIO_SIGNING_ENV" ]]; then
+            signing_keystore="$(sed -n "s/^DPC_AIO_RELEASE_KEYSTORE_PATH='\(.*\)'$/\1/p" "$DPC_AIO_SIGNING_ENV" | head -n1)"
+            rm -f "${signing_keystore:-}"
+          fi
+          rm -f "$DPC_AIO_SIGNING_ENV"
+          test ! -e "$DPC_AIO_SIGNING_ENV"
 
       - name: Enable KVM group perms
         shell: bash
@@ -473,7 +495,9 @@ jobs:
       - name: Cleanup signing material fallback
         if: always()
         shell: bash
-        run: rm -f "${DPC_AIO_RELEASE_KEYSTORE_PATH:-}" || true
+        run: |
+          rm -f "$DPC_AIO_SIGNING_ENV" || true
+          rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12" || true
 
   publish:
     needs: build
@@ -535,7 +559,7 @@ jobs:
             url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/DPC-AIO-enterprise-release.apk?cb=${cache_bust}"
             if curl -fL --retry 2 --retry-delay 3 "$url" -o public.apk; then
               observed="$(sha256sum public.apk | awk '{print $1}')"
-              if [[ "$observed" == "$expected" ]]; then
+              if cmp -s dist/DPC-AIO-enterprise-release.apk public.apk && [[ "$observed" == "$expected" ]]; then
                 matched="1"
                 break
               fi
