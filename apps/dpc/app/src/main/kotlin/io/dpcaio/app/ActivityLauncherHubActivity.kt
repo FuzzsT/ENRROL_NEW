@@ -20,16 +20,20 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.shizuku.AndroidShizukuRuntime
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class ActivityLauncherHubActivity : Activity() {
     private enum class AppTab { SYSTEM, USER, FAVORITES, RECENT }
-    private enum class AppSort { NAME, PACKAGE }
+    private enum class AppSort { NAME, PACKAGE, INSTALL_DATE }
 
     private data class AppEntry(
         val packageName: String,
         val label: String,
         val versionName: String,
+        val firstInstallTime: Long,
         val system: Boolean,
         val enabled: Boolean,
     )
@@ -280,6 +284,7 @@ class ActivityLauncherHubActivity : Activity() {
             packageName = info.packageName,
             label = label,
             versionName = packageInfo.versionName ?: "unknown",
+            firstInstallTime = packageInfo.firstInstallTime,
             system = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = info.enabled,
         )
@@ -352,7 +357,13 @@ class ActivityLauncherHubActivity : Activity() {
         return when (currentSort) {
             AppSort.NAME -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
             AppSort.PACKAGE -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.packageName })
+            AppSort.INSTALL_DATE -> filtered.sortedByDescending { it.firstInstallTime }
         }
+    }
+
+    private fun formatInstallDate(firstInstallTime: Long): String {
+        if (firstInstallTime <= 0L) return "unknown"
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(firstInstallTime))
     }
 
     private fun renderApps(resetLimit: Boolean = true) {
@@ -454,7 +465,12 @@ class ActivityLauncherHubActivity : Activity() {
                         orientation = LinearLayout.VERTICAL
                         addView(ModernUi.title(this@ActivityLauncherHubActivity, app.label))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, app.packageName))
-                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "v${app.versionName}"))
+                        addView(
+                            ModernUi.body(
+                                this@ActivityLauncherHubActivity,
+                                "v${app.versionName} • Installed ${formatInstallDate(app.firstInstallTime)}",
+                            )
+                        )
                     },
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
                 )
