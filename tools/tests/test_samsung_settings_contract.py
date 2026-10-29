@@ -20,7 +20,9 @@ def main():
     ])
     need('apps/dpc/app/src/main/kotlin/io/dpcaio/app/SamsungSettingsEditorActivity.kt', [
         'SamsungSettingEditCoordinator', 'AndroidSamsungSettingGateway', 'SettingNamespace',
-        'Discover settings', 'discoverSettings()', 'discoveredList', 'Filter discovered settings',
+        'Discover / refresh settings', 'discoverSettings()', 'discoveredContainer', 'Filter discovered settings',
+        'showDiscoveredSettingEditor', 'DiscoveredValueType', 'Default / baseline',
+        '.setPositiveButton("OK"', '.setNegativeButton("Anuluj"',
     ])
     print('test_samsung_settings_contract: PASS')
 

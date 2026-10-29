@@ -39,7 +39,12 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
 
     override fun getAppOps(packageName: String, userId: Int): String {
         if (!validPackage(packageName) || userId < 0) return "INVALID_ARGUMENT"
-        return runTypedCapture(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))
+        return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))
+    }
+
+    override fun getAppOp(packageName: String, op: String, userId: Int): String {
+        if (!validPackage(packageName) || !validOp(op) || userId < 0) return "INVALID_ARGUMENT"
+        return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName, op))
     }
 
     override fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int {
@@ -152,6 +157,16 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         if (!process.waitFor(10, TimeUnit.SECONDS)) {
             process.destroy(); "TIMEOUT"
         } else process.inputStream.bufferedReader().use { it.readText() }
+    } catch (_: Exception) { "EXECUTION_ERROR" }
+
+    private fun runTypedCaptureChecked(args: List<String>): String = try {
+        val process = ProcessBuilder(args).redirectErrorStream(true).start()
+        if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            process.destroy(); "TIMEOUT"
+        } else {
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            if (process.exitValue() == 0) output else "EXECUTION_ERROR"
+        }
     } catch (_: Exception) { "EXECUTION_ERROR" }
 
     private fun validPackage(value: String) = PACKAGE_PATTERN.matches(value)
