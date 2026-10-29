@@ -29,6 +29,10 @@ required = [
     'renderModeFilters()',
     'AUTO_DISCOVERY_DELAY_MS',
     'postDelayed',
+    'effectiveMode(',
+    'return "default"',
+    'rollbackExit',
+    'rollbackVerified',
 ]
 
 missing = [needle for needle in required if needle not in activity]
