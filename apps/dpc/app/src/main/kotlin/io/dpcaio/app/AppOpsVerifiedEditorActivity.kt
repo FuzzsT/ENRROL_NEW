@@ -25,6 +25,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
         private val mutationInProgress = AtomicBoolean(false)
         private val allowedModes = listOf("allow", "ignore", "deny", "default", "foreground")
         private val unreadableSnapshots = setOf("INVALID_ARGUMENT", "TIMEOUT", "EXECUTION_ERROR")
+        private val appOpNamePattern = Regex("[A-Za-z0-9_.:-]+")
     }
 
     private enum class ModeFilter { ALL, ALLOW, IGNORE, DENY, DEFAULT, FOREGROUND }
@@ -147,7 +148,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@AppOpsVerifiedEditorActivity,
-                        "The editor uses typed Shizuku AppOps APIs only. Before a mutation it performs an operation-specific read; unreadable state or a UID-level override aborts the transaction. A command exit code alone is not considered success; post-write effective state must match the request, and rollback is verified against the captured package-level state.",
+                        "The editor uses typed Shizuku AppOps APIs only. The requested operation is first resolved to the controlling runtime switch operation. Unreadable state, resolution failure or a UID-level override aborts before mutation. Readback and rollback use that same switch operation.",
                     )
                 )
             }
@@ -306,7 +307,14 @@ class AppOpsVerifiedEditorActivity : Activity() {
         output.text = "Applying $op=$mode..."
         Thread {
             try {
-                val before = shizuku.getAppOp(pkg, op, userId)
+                val resolved = shizuku.resolveAppOp(op)
+                val switchOp = resolvedSwitchOp(resolved)
+                if (switchOp == null) {
+                    postUi { output.text = "AppOp switch resolution failed; mutation aborted: ${resolved ?: "<null>"}" }
+                    return@Thread
+                }
+
+                val before = shizuku.getAppOp(pkg, switchOp, userId)
                 if (!snapshotReadable(before)) {
                     postUi { output.text = "Initial AppOps snapshot unreadable; mutation aborted: ${before ?: "<null>"}" }
                     return@Thread
@@ -324,9 +332,14 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 }
 
                 val beforeMode = effectiveMode(beforeState)
-                val rollbackMode = beforeState.packageMode?.takeUnless { it == "default" } ?: "default"
-                val exit = shizuku.setAppOp(pkg, op, mode, userId)
-                val after = shizuku.getAppOp(pkg, op, userId)
+                val rollbackMode = beforeState.packageMode ?: beforeState.defaultMode
+                if (rollbackMode == null) {
+                    postUi { output.text = "Rollback state unavailable; mutation aborted\n\n$before" }
+                    return@Thread
+                }
+
+                val exit = shizuku.setAppOp(pkg, switchOp, mode, userId)
+                val after = shizuku.getAppOp(pkg, switchOp, userId)
                 val afterState = parseSingleAppOp(after)
                 val observed = effectiveMode(afterState)
                 val verified = exit == 0 && snapshotReadable(after) && requestedModeMatches(afterState, mode)
@@ -335,8 +348,8 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 var rollbackVerified: Boolean? = null
                 var rollbackSnapshot: String? = null
                 if (!verified && exit == 0) {
-                    rollbackExit = shizuku.setAppOp(pkg, op, rollbackMode, userId)
-                    rollbackSnapshot = shizuku.getAppOp(pkg, op, userId)
+                    rollbackExit = shizuku.setAppOp(pkg, switchOp, rollbackMode, userId)
+                    rollbackSnapshot = shizuku.getAppOp(pkg, switchOp, userId)
                     val rollbackState = parseSingleAppOp(rollbackSnapshot)
                     rollbackVerified = rollbackExit == 0 && snapshotReadable(rollbackSnapshot) && requestedModeMatches(rollbackState, rollbackMode)
                 }
@@ -346,8 +359,9 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 val report = buildString {
                     appendLine("package=$pkg")
                     appendLine("user=$userId")
-                    appendLine("op=$op")
-                    appendLine("canonicalOp=${afterState?.canonicalName ?: beforeState.canonicalName ?: "<unparsed>"}")
+                    appendLine("requestedOp=$op")
+                    appendLine("switchOp=$switchOp")
+                    appendLine("canonicalOp=${afterState?.canonicalName ?: beforeState.canonicalName ?: switchOp}")
                     appendLine("beforeMode=${beforeMode ?: "<unparsed>"}")
                     appendLine("beforePackageMode=${beforeState.packageMode ?: "<implicit-default>"}")
                     appendLine("defaultMode=${beforeState.defaultMode ?: afterState?.defaultMode ?: "<unparsed>"}")
@@ -360,6 +374,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
                         appendLine("rollbackExit=$rollbackExit")
                         appendLine("rollbackVerified=$rollbackVerified")
                     }
+                    appendLine("resolution=${resolved ?: "<unavailable>"}")
                     appendLine("before=$before")
                     appendLine("after=${after ?: "<unavailable>"}")
                     if (rollbackSnapshot != null) appendLine("rollbackAfter=$rollbackSnapshot")
@@ -380,6 +395,16 @@ class AppOpsVerifiedEditorActivity : Activity() {
     private fun snapshotReadable(snapshot: String?): Boolean {
         val normalized = snapshot?.trim().orEmpty()
         return normalized.isNotEmpty() && normalized !in unreadableSnapshots
+    }
+
+    private fun resolvedSwitchOp(resolved: String?): String? {
+        if (!snapshotReadable(resolved)) return null
+        return resolved.orEmpty().lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("switch=") }
+            ?.substringAfter('=')
+            ?.trim()
+            ?.takeIf { it.matches(appOpNamePattern) }
     }
 
     private fun parseSingleAppOp(snapshot: String?): AppOpRead? {
@@ -431,14 +456,14 @@ class AppOpsVerifiedEditorActivity : Activity() {
     private fun effectiveMode(read: AppOpRead?): String? {
         if (read == null) return null
         read.uidMode?.let { return it }
-        read.packageMode?.takeUnless { it == "default" }?.let { return it }
+        read.packageMode?.let { return it }
         return read.defaultMode
     }
 
     private fun requestedModeMatches(read: AppOpRead?, requested: String): Boolean {
         if (read == null || read.uidMode != null) return false
         return if (requested == "default") {
-            (read.packageMode == null || read.packageMode == "default") && read.defaultMode != null
+            read.packageMode == "default" || (read.packageMode == null && read.defaultMode == "default")
         } else {
             effectiveMode(read) == requested
         }
