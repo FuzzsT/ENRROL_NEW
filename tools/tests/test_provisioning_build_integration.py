@@ -2,48 +2,67 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / '.github/workflows/build-aio-enrollment.yml'
-BUILD = ROOT / 'apps/dpc/app/build.gradle.kts'
-GENERATOR = ROOT / 'tools/provisioning/generate_provisioning.py'
-VERIFY = ROOT / 'tools/provisioning/verify_provisioning_qr.py'
+
+
+def must(path: str, token: str):
+    p = ROOT / path
+    if not p.exists():
+        raise AssertionError(f'missing {path}')
+    text = p.read_text('utf-8', errors='ignore')
+    if token not in text:
+        raise AssertionError(f'{path} missing {token}')
+    return text
 
 
 def main():
-    for path in [WORKFLOW, BUILD, GENERATOR, VERIFY]:
-        if not path.is_file():
-            raise AssertionError(f'missing {path.relative_to(ROOT)}')
-
-    workflow = WORKFLOW.read_text(encoding='utf-8')
-    build = BUILD.read_text(encoding='utf-8')
-
+    gradle = must('apps/dpc/app/build.gradle.kts', 'generateProvisioningQr')
+    if 'project.exec' in gradle:
+        raise AssertionError('Gradle 9 removed Project.exec; use ProviderFactory.exec')
+    if 'releases/latest/download/' in gradle:
+        raise AssertionError('Gradle provisioning fallback must not point at releases/latest')
     for token in [
-        ':app-dpc:assembleEnterpriseRelease',
-        'generateEnterpriseReleaseProvisioningQr',
+        'DPC_AIO_CONTINUOUS_RELEASE_TAG',
+        'dpc-aio-continuous',
+        'flavor == "enterprise" && buildType == "debug"',
+        'providers.exec',
         'DPC_AIO_PROVISIONING_APK_URL',
         'DPC_AIO_GITHUB_REPOSITORY',
-        'DPC_AIO_RELEASE_TAG',
-        'DPC_AIO_ENROLLMENT_TOKEN',
-        'DPC_AIO_ENROLLMENT_ENDPOINT',
-        'DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY',
-        'DPC_AIO_POLICY_PROFILE',
+        'generate_provisioning.py',
+        'finalizedBy',
+        'provisioning-qr.png',
         'DPC_AIO_PROVISIONING_MODE',
         'DPC_AIO_ALLOW_OFFLINE',
         'DPC_AIO_ENROLLMENT_OFFLINE_MODE',
         'DPC_AIO_OFFLINE_BUNDLE_ID',
-        'DPC_AIO_RELEASE_KEYSTORE_PATH',
-        'DPC_AIO_RELEASE_STORE_PASSWORD',
-        'DPC_AIO_RELEASE_KEY_ALIAS',
-        'DPC_AIO_RELEASE_KEY_PASSWORD',
-        'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256',
-        'DPC_AIO_SIGNING_MODE',
-        'stable',
-        'emergency',
-        'ephemeral',
-        'android_build_preflight.py',
-        '--require-signing',
-        'extract_apksigner_sha256.py',
-        'signing-mode.txt',
-        'signing-cert-sha256.txt',
+        '--allow-offline',
+        'work-profile-qr.png',
+        'device-owner-qr.png',
+        'publishExplicitMode("work-profile"',
+        'publishExplicitMode("fully-managed"',
+    ]:
+        if token not in gradle:
+            raise AssertionError(f'apps/dpc/app/build.gradle.kts missing {token}')
+
+    workflow = must('.github/workflows/build-aio-enrollment.yml', 'Build signed enterpriseRelease')
+    if 'releases/latest/download/DPC-AIO-enterprise-debug.apk' in workflow:
+        raise AssertionError('manual provisioning must not depend on a pre-existing latest release asset')
+    if 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' not in workflow:
+        raise AssertionError('workflow must use immutable checkout v5.1.0 pin on the Node 24 runner')
+    for token in [
+        'actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95',
+        'android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699',
+        '--list --channel=3',
+        'platforms;android-37',
+        'build-tools;36.0.0',
+        'ndk;28.2.13676358',
+        'enterpriseRelease',
+        'DPC_AIO_PROVISIONING_APK_URL',
+        'provisioning-qr.png',
+        'DPC_AIO_PROVISIONING_MODE',
+        'DPC_AIO_ALLOW_OFFLINE',
+        'DPC_AIO_ENROLLMENT_OFFLINE_MODE',
+        'DPC_AIO_OFFLINE_BUNDLE_ID',
+        'allow_offline',
         'work-profile-qr.png',
         'work-profile-provisioning.json',
         'device-owner-qr.png',
@@ -84,26 +103,10 @@ def main():
     if verify_release <= publish_release:
         raise AssertionError('published APK byte-identical verification must run after asset publication')
 
-    for token in [
-        'dpcAioProvisioningApkUrl',
-        'DPC_AIO_PROVISIONING_APK_URL',
-        'DPC_AIO_GITHUB_REPOSITORY',
-        'DPC_AIO_CONTINUOUS_RELEASE_TAG',
-        'dpc-aio-continuous',
-        'DPC_AIO_ENROLLMENT_TOKEN',
-        'DPC_AIO_ENROLLMENT_ENDPOINT',
-        'DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY',
-        'DPC_AIO_POLICY_PROFILE',
-        'DPC_AIO_PROVISIONING_MODE',
-        'DPC_AIO_ALLOW_OFFLINE',
-        'DPC_AIO_ENROLLMENT_OFFLINE_MODE',
-        'DPC_AIO_OFFLINE_BUNDLE_ID',
-        'generateEnterpriseReleaseProvisioningQr',
-        'work-profile',
-        'fully-managed',
-    ]:
-        if token not in build:
-            raise AssertionError(f'build.gradle.kts missing {token}')
+    refs = must('docs/upstream/TESTDPC-PROVISIONING.md', 'googlesamples/android-testdpc')
+    for token in ['PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME', 'PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM']:
+        if token not in refs:
+            raise AssertionError(f'upstream doc missing {token}')
 
     print('test_provisioning_build_integration: PASS')
 
