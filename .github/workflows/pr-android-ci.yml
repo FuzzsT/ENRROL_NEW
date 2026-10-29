@@ -4,17 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'apps/dpc/**'
-      - 'tools/**'
-      - 'services/provisioning/**'
-      - 'plugins/chatgpt-companion/**'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'settings.gradle.kts'
-      - 'build.gradle.kts'
-      - '.github/workflows/pr-android-ci.yml'
-      - '.github/workflows/build-aio-enrollment.yml'
   workflow_dispatch:
 
 permissions:
