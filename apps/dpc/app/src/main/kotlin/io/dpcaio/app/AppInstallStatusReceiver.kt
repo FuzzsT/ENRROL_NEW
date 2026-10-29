@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
+import io.dpcaio.installer.InstallHistoryRecord
+import io.dpcaio.installer.InstallHistoryStatus
 
 class AppInstallStatusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -25,6 +27,20 @@ class AppInstallStatusReceiver : BroadcastReceiver() {
                 detail = message,
             )
         }
+
+        val historyStatus = when (status) {
+            PackageInstaller.STATUS_SUCCESS -> InstallHistoryStatus.SUCCEEDED
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> InstallHistoryStatus.PENDING_USER_ACTION
+            else -> InstallHistoryStatus.FAILED
+        }
+        AppInstallHistoryStore(context).append(
+            InstallHistoryRecord(
+                timestampMillis = System.currentTimeMillis(),
+                status = historyStatus,
+                packageName = packageName,
+                detail = message,
+            )
+        )
 
         val summary = when (status) {
             PackageInstaller.STATUS_SUCCESS -> {
