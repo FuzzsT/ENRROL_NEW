@@ -102,6 +102,7 @@ dependencies {
     implementation(project(":activity-android"))
     implementation(project(":installer-core"))
     implementation(project(":installer-android"))
+    implementation(project(":self-update-core"))
     implementation(project(":delegation-core"))
     implementation(project(":dhizuku-compat"))
     implementation(project(":shizuku-adapter"))
