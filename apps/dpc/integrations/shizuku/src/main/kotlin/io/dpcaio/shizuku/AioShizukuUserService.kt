@@ -63,6 +63,16 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         return runTyped(listOf("/system/bin/cmd", "package", "install-existing", "--user", userId.toString(), packageName))
     }
 
+    override fun listPackagesForUser(userId: Int): String {
+        if (userId <= 0) return "INVALID_ARGUMENT"
+        return runTypedCapture(listOf("/system/bin/pm", "list", "packages", "--user", userId.toString()))
+    }
+
+    override fun uninstallPackageForUser(packageName: String, userId: Int): Int {
+        if (!validPackage(packageName) || userId <= 0) return RESULT_INVALID_ARGUMENT
+        return runTyped(listOf("/system/bin/pm", "uninstall", "--user", userId.toString(), packageName))
+    }
+
     override fun listUsers(): String = runTypedCapture(listOf("/system/bin/pm", "list", "users"))
 
     override fun createProfile(name: String, cloneProfile: Boolean): String {

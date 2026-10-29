@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+from test_dual_app_multi_clone_contract import main as multi_clone_main
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -53,6 +54,7 @@ def main() -> None:
             "validProfileName",
         ],
     )
+    multi_clone_main()
     print("test_dual_app_workspace_contract: PASS")
 
 
