@@ -97,12 +97,12 @@ Publish a small JSON manifest per channel. Schema v1:
 }
 ```
 
-The app owns fixed/default manifest endpoints through build configuration so production code does not depend on GitHub API discovery.
+The app uses fixed default manifest endpoints through build configuration so production code does not depend on GitHub API discovery:
 
-Recommended channel endpoints:
+- stable: `https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-stable/self-update.json`
+- continuous: `https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/self-update.json`
 
-- stable: a predictable mutable stable-alias release asset, e.g. `dpc-aio-stable/self-update.json`
-- continuous: the existing mutable `dpc-aio-continuous/self-update.json`
+The release workflow must maintain the `dpc-aio-stable` mutable alias for the latest approved stable APK and keep the existing `dpc-aio-continuous` alias for continuous builds.
 
 CI/release automation generates the manifest from the APK actually being published, computes SHA-256 and size, and uploads manifest + APK together.
 
@@ -123,6 +123,8 @@ Before installation, all of the following must pass:
 11. parsed APK version code matches the manifest
 12. candidate signing identity is compatible with the currently installed application's signing identity/signing lineage
 
+The signing identity/lineage check is the primary app-authenticity trust anchor. Manifest SHA-256 protects the downloaded candidate against corruption/substitution relative to that manifest but does not replace signer verification.
+
 If any verification fails, installation controls remain disabled and the cached candidate is rejected/deleted.
 
 Android PackageInstaller still performs its own platform signature/update validation; the preflight is an additional fail-closed UX guard.
@@ -131,8 +133,8 @@ Android PackageInstaller still performs its own platform signature/update valida
 
 Store only one pending Self Update candidate.
 
-- downloaded APK: app-private storage under a dedicated self-update directory
-- persisted metadata: SharedPreferences or a small app-private JSON record
+- downloaded APK: `filesDir/self-update/pending.apk`
+- persisted metadata/state: SharedPreferences file `self_update`
 - delete candidate after successful package replacement, explicit clear, failed cryptographic/package verification, or when superseded by a newer download
 
 Never store signing secrets in the app.
@@ -167,7 +169,7 @@ No Shizuku/root/ADB install fallback is added.
 
 ### 2.3 Self-update install session
 
-Self Update may reuse `AndroidPackageInstallerAdapter`, but it should have a focused coordinator so update-specific verification/state is not mixed into the general user-selected APK queue.
+Self Update reuses `AndroidPackageInstallerAdapter` but has a focused `SelfUpdateCoordinator` so update-specific verification/state is not mixed into the general user-selected APK queue.
 
 The session must set:
 
@@ -201,11 +203,14 @@ data class InstallSourceDetails(
 )
 ```
 
-Read fields with API guards:
+Read fields with explicit API guards:
 
-- API 30+: `PackageManager.getInstallSourceInfo(packageName)`
-- older Android: `getInstallerPackageName(packageName)` fallback for the installing package
-- newer fields only on Android versions that expose them
+- API 30+: `PackageManager.getInstallSourceInfo(packageName)` for installing, initiating and originating package names
+- pre-30: deprecated `getInstallerPackageName(packageName)` fallback for the installing package only
+- API 33+: `InstallSourceInfo.packageSource`
+- API 34+: `InstallSourceInfo.updateOwnerPackageName`
+
+`originatingPackageName` may legitimately be null when the caller does not hold `INSTALL_PACKAGES`; null is preserved as unavailable rather than inferred.
 
 Do not infer a package source when Android returns null/unavailable.
 
@@ -245,9 +250,9 @@ Also include the installer/source package in package-install history where that 
 
 ### 3.3 Reuse in Activity Launcher
 
-Replace the local `installerPackage(...)` helper in `ActivityLauncherHubActivity` with the shared reader where practical so Activity Launcher and App Package Manager do not disagree about install source.
+Replace the local `installerPackage(...)` helper in `ActivityLauncherHubActivity` with the shared install-source reader. Activity Launcher and App Package Manager must use the same reader and therefore the same API-gating/null behavior.
 
-The launcher may continue displaying only its compact installer field while the updater uses the full details card.
+The launcher continues displaying only its compact installer field while the updater uses the full details card.
 
 ## 4. ModernUi improvements
 
@@ -323,9 +328,10 @@ Add focused host tests that initially fail because implementation is absent:
 3. Install-source contract
    - API 30+ `getInstallSourceInfo`
    - pre-30 `getInstallerPackageName` fallback
-   - fields for installing/initiating/originating/packageSource/updateOwner where API supports them
+   - API 33 package-source handling
+   - API 34 update-owner handling
    - AppPackageManager updater renders label + raw package
-   - Activity Launcher uses shared reader where practical
+   - Activity Launcher uses the shared reader
 
 4. ModernUi contract
    - reusable status/progress/details components used by Self Update
@@ -366,6 +372,6 @@ The change is complete when:
 2. A manual Self Update can install silently when official Android policy permits it, and safely falls back to system confirmation otherwise.
 3. Optional auto-silent-after-download remains opt-in and never bypasses `STATUS_PENDING_USER_ACTION`.
 4. The updater clearly shows which package installed the selected app and exposes richer `InstallSourceInfo` fields when Android provides them.
-5. Activity Launcher and App Package Manager use a consistent source reader instead of divergent installer-package logic.
+5. Activity Launcher and App Package Manager use the same shared source reader instead of divergent installer-package logic.
 6. Self Update and installer source details use the improved shared ModernUi components.
 7. Exact-head CI is fully green before the PR is considered implementation-complete.
