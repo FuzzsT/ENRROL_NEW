@@ -49,14 +49,13 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
 
     override fun setComponentEnabledState(packageName: String, className: String, state: String, userId: Int): Int {
         if (!validPackage(packageName) || !validClass(className) || userId < 0) return RESULT_INVALID_ARGUMENT
-        val command = when (state) {
-            "ENABLED" -> "enable"
-            "DISABLED" -> "disable-user"
-            "DEFAULT" -> "default-state"
-            else -> return RESULT_INVALID_ARGUMENT
-        }
         val component = "$packageName/$className"
-        return runTyped(listOf("/system/bin/pm", command, "--user", userId.toString(), component))
+        return when (state) {
+            "ENABLED" -> runTyped(listOf("/system/bin/pm", "enable", "--user", userId.toString(), component))
+            "DISABLED" -> runTyped(listOf("/system/bin/pm", "disable", "--user", userId.toString(), component))
+            "DEFAULT" -> runTyped(listOf("/system/bin/pm", "default-state", "--user", userId.toString(), component))
+            else -> RESULT_INVALID_ARGUMENT
+        }
     }
 
     override fun installExistingPackage(packageName: String, userId: Int): Int {
