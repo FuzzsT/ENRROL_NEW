@@ -2,6 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 hub = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt').read_text()
+permission_manager = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt').read_text()
 
 for needle in [
     'StateFilter { ALL, ENABLED, DISABLED }',
@@ -20,5 +21,12 @@ for needle in [
     'currentStateFilter',
 ]:
     assert needle in hub, f'ActivityLauncherHubActivity.kt missing {needle}'
+
+for needle in [
+    'EXTRA_TARGET_PACKAGE',
+    'intent.getStringExtra(EXTRA_TARGET_PACKAGE)',
+    'targetPackage.setText',
+]:
+    assert needle in permission_manager, f'PermissionManagerActivity.kt missing {needle}'
 
 print('ACTIVITY_LAUNCHER_APP_MANAGER_CONTRACT: PASS')
