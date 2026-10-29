@@ -42,7 +42,6 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         return runTypedCapture(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))
     }
 
-
     override fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int {
         if (!validPackage(packageName) || userId < 0) return RESULT_INVALID_ARGUMENT
         return runTyped(listOf("/system/bin/pm", if (enabled) "enable" else "disable-user", "--user", userId.toString(), packageName))
@@ -50,23 +49,48 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
 
     override fun setComponentEnabledState(packageName: String, className: String, state: String, userId: Int): Int {
         if (!validPackage(packageName) || !validClass(className) || userId < 0) return RESULT_INVALID_ARGUMENT
-        val command = when (state) {
-            "ENABLED" -> "enable"
-            "DISABLED" -> "disable"
-            "DEFAULT" -> "default-state"
-            else -> return RESULT_INVALID_ARGUMENT
-        }
         val component = "$packageName/$className"
-        return when (command) {
-            "enable" -> runTyped(listOf("/system/bin/pm", "enable", "--user", userId.toString(), component))
-            "disable" -> runTyped(listOf("/system/bin/pm", "disable", "--user", userId.toString(), component))
-            else -> runTyped(listOf("/system/bin/pm", "default-state", "--user", userId.toString(), component))
+        return when (state) {
+            "ENABLED" -> runTyped(listOf("/system/bin/pm", "enable", "--user", userId.toString(), component))
+            "DISABLED" -> runTyped(listOf("/system/bin/pm", "disable", "--user", userId.toString(), component))
+            "DEFAULT" -> runTyped(listOf("/system/bin/pm", "default-state", "--user", userId.toString(), component))
+            else -> RESULT_INVALID_ARGUMENT
         }
     }
 
     override fun installExistingPackage(packageName: String, userId: Int): Int {
-        if (!validPackage(packageName) || userId < 0) return RESULT_INVALID_ARGUMENT
+        if (!validPackage(packageName) || userId <= 0) return RESULT_INVALID_ARGUMENT
         return runTyped(listOf("/system/bin/cmd", "package", "install-existing", "--user", userId.toString(), packageName))
+    }
+
+    override fun listUsers(): String = runTypedCapture(listOf("/system/bin/pm", "list", "users"))
+
+    override fun createProfile(name: String, cloneProfile: Boolean): String {
+        val safeName = name.trim()
+        if (!validProfileName(safeName)) return "INVALID_ARGUMENT"
+        val args = mutableListOf("/system/bin/pm", "create-user", "--profileOf", "0")
+        if (cloneProfile) {
+            args += listOf("--user-type", "android.os.usertype.profile.CLONE")
+        } else {
+            args += "--managed"
+        }
+        args += safeName
+        return runTypedCapture(args).trim()
+    }
+
+    override fun removeProfile(userId: Int): Int {
+        if (userId <= 0) return RESULT_INVALID_ARGUMENT
+        return runTyped(listOf("/system/bin/pm", "remove-user", userId.toString()))
+    }
+
+    override fun startProfile(userId: Int): Int {
+        if (userId <= 0) return RESULT_INVALID_ARGUMENT
+        return runTyped(listOf("/system/bin/am", "start-user", userId.toString()))
+    }
+
+    override fun stopProfile(userId: Int): Int {
+        if (userId <= 0) return RESULT_INVALID_ARGUMENT
+        return runTyped(listOf("/system/bin/am", "stop-user", "-f", userId.toString()))
     }
 
     override fun readSetting(namespaceName: String, key: String, userId: Int): String {
@@ -83,7 +107,6 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         if (!validNamespace(namespaceName) || !validSettingKey(key) || userId < 0) return RESULT_INVALID_ARGUMENT
         return runTyped(listOf("/system/bin/settings", "--user", userId.toString(), "delete", namespaceName, key))
     }
-
 
     override fun listPermissionConfigFiles(): String = listConfigDir("etc/permissions")
 
@@ -129,6 +152,7 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
     private fun validNamespace(value: String) = value in SETTINGS_NAMESPACES
     private fun validSettingKey(value: String) = value.length in 1..160 && SETTING_KEY_PATTERN.matches(value)
     private fun validSettingValue(value: String) = value.length <= 4096 && value.none { it == '\u0000' || it == '\n' || it == '\r' }
+    private fun validProfileName(value: String) = value.length in 1..48 && PROFILE_NAME_PATTERN.matches(value)
 
     companion object {
         const val RESULT_INVALID_ARGUMENT = -2
@@ -140,6 +164,7 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         private val PERMISSION_PATTERN = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+")
         private val OP_PATTERN = Regex("[A-Za-z0-9_.:-]+")
         private val SETTING_KEY_PATTERN = Regex("[A-Za-z0-9_.:-]+")
+        private val PROFILE_NAME_PATTERN = Regex("[A-Za-z0-9 _.-]+")
         private val SETTINGS_NAMESPACES = setOf("system", "secure", "global")
         private val APP_OP_MODES = setOf("allow", "ignore", "deny", "default", "foreground")
         private val CONFIG_PARTITIONS = listOf("system", "system_ext", "product", "vendor", "odm")

@@ -12,6 +12,11 @@ interface IAioShizukuUserService {
     int setPackageEnabled(String packageName, boolean enabled, int userId);
     int setComponentEnabledState(String packageName, String className, String state, int userId);
     int installExistingPackage(String packageName, int userId);
+    String listUsers();
+    String createProfile(String name, boolean cloneProfile);
+    int removeProfile(int userId);
+    int startProfile(int userId);
+    int stopProfile(int userId);
     String readSetting(String namespaceName, String key, int userId);
     int writeSetting(String namespaceName, String key, String value, int userId);
     int deleteSetting(String namespaceName, String key, int userId);

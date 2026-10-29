@@ -61,7 +61,6 @@ class ShizukuUserServiceClient(context: Context) {
     fun getAppOps(packageName: String, userId: Int): String? =
         runCatching { remote?.getAppOps(packageName, userId) }.getOrNull()
 
-
     fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int? =
         runCatching { remote?.setPackageEnabled(packageName, enabled, userId) }.getOrNull()
 
@@ -70,6 +69,17 @@ class ShizukuUserServiceClient(context: Context) {
 
     fun installExistingPackage(packageName: String, userId: Int): Int? =
         runCatching { remote?.installExistingPackage(packageName, userId) }.getOrNull()
+
+    fun listUsers(): String? = runCatching { remote?.listUsers() }.getOrNull()
+
+    fun createProfile(name: String, cloneProfile: Boolean): String? =
+        runCatching { remote?.createProfile(name, cloneProfile) }.getOrNull()
+
+    fun removeProfile(userId: Int): Int? = runCatching { remote?.removeProfile(userId) }.getOrNull()
+
+    fun startProfile(userId: Int): Int? = runCatching { remote?.startProfile(userId) }.getOrNull()
+
+    fun stopProfile(userId: Int): Int? = runCatching { remote?.stopProfile(userId) }.getOrNull()
 
     fun readSetting(namespaceName: String, key: String, userId: Int): String? =
         runCatching { remote?.readSetting(namespaceName, key, userId) }.getOrNull()

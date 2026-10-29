@@ -38,9 +38,7 @@
             </intent-filter>
         </receiver>
 
-        <activity
-            android:name=".GoogleAccountManagerActivity"
-            android:exported="false" />
+        <activity android:name=".GoogleAccountManagerActivity" android:exported="false" />
 
         <activity android:name=".AioDashboardActivity" android:exported="true">
             <intent-filter>
@@ -66,6 +64,7 @@
         <activity android:name=".ScenarioLabActivity" android:exported="false" />
         <activity android:name=".NfcLabActivity" android:exported="false" />
         <activity android:name=".AppPackageManagerActivity" android:exported="false" />
+        <activity android:name=".DualAppWorkspaceActivity" android:exported="false" />
 
         <activity
             android:name=".ProvisioningModeActivity"
@@ -89,7 +88,6 @@
         </activity>
 
         <activity android:name=".PermissionManagerActivity" android:exported="false" />
-
         <activity android:name=".VerificationToggleActivity" android:exported="false" />
         <receiver
             android:name=".VerificationCommandReceiver"
@@ -103,13 +101,8 @@
         <activity android:name=".SamsungSettingsEditorActivity" android:exported="false" />
         <activity android:name=".KnoxZtManagerActivity" android:exported="false" />
 
-        <receiver
-            android:name=".AppInstallStatusReceiver"
-            android:exported="false" />
-
-        <receiver
-            android:name=".OfflineInstallStatusReceiver"
-            android:exported="false" />
+        <receiver android:name=".AppInstallStatusReceiver" android:exported="false" />
+        <receiver android:name=".OfflineInstallStatusReceiver" android:exported="false" />
 
         <receiver
             android:name=".OfflineRecoveryReceiver"
