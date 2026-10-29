@@ -114,6 +114,7 @@ def main():
     assert_true('project(":self-update-core")' in build_text, "self-update Android must depend on core")
     assert_true('project(":installer-android")' in build_text, "self-update Android must reuse installer Android adapter")
     assert_true('project(":installer-core")' in build_text, "self-update Android must reuse installer core model")
+    assert_true('project(":policy-core")' in build_text, "self-update Android must expose PolicyResult dependency")
     assert_true("android.permission.INTERNET" in manifest_file.read_text(encoding="utf-8"), "Self Update Android must declare INTERNET")
 
     client = client_file.read_text(encoding="utf-8")
@@ -135,6 +136,47 @@ def main():
     combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file])
     for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
         assert_true(forbidden not in combined, f"Self Update must not use install bypass path: {forbidden}")
+
+    # Task 4 RED: the app-owned Self Update UI must expose the verified pipeline
+    # without weakening PackageInstaller's user-action boundary.
+    self_update_activity_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
+    assert_true(self_update_activity_path.is_file(), "SelfUpdateActivity.kt missing")
+    self_update_activity = self_update_activity_path.read_text(encoding="utf-8")
+    for token in [
+        "UpdateChannel.STABLE",
+        "UpdateChannel.CONTINUOUS",
+        "Check now",
+        "Download & verify",
+        "Install update",
+        "Install silently",
+        "Clear downloaded update",
+        "Release notes",
+        "SILENT_IF_ALLOWED",
+        "AUTO_SILENT",
+    ]:
+        assert_true(token in self_update_activity, f"Self Update UI missing: {token}")
+
+    status_receiver_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateStatusReceiver.kt"
+    assert_true(status_receiver_path.is_file(), "SelfUpdateStatusReceiver.kt missing")
+    status_receiver = status_receiver_path.read_text(encoding="utf-8")
+    for token in ["STATUS_PENDING_USER_ACTION", "WAITING_USER", "EXTRA_INTENT"]:
+        assert_true(token in status_receiver, f"Self Update status receiver missing: {token}")
+
+    app_manifest = (ROOT / "apps/dpc/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+    assert_true("android.permission.INTERNET" in app_manifest, "app manifest must explicitly declare INTERNET for Self Update")
+    assert_true('.SelfUpdateActivity" android:exported="false"' in app_manifest, "Self Update activity must be internal")
+    assert_true('.SelfUpdateStatusReceiver" android:exported="false"' in app_manifest, "Self Update status receiver must be internal")
+
+    dashboard = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt").read_text(encoding="utf-8")
+    control = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt").read_text(encoding="utf-8")
+    registry = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcModuleRegistry.kt").read_text(encoding="utf-8")
+    for text, surface in [(dashboard, "Dashboard"), (control, "Control Center"), (registry, "Module registry")]:
+        assert_true("SelfUpdateActivity::class.java" in text, f"{surface} must navigate to Self Update")
+
+    modern_ui = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ModernUi.kt").read_text(encoding="utf-8")
+    for token in ["fun statusCard(", "fun progressCard(", "fun detailRow("]:
+        assert_true(token in modern_ui, f"ModernUi Self Update helper missing: {token}")
+    assert_true("ModernUi.detailRow" in package_manager, "installer source details must use shared key/value UI")
 
     print("test_android_contracts: PASS")
 
