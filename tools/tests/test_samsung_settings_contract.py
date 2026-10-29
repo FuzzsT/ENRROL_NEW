@@ -10,13 +10,17 @@ def need(path, tokens):
 def main():
     need('apps/dpc/modules/samsung/android/src/main/kotlin/io/dpcaio/samsung/settings/android/AndroidSamsungSettingGateway.kt', [
         'Settings.System.getString', 'Settings.Secure.getString', 'Settings.Global.getString',
-        'Settings.System.canWrite', 'WRITE_SECURE_SETTINGS', 'SHIZUKU_SETTINGS'
+        'Settings.System.canWrite', 'WRITE_SECURE_SETTINGS', 'SHIZUKU_SETTINGS',
+        'fun list(namespace: SettingNamespace)', 'Settings.System.CONTENT_URI',
+        'Settings.Secure.CONTENT_URI', 'Settings.Global.CONTENT_URI',
+        'arrayOf("name", "value")', 'moveToNext()',
     ])
     need('apps/dpc/modules/samsung/android/src/main/kotlin/io/dpcaio/samsung/settings/android/AndroidSettingStabilityMonitor.kt', [
         'ContentObserver', 'registerContentObserver', 'unregisterContentObserver'
     ])
     need('apps/dpc/app/src/main/kotlin/io/dpcaio/app/SamsungSettingsEditorActivity.kt', [
-        'SamsungSettingEditCoordinator', 'AndroidSamsungSettingGateway', 'SettingNamespace'
+        'SamsungSettingEditCoordinator', 'AndroidSamsungSettingGateway', 'SettingNamespace',
+        'Discover settings', 'discoverSettings()', 'discoveredList', 'Filter discovered settings',
     ])
     print('test_samsung_settings_contract: PASS')
 
