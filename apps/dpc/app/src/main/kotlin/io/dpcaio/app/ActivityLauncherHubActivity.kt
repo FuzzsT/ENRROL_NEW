@@ -24,6 +24,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.dpcaio.installer.android.AndroidInstallSourceReader
 import io.dpcaio.shizuku.AndroidShizukuRuntime
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,6 +64,7 @@ class ActivityLauncherHubActivity : Activity() {
     private val selectedPackages = linkedSetOf<String>()
 
     private val runtime = AndroidShizukuRuntime()
+    private val installSourceReader by lazy { AndroidInstallSourceReader(this) }
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
     private val iconExecutor = Executors.newFixedThreadPool(ICON_WORKER_COUNT)
     private var renderGeneration = 0L
@@ -389,11 +391,8 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }.getOrNull()
 
-    @Suppress("DEPRECATION")
-    private fun installerPackage(packageName: String): String? = runCatching {
-        if (Build.VERSION.SDK_INT >= 30) packageManager.getInstallSourceInfo(packageName).installingPackageName
-        else packageManager.getInstallerPackageName(packageName)
-    }.getOrNull()
+    private fun installerPackage(packageName: String): String? =
+        installSourceReader.read(packageName).installingPackageName
 
     private fun loadAppIcon(packageName: String): Drawable? {
         iconCache.get(packageName)?.let { return it }
