@@ -25,6 +25,30 @@ class AndroidSamsungSettingGateway(
         SettingNamespace.KNOX_DEEP_SETTING, SettingNamespace.SAMSUNG_CUSTOM -> knoxDeepSettings?.takeIf { it.isAvailable() && it.supports(key) }?.read(key)
     }
 
+    fun list(namespace: SettingNamespace): List<Pair<String, String?>> {
+        val uri = when (namespace) {
+            SettingNamespace.SYSTEM -> Settings.System.CONTENT_URI
+            SettingNamespace.SECURE -> Settings.Secure.CONTENT_URI
+            SettingNamespace.GLOBAL -> Settings.Global.CONTENT_URI
+            else -> return emptyList()
+        }
+        return runCatching {
+            resolver.query(uri, arrayOf("name", "value"), null, null, "name COLLATE NOCASE ASC")?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex("name")
+                val valueIndex = cursor.getColumnIndex("value")
+                if (nameIndex < 0) return@use emptyList()
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameIndex)?.trim().orEmpty()
+                        if (name.isNotEmpty()) {
+                            add(name to if (valueIndex >= 0 && !cursor.isNull(valueIndex)) cursor.getString(valueIndex) else null)
+                        }
+                    }
+                }
+            } ?: emptyList()
+        }.getOrElse { emptyList() }
+    }
+
     override fun write(route: SettingWriteRoute, namespace: SettingNamespace, key: String, value: String): Boolean = when (route) {
         SettingWriteRoute.PUBLIC_SETTINGS -> writePublic(namespace, key, value)
         SettingWriteRoute.SHIZUKU_SETTINGS -> shizuku?.writeSetting(namespace.name.lowercase(), key, value, userId) == 0
