@@ -12,7 +12,6 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.widget.ArrayAdapter
-import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import io.dpcaio.installer.PackageSource
@@ -157,7 +156,7 @@ class AppPackageManagerActivity : Activity() {
                         versionCode = versionCode(info),
                     )
                 }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label }.thenBy { it.packageName })
+                .sortedWith(compareBy<InstalledApp>(String.CASE_INSENSITIVE_ORDER) { it.label }.thenBy { it.packageName })
                 .toList()
         }.getOrElse { emptyList() }
         installedSpinner.adapter = ArrayAdapter(
@@ -230,8 +229,7 @@ class AppPackageManagerActivity : Activity() {
     }
 
     private fun installSingleApk(file: File, target: InstalledApp?): String {
-        val archiveInfo = getPackageArchiveInfo(file)
-            ?: return "APK_PARSE_FAILED"
+        val archiveInfo = getPackageArchiveInfo(file) ?: return "APK_PARSE_FAILED"
         val preflight = verifyTargetAndSigner(archiveInfo, target)
         if (preflight != null) return preflight
 
@@ -307,10 +305,10 @@ class AppPackageManagerActivity : Activity() {
         if (incomingVersion < installedVersion) {
             return "DOWNGRADE_BLOCKED\ninstalled=$installedVersion\nincoming=$incomingVersion"
         }
-        val incomingSigners = currentSignerDigests(incoming)
-        val installedAllowed = signerLineageDigests(installed)
-        if (incomingSigners.isEmpty() || installedAllowed.isEmpty() || !incomingSigners.all { it in installedAllowed }) {
-            return "SIGNER_MISMATCH\nUpdate must be signed by the installed app's signing identity."
+        val installedCurrent = currentSignerDigests(installed)
+        val incomingLineage = signerLineageDigests(incoming)
+        if (installedCurrent.isEmpty() || incomingLineage.isEmpty() || !installedCurrent.all { it in incomingLineage }) {
+            return "SIGNER_MISMATCH\nUpdate must continue the installed app's signing identity."
         }
         return null
     }
