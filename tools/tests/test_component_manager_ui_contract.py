@@ -27,6 +27,7 @@ for n in [
     'SELECTED',
     'AppOps',
     'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
+    'filteredApps().take(visibleAppLimit)',
 ]:
     assert n in ht,n
 assert 'createDeviceProtectedStorageContext' in st
