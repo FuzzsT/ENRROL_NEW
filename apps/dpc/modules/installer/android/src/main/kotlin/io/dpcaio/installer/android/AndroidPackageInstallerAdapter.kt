@@ -27,7 +27,20 @@ data class InstallSessionSpec(
     val requestUpdateOwnership: Boolean = false,
     val permissionStates: Map<String, InstallPermissionState> = emptyMap(),
     val installReason: Int = PackageManager.INSTALL_REASON_POLICY
-)
+) {
+    constructor(
+        packageName: String,
+        installerPackageName: String?,
+        packageSource: PackageSource,
+        requireUserAction: Boolean,
+    ) : this(
+        packageName = packageName,
+        installerPackageName = installerPackageName,
+        packageSource = packageSource,
+        originatingUid = null,
+        requireUserAction = requireUserAction,
+    )
+}
 
 class AndroidPackageInstallerAdapter(context: Context) {
     private val installer = context.applicationContext.packageManager.packageInstaller
