@@ -13,6 +13,19 @@ class AppInstallStatusReceiver : BroadcastReceiver() {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val packageName = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME) ?: "unknown"
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+        val queueItemId = intent.getStringExtra(QUEUE_ITEM_ID)
+        val sessionId = intent.getIntExtra(SESSION_ID, -1).takeIf { it >= 0 }
+
+        if (queueItemId != null) {
+            InstallQueueCoordinator(InstallQueueStore(context)).onPackageInstallerResult(
+                itemId = queueItemId,
+                sessionId = sessionId,
+                status = status,
+                packageName = packageName,
+                detail = message,
+            )
+        }
+
         val summary = when (status) {
             PackageInstaller.STATUS_SUCCESS -> {
                 "Install completed\npackage=$packageName"
@@ -34,6 +47,8 @@ class AppInstallStatusReceiver : BroadcastReceiver() {
             .putString(KEY_SUMMARY, summary)
             .putLong(KEY_UPDATED_AT, System.currentTimeMillis())
             .apply()
+
+        context.sendBroadcast(Intent(ACTION_QUEUE_CHANGED).setPackage(context.packageName))
     }
 
     private fun confirmationIntent(intent: Intent): Intent? = if (Build.VERSION.SDK_INT >= 33) {
@@ -45,6 +60,9 @@ class AppInstallStatusReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_INSTALL_RESULT = "io.dpcaio.app.PACKAGE_INSTALL_RESULT"
+        const val ACTION_QUEUE_CHANGED = "io.dpcaio.app.PACKAGE_INSTALL_QUEUE_CHANGED"
+        const val QUEUE_ITEM_ID = "queue_item_id"
+        const val SESSION_ID = "session_id"
         const val PREFS = "dpc-aio-app-installer-status"
         const val KEY_SUMMARY = "summary"
         const val KEY_UPDATED_AT = "updated_at"
