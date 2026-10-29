@@ -422,9 +422,11 @@ def main() -> int:
                 args.repo,
                 "--ref",
                 "main",
+                "-f",
+                "signing_mode=stable",
             ]
         )
-        print("Production enrollment workflow dispatched on main.")
+        print("Production stable enrollment workflow dispatched on main.")
 
     print("Historical APK signer verification: PASS")
     print("Historical signing keystore recovery completed.")
