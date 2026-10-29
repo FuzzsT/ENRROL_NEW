@@ -22,9 +22,11 @@ Android Enterprise DPC workspace with production QR enrollment, protected enterp
 
 ## Dual Apps workspace model
 
-`Dual Apps` creates additional isolated app instances through Android managed or clone profiles when supported by the device. It does not repackage APKs or rewrite package names, so application signatures and normal update compatibility remain intact.
+`Dual Apps` follows the useful isolation model identified in AppDualZuku: additional instances are separate Android user/profile sandboxes rather than repackaged copies inside one user ID. The module creates managed or clone profiles when supported by the OS, then enables an already-installed package in the selected profile.
 
-A selected package can be enabled in another profile through the existing authorized Shizuku `install-existing` route. Android and OEM limits on profile count and profile types still apply.
+This means application signatures, package identity and normal update compatibility are preserved. Android and OEM limits on profile count and profile types still apply, so the number of instances is bounded by the device rather than artificially claimed as unlimited.
+
+A selected package is enabled in another profile through the existing authorized Shizuku `install-existing` route. The UI never accepts arbitrary shell commands; workspace operations are exposed as typed AIDL methods with argument validation.
 
 The same module reports the connected Shizuku service UID for diagnostics. UID 1000 is only detected when the service already has that identity; DPC-AIO does not contain a path to obtain, spoof, or escalate to system UID.
 
