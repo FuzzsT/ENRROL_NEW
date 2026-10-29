@@ -17,6 +17,8 @@ def main():
     runtime = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt"
     service = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt"
     client = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt"
+    aidl = ROOT / "apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioShizukuUserService.aidl"
+    editor = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppOpsVerifiedEditorActivity.kt"
     activity_executor = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt"
     manifest = ROOT / "apps/dpc/integrations/shizuku/src/main/AndroidManifest.xml"
     catalog = ROOT / "gradle/libs.versions.toml"
@@ -26,13 +28,19 @@ def main():
         if token not in runtime_text:
             raise AssertionError(f"runtime missing {token}")
 
+    aidl_text = must(aidl, 'String getAppOp(String packageName, String op, int userId);')
+    if 'String getAppOps(String packageName, int userId);' not in aidl_text:
+        raise AssertionError("typed full AppOps discovery contract must remain available")
+
     service_text = must(service, 'ProcessBuilder(args)')
     for token in ['"/system/bin/am", "start"', '"/system/bin/am", "broadcast"']:
         if token not in service_text:
             raise AssertionError(f"typed am route missing {token}")
     for token in [
         'runTypedCaptureChecked(',
-        'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get"',
+        'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))',
+        'override fun getAppOp(packageName: String, op: String, userId: Int): String',
+        'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName, op))',
         'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
     ]:
         if token not in service_text:
@@ -42,9 +50,25 @@ def main():
             raise AssertionError(f"unsafe Shizuku service token: {forbidden}")
 
     client_text = must(client, "Shizuku.UserServiceArgs")
-    for token in ["Shizuku.bindUserService", ".processNameSuffix(", ".version("]:
+    for token in [
+        "Shizuku.bindUserService",
+        ".processNameSuffix(",
+        ".version(",
+        'fun getAppOp(packageName: String, op: String, userId: Int): String?',
+        'remote?.getAppOp(packageName, op, userId)',
+    ]:
         if token not in client_text:
             raise AssertionError(f"client missing {token}")
+
+    editor_text = must(editor, 'val before = shizuku.getAppOp(pkg, op, userId)')
+    for token in [
+        'if (!snapshotReadable(before))',
+        'Initial AppOps snapshot unreadable; mutation aborted',
+        'Uid mode:',
+        'Default mode:',
+    ]:
+        if token not in editor_text:
+            raise AssertionError(f"AppOps fail-closed verification missing {token}")
 
     activity_text = must(activity_executor, "ActivityRoute.SHIZUKU")
     if "client.startActivity(" not in activity_text:
