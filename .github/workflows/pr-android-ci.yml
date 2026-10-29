@@ -119,6 +119,9 @@ jobs:
           fi
           test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
 
+      - name: Install provisioning build dependencies
+        run: python3 -m pip install -r tools/provisioning/requirements.txt
+
       - name: Assemble enterprise debug APK
         env:
           DPC_AIO_GITHUB_REPOSITORY: ${{ github.repository }}
