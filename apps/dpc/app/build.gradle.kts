@@ -103,6 +103,7 @@ dependencies {
     implementation(project(":installer-core"))
     implementation(project(":installer-android"))
     implementation(project(":self-update-core"))
+    implementation(project(":self-update-android"))
     implementation(project(":delegation-core"))
     implementation(project(":dhizuku-compat"))
     implementation(project(":shizuku-adapter"))
