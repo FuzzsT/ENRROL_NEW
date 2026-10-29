@@ -20,6 +20,18 @@ Android Enterprise DPC workspace with production QR enrollment, protected enterp
 - Hardened APK+ importer treats archives as data only and rejects traversal, symlinks, duplicates, decompression abuse and package/version/signer mismatch.
 - Work Profile Lifecycle 2.0, encrypted Credential Recovery 2.0, Application Restrictions readback, whole-app state and Device-Owner location policy.
 
+## Dual Apps workspace model
+
+`Dual Apps` creates additional isolated app instances through Android managed or clone profiles when supported by the device. It does not repackage APKs or rewrite package names, so application signatures and normal update compatibility remain intact.
+
+A selected package can be enabled in another profile through the existing authorized Shizuku `install-existing` route. Android and OEM limits on profile count and profile types still apply.
+
+The same module reports the connected Shizuku service UID for diagnostics. UID 1000 is only detected when the service already has that identity; DPC-AIO does not contain a path to obtain, spoof, or escalate to system UID.
+
+## PR CI layout
+
+Pull-request verification is split into parallel `Source contracts` and `Enterprise debug APK` jobs. A final `verify` job aggregates both results, preserving a stable required-check name while making failures much easier to locate.
+
 ## Modern UI work
 
 The current UI modernization is tracked in PR #34 (`ui/safe-area-motion-refresh`). It adds a shared classic-View design system (`ModernUi`), global safe-area handling for modern Android edge-to-edge behavior, lightweight Activity entrance motion, and refreshed Dashboard, Permission Manager, Enterprise Policy Hub, and Module Center surfaces.
