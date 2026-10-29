@@ -2,6 +2,7 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Process
@@ -76,6 +77,8 @@ class PermissionManagerActivity : Activity() {
             action("Scan app permissions") { scanAppPermissions(false) },
             action("Show only anomalies") { scanAppPermissions(true) },
         ))
+        targetCard.addView(ModernUi.spacer(this, 7))
+        targetCard.addView(action("Open Verified AppOps") { openVerifiedAppOps() })
         body.addView(targetCard)
 
         body.addView(ModernUi.section(this, "Permission state"))
@@ -138,6 +141,15 @@ class PermissionManagerActivity : Activity() {
 
     private fun action(label: String, destructive: Boolean = false, action: () -> Unit): Button =
         ModernUi.action(this, label, destructive, action)
+
+    private fun openVerifiedAppOps() {
+        val packageName = targetPackage.text.toString().trim()
+        startActivity(Intent(this, AppOpsVerifiedEditorActivity::class.java).apply {
+            if (packageName.isNotBlank()) {
+                putExtra(AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE, packageName)
+            }
+        })
+    }
 
     private fun postUiIfAlive(block: () -> Unit) {
         runOnUiThread {
