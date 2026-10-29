@@ -41,6 +41,12 @@ class AioDashboardActivity : Activity() {
 
         addSection(body, "Tools")
         add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
+        add(body, "APK / APKS Installer", { AppPackageManagerActivity::class.java }) {
+            it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_INSTALLER)
+        }
+        add(body, "App Updater", { AppPackageManagerActivity::class.java }) {
+            it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_UPDATER)
+        }
         add(body, "Activity Explorer • direct package mode") { ActivityExplorerActivity::class.java }
         add(body, "Permission Manager") { PermissionManagerActivity::class.java }
         add(body, "Samsung Settings") { SamsungSettingsEditorActivity::class.java }
@@ -63,10 +69,17 @@ class AioDashboardActivity : Activity() {
         root.addView(ModernUi.section(this, label))
     }
 
-    private fun add(root: LinearLayout, label: String, target: () -> Class<out Activity>) {
+    private fun add(
+        root: LinearLayout,
+        label: String,
+        target: () -> Class<out Activity>,
+        configure: (Intent) -> Unit = {},
+    ) {
         root.addView(ModernUi.compactCard(this).apply {
             addView(ModernUi.action(this@AioDashboardActivity, label) {
-                startActivity(Intent(this@AioDashboardActivity, target()))
+                val next = Intent(this@AioDashboardActivity, target())
+                configure(next)
+                startActivity(next)
             })
         })
     }
