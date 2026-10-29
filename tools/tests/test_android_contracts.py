@@ -100,6 +100,42 @@ def main():
     for token in ["AndroidInstallSourceReader", "Installed by", "installingPackageName", "installingPackageLabel"]:
         assert_true(token in package_manager, f"App Package Manager source UI missing: {token}")
 
+    self_update_root = ROOT / "apps/dpc/modules/self-update/android"
+    build_file = self_update_root / "build.gradle.kts"
+    manifest_file = self_update_root / "src/main/AndroidManifest.xml"
+    client_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateClient.kt"
+    store_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateStore.kt"
+    verifier_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateVerifier.kt"
+    installer_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateInstaller.kt"
+    for path in [build_file, manifest_file, client_file, store_file, verifier_file, installer_file]:
+        assert_true(path.is_file(), f"Self Update Android file missing: {path.relative_to(ROOT)}")
+
+    build_text = build_file.read_text(encoding="utf-8")
+    assert_true('project(":self-update-core")' in build_text, "self-update Android must depend on core")
+    assert_true('project(":installer-android")' in build_text, "self-update Android must reuse installer Android adapter")
+    assert_true('project(":installer-core")' in build_text, "self-update Android must reuse installer core model")
+    assert_true("android.permission.INTERNET" in manifest_file.read_text(encoding="utf-8"), "Self Update Android must declare INTERNET")
+
+    client = client_file.read_text(encoding="utf-8")
+    for token in ["class SelfUpdateClient", "HttpURLConnection", "connectTimeout", "readTimeout", "JSONObject", "https://"]:
+        assert_true(token in client, f"Self Update client missing: {token}")
+
+    store = store_file.read_text(encoding="utf-8")
+    for token in ["class SelfUpdateStore", "filesDir", "self-update", "clearCandidate", "saveCandidate"]:
+        assert_true(token in store, f"Self Update store missing: {token}")
+
+    verifier = verifier_file.read_text(encoding="utf-8")
+    for token in ["class SelfUpdateVerifier", "SHA-256", "getPackageArchiveInfo", "GET_SIGNING_CERTIFICATES", "apkContentsSigners", "signingCertificateHistory", "versionCode"]:
+        assert_true(token in verifier, f"Self Update verifier missing: {token}")
+
+    installer = installer_file.read_text(encoding="utf-8")
+    for token in ["class SelfUpdateInstaller", "AndroidPackageInstallerAdapter", "InstallSessionSpec", "PackageSource.DOWNLOADED_FILE", "requireUserAction", "SILENT_IF_ALLOWED", "AUTO_SILENT"]:
+        assert_true(token in installer, f"Self Update installer missing: {token}")
+
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file])
+    for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
+        assert_true(forbidden not in combined, f"Self Update must not use install bypass path: {forbidden}")
+
     print("test_android_contracts: PASS")
 
 
