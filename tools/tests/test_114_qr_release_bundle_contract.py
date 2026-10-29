@@ -87,6 +87,15 @@ byte_identity_check = (
 if not byte_identity_check:
     errors.append('published APK byte identity verification missing')
 
+# Rolling prereleases must not accumulate old versioned QR bundles. Stable tag releases are immutable history.
+for token in [
+    'DPC-AIO-*-QR-RELEASE-BUNDLE.zip',
+    'gh release delete-asset "$RELEASE_TAG"',
+    'if [[ "$GITHUB_REF_TYPE" != "tag" ]]',
+]:
+    if token not in workflow:
+        errors.append(f'rolling release bundle cleanup missing {token}')
+
 retry_gate_path=ROOT/'tools/runtime/runtime_smoke_retry_gate.py'
 if not retry_gate_path.is_file():
     errors.append('runtime smoke retry gate missing')
