@@ -23,6 +23,8 @@ import io.dpcaio.installer.android.AndroidPackageInstallerAdapter
 import io.dpcaio.installer.android.InstallSessionSpec
 import java.io.File
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -48,11 +50,14 @@ class AppPackageManagerActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var queueView: TextView
     private lateinit var historyView: TextView
+    private lateinit var doctorView: TextView
+    private lateinit var operationHistoryView: TextView
     private lateinit var installedSpinner: Spinner
     private lateinit var queueStore: InstallQueueStore
     private lateinit var queueCoordinator: InstallQueueCoordinator
     private var installedApps: List<InstalledApp> = emptyList()
     private var receiverRegistered = false
+    private val operationHistoryStore by lazy { AppInstallHistoryStore(this) }
 
     private val mode: Mode by lazy {
         when (intent.getStringExtra(EXTRA_MODE)) {
@@ -61,9 +66,14 @@ class AppPackageManagerActivity : Activity() {
         }
     }
 
+    private val requestedTargetPackage: String by lazy {
+        intent.getStringExtra(EXTRA_TARGET_PACKAGE)?.trim().orEmpty()
+    }
+
     private val queueChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             renderQueueAndHistory()
+            renderOperationHistory()
             continueQueueIfReady()
         }
     }
@@ -142,11 +152,29 @@ class AppPackageManagerActivity : Activity() {
             }
         )
 
-        body.addView(ModernUi.section(this, "History"))
+        body.addView(ModernUi.section(this, "Queue history"))
         body.addView(
             ModernUi.card(this).apply {
                 historyView = ModernUi.body(this@AppPackageManagerActivity, "No install history")
                 addView(historyView)
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Installer Doctor"))
+        body.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                doctorView = ModernUi.body(this@AppPackageManagerActivity, "Checking installer capabilities…")
+                addView(doctorView)
+                addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
+                addView(ModernUi.action(this@AppPackageManagerActivity, "Refresh doctor") { renderInstallerDoctor() })
+            }
+        )
+
+        body.addView(ModernUi.section(this, "Installation history"))
+        body.addView(
+            ModernUi.card(this).apply {
+                operationHistoryView = ModernUi.body(this@AppPackageManagerActivity, "No PackageInstaller outcomes recorded")
+                addView(operationHistoryView)
             }
         )
 
@@ -170,7 +198,7 @@ class AppPackageManagerActivity : Activity() {
         body.addView(
             ModernUi.card(this, emphasized = true).apply {
                 addView(ModernUi.title(this@AppPackageManagerActivity, "Verification boundary"))
-                addView(ModernUi.body(this@AppPackageManagerActivity, "No shell/root install path is used. PackageInstaller remains the authority and user confirmation is requested where Android requires it."))
+                addView(ModernUi.body(this@AppPackageManagerActivity, "No shell/root install path is used. PackageInstaller remains the authority and user confirmation is requested where Android requires it. Shizuku is diagnostic-only for this installer surface."))
             }
         )
 
@@ -178,6 +206,8 @@ class AppPackageManagerActivity : Activity() {
         if (mode == Mode.UPDATER) loadInstalledPackages()
         renderLastResult()
         renderQueueAndHistory()
+        renderInstallerDoctor()
+        renderOperationHistory()
     }
 
     override fun onResume() {
@@ -185,6 +215,8 @@ class AppPackageManagerActivity : Activity() {
         if (::status.isInitialized) {
             renderLastResult()
             renderQueueAndHistory()
+            renderInstallerDoctor()
+            renderOperationHistory()
             continueQueueIfReady()
         }
         if (!receiverRegistered) {
@@ -221,7 +253,11 @@ class AppPackageManagerActivity : Activity() {
                 .toList()
         }.getOrElse { emptyList() }
         installedSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, installedApps)
-        status.text = "Installed apps: ${installedApps.size}"
+        if (requestedTargetPackage.isNotBlank()) {
+            val requestedIndex = installedApps.indexOfFirst { it.packageName == requestedTargetPackage }
+            if (requestedIndex >= 0) installedSpinner.setSelection(requestedIndex)
+        }
+        status.text = "Installed apps: ${installedApps.size}${if (requestedTargetPackage.isNotBlank()) " • target=$requestedTargetPackage" else ""}"
     }
 
     private fun openPackagePicker(allowMultiple: Boolean) {
@@ -454,6 +490,31 @@ class AppPackageManagerActivity : Activity() {
         }
     }
 
+    private fun renderInstallerDoctor() {
+        if (!::doctorView.isInitialized) return
+        val snapshot = InstallerDoctor(this).inspect()
+        doctorView.text = buildString {
+            appendLine("PackageInstaller=${snapshot.packageInstallerAvailable}")
+            appendLine("canRequestPackageInstalls=${snapshot.canRequestPackageInstalls}")
+            appendLine("deviceOwner=${snapshot.deviceOwner} profileOwner=${snapshot.profileOwner}")
+            appendLine("Shizuku binder=${snapshot.shizukuBinderAlive} permission=${snapshot.shizukuPermissionGranted}")
+            snapshot.backends.forEach { appendLine("${it.kind}: ${it.availability} • ${it.detail}") }
+        }.trim()
+    }
+
+    private fun renderOperationHistory() {
+        if (!::operationHistoryView.isInitialized) return
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        val records = operationHistoryStore.recent(30)
+        operationHistoryView.text = if (records.isEmpty()) {
+            "No PackageInstaller outcomes recorded"
+        } else {
+            records.joinToString("\n") { record ->
+                "${formatter.format(Date(record.timestampMillis))} • ${record.status} • ${record.packageName}${record.detail?.let { "\n  $it" } ?: ""}"
+            }
+        }
+    }
+
     private fun renderLastResult() {
         val prefs = getSharedPreferences(AppInstallStatusReceiver.PREFS, MODE_PRIVATE)
         val text = prefs.getString(AppInstallStatusReceiver.KEY_SUMMARY, null) ?: return
@@ -464,6 +525,7 @@ class AppPackageManagerActivity : Activity() {
 
     companion object {
         const val EXTRA_MODE = "mode"
+        const val EXTRA_TARGET_PACKAGE = "target_package"
         const val MODE_INSTALLER = "installer"
         const val MODE_UPDATER = "updater"
         private const val REQ_PACKAGE = 4101
