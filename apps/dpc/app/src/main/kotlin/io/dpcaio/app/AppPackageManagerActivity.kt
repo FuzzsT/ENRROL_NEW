@@ -311,7 +311,14 @@ class AppPackageManagerActivity : Activity() {
         if (preflight != null) return InstallSubmission(preflight)
 
         val adapter = AndroidPackageInstallerAdapter(this)
-        val session = adapter.createSession(InstallSessionSpec(archiveInfo.packageName, packageName, PackageSource.LOCAL_FILE, true))
+        val session = adapter.createSession(
+            InstallSessionSpec(
+                packageName = archiveInfo.packageName,
+                installerPackageName = packageName,
+                packageSource = PackageSource.LOCAL_FILE,
+                requireUserAction = true,
+            )
+        )
         val sessionId = session.value ?: return InstallSubmission("SESSION_CREATE_FAILED: ${session.status}: ${session.message}")
         val staged = file.inputStream().use { adapter.stageSingleApk(sessionId, it, file.length()) }
         if (!staged.isSuccess) {
@@ -338,7 +345,14 @@ class AppPackageManagerActivity : Activity() {
             if (preflight != null) return InstallSubmission(preflight)
 
             val adapter = AndroidPackageInstallerAdapter(this)
-            val session = adapter.createSession(InstallSessionSpec(archiveInfo.packageName, packageName, PackageSource.LOCAL_FILE, true))
+            val session = adapter.createSession(
+                InstallSessionSpec(
+                    packageName = archiveInfo.packageName,
+                    installerPackageName = packageName,
+                    packageSource = PackageSource.LOCAL_FILE,
+                    requireUserAction = true,
+                )
+            )
             val sessionId = session.value ?: return InstallSubmission("SESSION_CREATE_FAILED: ${session.status}: ${session.message}")
             val staged = adapter.stageApkSet(sessionId, stagedFiles)
             if (!staged.isSuccess) {
