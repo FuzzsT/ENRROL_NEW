@@ -64,7 +64,12 @@ if 'DPC-AIO-enterprise-debug.tag.downloaded.apk' in wf:
     errors.append('stale debug-named release download path remains')
 
 # Keystore must be destroyed before third-party emulator action runs.
-cleanup=wf.find('Cleanup release signing material before runtime')
+cleanup_markers=[
+    'Cleanup release signing material before runtime',
+    'Cleanup signing material before emulator runtime',
+]
+cleanup_positions=[wf.find(marker) for marker in cleanup_markers if wf.find(marker) >= 0]
+cleanup=min(cleanup_positions) if cleanup_positions else -1
 emu=wf.find('ReactiveCircus/android-emulator-runner@')
 if cleanup < 0 or emu < 0 or cleanup > emu:
     errors.append('signing material is not cleaned before emulator action')
@@ -76,9 +81,13 @@ if pub_idx < 0:
 else:
     before=wf[:pub_idx]
     after=wf[pub_idx:]
-    for marker in ['Publish continuous enrollment assets','Publish tag release assets']:
-        if marker in before or marker not in after:
-            errors.append(f'{marker} not isolated to publish job')
+    if 'Publish release assets' in wf:
+        if 'Publish release assets' in before or 'Publish release assets' not in after:
+            errors.append('Publish release assets not isolated to publish job')
+    else:
+        for marker in ['Publish continuous enrollment assets','Publish tag release assets']:
+            if marker in before or marker not in after:
+                errors.append(f'{marker} not isolated to publish job')
 
 report=json.loads(read('RELEASE-VERIFICATION.json'))
 rv=report.get('version','0.0.0')
