@@ -9,7 +9,10 @@ data class ShizukuRuntimeState(
     val serverUid: Int?,
     val apiVersion: Int?,
     val identity: String
-)
+) {
+    /** Diagnostic only: reports an already-present Shizuku service identity. */
+    val isSystemUid: Boolean get() = serverUid == 1000
+}
 
 class AndroidShizukuRuntime {
     fun probe(): ShizukuRuntimeState {
@@ -24,6 +27,7 @@ class AndroidShizukuRuntime {
         val version = runCatching { Shizuku.getVersion() }.getOrNull()
         val identity = when (uid) {
             0 -> "root"
+            1000 -> "system"
             2000 -> "shell"
             null -> "unknown"
             else -> "uid:$uid"
