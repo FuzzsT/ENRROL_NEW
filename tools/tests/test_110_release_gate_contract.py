@@ -62,10 +62,19 @@ def main() -> None:
         'assembleEnterpriseRelease',
         'DPC-AIO-enterprise-release.apk',
         'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256',
-        'cmp -s',
     ]:
         if marker not in workflow:
             raise AssertionError(f'1.0.2 production prerequisite lost: {marker}')
+
+    if not (
+        'cmp -s' in workflow
+        or (
+            'sha256sum dist/DPC-AIO-enterprise-release.apk' in workflow
+            and 'sha256sum public.apk' in workflow
+            and '[[ "$observed" == "$expected" ]]' in workflow
+        )
+    ):
+        raise AssertionError('1.0.2 production prerequisite lost: byte-identity verification')
 
     print('test_110_release_gate_contract: PASS')
 
