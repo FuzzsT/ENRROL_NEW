@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HELPER = ROOT / "tools/release/extract_apksigner_sha256.py"
-WORKFLOW = ROOT / ".github/workflows/build-emergency-enrollment.yml"
+WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 
 spec = importlib.util.spec_from_file_location("extract_apksigner_sha256", HELPER)
 assert spec and spec.loader
@@ -35,6 +35,9 @@ workflow = WORKFLOW.read_text(encoding="utf-8")
 assert "extract_apksigner_sha256.py" in workflow
 assert "sed -n 's/^Signer #1 certificate SHA-256 digest: //p'" not in workflow
 assert "cert_output=" in workflow
+assert "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256" in workflow
+assert "Prepare stable signer" in workflow
+assert "Prepare emergency ephemeral signer" in workflow
 assert "APKSIGNER_CERT_PARSE_FAILED" in HELPER.read_text(encoding="utf-8")
 
 print("APKSIGNER_CERT_PARSER_114_CONTRACT: PASS")

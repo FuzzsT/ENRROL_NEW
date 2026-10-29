@@ -1,10 +1,9 @@
-name: Android PR compile gate
+name: Android CI
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-      - ui/safe-area-motion-refresh
     paths:
       - 'apps/dpc/**'
       - 'tools/**'
@@ -15,46 +14,20 @@ on:
       - 'settings.gradle.kts'
       - 'build.gradle.kts'
       - '.github/workflows/pr-android-ci.yml'
-  pull_request:
-    branches:
-      - main
+      - '.github/workflows/build-aio-enrollment.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-pr-${{ github.event.pull_request.number || github.ref }}
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  host-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Java 21
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Install provisioning test dependencies
-        run: python3 -m pip install -r tools/provisioning/requirements.txt
-
-      - name: Run host test suite
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x tools/run_host_tests.sh
-          ./tools/run_host_tests.sh
-
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
 
     steps:
       - name: Checkout
@@ -135,40 +108,12 @@ jobs:
       - name: Install provisioning test dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
 
-      - name: Run source contracts
+      - name: Run host/source test suite
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/tests/test_ci_host_suite_contract.py
-          python3 tools/tests/test_modern_ui_v2_contract.py
-          python3 tools/tests/test_ui_accessibility_responsive_contract.py
-          python3 tools/tests/test_activity_explorer_launcher_ui_contract.py
-          python3 tools/tests/test_activity_explorer_visual_polish_contract.py
-          python3 tools/tests/test_control_center_shizuku_launcher_contract.py
-          python3 tools/tests/test_shizuku_reactive_launcher_icons_contract.py
-          python3 tools/tests/test_activity_launcher_lazy_icons_contract.py
-          python3 tools/tests/test_scenario_android_contract.py
-          python3 tools/tests/test_permission_manager_lifecycle_contract.py
-          python3 tools/tests/test_permission_manager_shizuku_async_contract.py
-          python3 tools/tests/test_network_doh_input_snapshot_contract.py
-          python3 tools/tests/test_network_control_async_contract.py
-          python3 tools/tests/test_offline_setup_async_contract.py
-          python3 tools/tests/test_offline_apply_async_contract.py
-          python3 tools/tests/test_emergency_runtime_image_contract.py
-          python3 tools/tests/test_recovery_job_lifecycle_contract.py
-          python3 tools/tests/test_knoxzt_startup_coalescing_contract.py
-          python3 tools/tests/test_knoxzt_manager_operation_gate_contract.py
-          python3 tools/tests/test_knoxzt_activity_support_context_contract.py
-          python3 tools/tests/test_enrollment_coordinator_serialization_contract.py
-          python3 tools/tests/test_samsung_settings_operation_gate_contract.py
-          python3 tools/tests/test_samsung_settings_cleanup_contract.py
-          python3 tools/tests/test_gradle_source_completeness.py
-          python3 tools/tests/test_app_android_classpath_114_contract.py
-          python3 tools/tests/test_installer_android_compile_114_contract.py
-          python3 tools/tests/test_app_dpc_compile_114_contract_v2.py
-          python3 tools/tests/test_persisted_signing_recovery_contract.py
-          python3 tools/tests/test_non_sdk_api_scan.py
-          python3 tools/tests/test_release_secret_scan.py
+          chmod +x tools/run_host_tests.sh
+          ./tools/run_host_tests.sh
 
       - name: Assemble enterprise debug APK
         env:

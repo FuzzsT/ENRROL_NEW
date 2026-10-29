@@ -35,11 +35,15 @@ for marker in [
 for marker in [
     'Enable KVM group perms', 'ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d',
     'api-level: 35', 'tools/runtime/android_device_owner_smoke.py',
-    'android-runtime-smoke.json', 'Upload full build + enrollment artifacts'
+    'android-runtime-smoke.json', 'Upload verified enrollment artifacts'
 ]:
     if marker not in workflow:
         errors.append(f'workflow runtime smoke missing {marker}')
-# Runtime smoke must gate integrity packaging and both publication paths.
+
+# Runtime smoke must happen before integrity packaging and before the verified
+# artifact set is uploaded/published. The unified workflow publishes both stable
+# and emergency modes through one publish job, so contract the behavior rather
+# than legacy step names.
 smoke_pos=workflow.find('tools/runtime/android_device_owner_smoke.py')
 integrity_markers=['Refresh artifact hashes after runtime smoke', 'Build QR release bundle']
 integrity_positions=[workflow.find(x) for x in integrity_markers if workflow.find(x) >= 0]
@@ -49,16 +53,23 @@ else:
     integrity_pos=min(integrity_positions)
     if smoke_pos < 0 or smoke_pos > integrity_pos:
         errors.append('runtime smoke must run before post-runtime integrity packaging')
-for marker in ['Publish continuous enrollment assets', 'Publish tag release assets']:
-    pos=workflow.find(marker)
-    if smoke_pos < 0 or pos < 0 or smoke_pos > pos:
-        errors.append(f'runtime smoke must run before {marker}')
+
+upload_pos=workflow.find('Upload verified enrollment artifacts')
+publish_pos=workflow.find('Publish release assets')
+if smoke_pos < 0 or upload_pos < 0 or smoke_pos > upload_pos:
+    errors.append('runtime smoke must run before verified artifact upload')
+if smoke_pos < 0 or publish_pos < 0 or smoke_pos > publish_pos:
+    errors.append('runtime smoke must run before unified release publication')
 
 explicit_runtime_refs=workflow.count('dist/android-runtime-smoke.json')
 legacy_hashing='find dist -maxdepth 1 -type f ! -name SHA256SUMS.txt' in workflow
 bundle_hashing=('build_qr_release_bundle.py' in workflow and 'android-runtime-smoke.json' in bundle_builder and 'SHA256SUMS.txt' in bundle_builder)
-wildcard_release_upload='gh release upload "$tag" dist/*' in workflow
-if explicit_runtime_refs < 2 or not (legacy_hashing or bundle_hashing) or not wildcard_release_upload:
+wildcard_release_upload=('gh release upload "$RELEASE_TAG" dist/*' in workflow or 'gh release upload "$tag" dist/*' in workflow)
+upload_dist=(
+    'uses: actions/upload-artifact@' in workflow
+    and re.search(r'^\s*path:\s*dist/?\s*$', workflow, re.MULTILINE) is not None
+)
+if explicit_runtime_refs < 1 or not (legacy_hashing or bundle_hashing) or not wildcard_release_upload or not upload_dist:
     errors.append('runtime smoke evidence must be generated, integrity-hashed, uploaded as artifact, and published with release assets')
 
 if errors:

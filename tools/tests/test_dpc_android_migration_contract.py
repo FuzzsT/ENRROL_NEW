@@ -29,19 +29,38 @@ readme = read('README.md')
 if 'FuzzsT/ENRROL_NEW' not in readme:
     errors.append('README missing dpc_android target')
 
-prod = read('.github/workflows/build-aio-enrollment.yml')
-for needle in ['STABLE_SIGNING_KEY_REQUIRED', 'assembleEnterpriseRelease', 'device-owner-qr.png', 'work-profile-qr.png', 'cmp -s']:
-    if needle not in prod:
-        errors.append(f'production workflow missing {needle}')
-if 'assembleEnterpriseDebug' in prod:
-    errors.append('production workflow builds debug APK')
+workflow = read('.github/workflows/build-aio-enrollment.yml')
+for needle in [
+    'Prepare stable signer',
+    'STABLE_SIGNING_KEY_REQUIRED',
+    'Prepare emergency ephemeral signer',
+    'PKCS12',
+    'dpc-aio-emergency-enrollment',
+    'assembleEnterpriseRelease',
+    'device-owner-qr.png',
+    'work-profile-qr.png',
+    'signing-mode.txt',
+    'signing_mode:',
+]:
+    if needle not in workflow:
+        errors.append(f'unified enrollment workflow missing {needle}')
 
-emergency = read('.github/workflows/build-emergency-enrollment.yml')
-for needle in ['PKCS12', 'dpc-aio-emergency-enrollment', 'assembleEnterpriseRelease', 'device-owner-qr.png', 'work-profile-qr.png', 'signing-mode.txt', 'cmp -s']:
-    if needle not in emergency:
-        errors.append(f'emergency workflow missing {needle}')
-if 'DPC_AIO_RELEASE_KEYSTORE_B64' in emergency:
-    errors.append('emergency workflow unexpectedly depends on stable keystore secret')
+byte_identity_check = (
+    'cmp -s' in workflow
+    or (
+        'sha256sum dist/DPC-AIO-enterprise-release.apk' in workflow
+        and 'sha256sum public.apk' in workflow
+        and 'observed' in workflow
+        and 'expected' in workflow
+    )
+)
+if not byte_identity_check:
+    errors.append('unified enrollment workflow lacks published APK byte identity verification')
+
+if 'assembleEnterpriseDebug' in workflow:
+    errors.append('production workflow builds debug APK')
+if '.github/workflows/build-emergency-enrollment.yml' in workflow:
+    errors.append('unified workflow still references removed emergency workflow')
 
 if errors:
     raise SystemExit('DPC_ANDROID_MIGRATION_CONTRACT: FAIL\n- ' + '\n- '.join(errors))

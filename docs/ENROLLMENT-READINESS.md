@@ -10,17 +10,20 @@ Target repository: `FuzzsT/ENRROL_NEW`.
 - APK+ installer nullability and Android module classpath fixes through the latest v9 source are included.
 - Gradle source completeness guard confirms declared modules contain real sources; normal Kotlin-only `compileJava NO-SOURCE`, resource-less `processResources NO-SOURCE`, and non-JNI `mergeNativeLibs NO-SOURCE` are not treated as failures.
 
-## Production enrollment
+## Enrollment workflow
 
 Workflow: `.github/workflows/build-aio-enrollment.yml`
 
-Requires stable release signing material. It builds `enterpriseRelease`, verifies signer SHA-256, validates QRs against the exact APK, runs Device Owner emulator smoke, publishes release assets, re-downloads the public APK, and requires byte equality.
+One workflow now owns both release modes:
 
-## Emergency enrollment
+- **stable** — uses the configured stable release signing material, builds `enterpriseRelease`, verifies signer SHA-256, validates QRs against the exact APK, runs Device Owner emulator smoke, publishes release assets and verifies the public APK bytes;
+- **emergency** — creates a run-specific PKCS12 signer in runner temporary storage, performs the same release/QR/runtime checks and publishes prerelease `dpc-aio-emergency-enrollment`.
 
-Workflow: `.github/workflows/build-emergency-enrollment.yml`
+Trigger behavior:
 
-Requires no signing secrets. It creates a run-specific PKCS12 signer in runner temporary storage, builds `enterpriseRelease`, validates Device Owner/Work Profile QRs against the exact APK, runs Device Owner emulator smoke, publishes prerelease `dpc-aio-emergency-enrollment`, and verifies the public APK bytes.
+- push to `main` -> emergency mode;
+- tag `v*` -> stable mode;
+- manual `workflow_dispatch` -> `auto`, `stable` or `emergency`.
 
 Emergency signing is suitable for an initial/lab enrollment but not for update continuity between independent runs. Production-managed devices should use one backed-up stable signer from the first production enrollment onward.
 

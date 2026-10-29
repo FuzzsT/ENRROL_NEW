@@ -1,6 +1,6 @@
 # DPC-AIO provisioning contract
 
-DPC-AIO 0.6.7 always exposes two explicit Android Enterprise enrollment sets in addition to the compatibility `provisioning-*` outputs.
+DPC-AIO 1.1.4 always exposes two explicit Android Enterprise enrollment sets in addition to the compatibility `provisioning-*` outputs.
 
 ```text
 apps/dpc/app/build/outputs/provisioning/<flavor>/<buildType>/work-profile-provisioning.json

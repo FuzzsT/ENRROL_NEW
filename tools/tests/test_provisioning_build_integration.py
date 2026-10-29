@@ -81,19 +81,27 @@ def main():
         'gh release upload',
         '--clobber',
         'curl -fL',
-        'cmp -s',
         '--expected-apk-url',
-        'Verify tag release APK is publicly downloadable',
-        "if: github.ref_type == 'tag'",
-        'Tag release APK URL is public and byte-identical to this build.',
+        'Verify published APK byte identity',
+        'Published APK is public and byte-identical to the QR-bound build.',
     ]:
         if token not in workflow:
             raise AssertionError(f'workflow missing {token}')
 
-    publish_tag = workflow.index('- name: Publish tag release assets')
-    verify_tag = workflow.index('- name: Verify tag release APK is publicly downloadable')
-    if verify_tag <= publish_tag:
-        raise AssertionError('tag release byte-identical verification must run after tag asset publication')
+    if not (
+        'cmp -s' in workflow
+        or (
+            'sha256sum dist/DPC-AIO-enterprise-release.apk' in workflow
+            and 'sha256sum public.apk' in workflow
+            and '[[ "$observed" == "$expected" ]]' in workflow
+        )
+    ):
+        raise AssertionError('workflow missing byte-identity verification (cmp or SHA-256)')
+
+    publish_release = workflow.index('- name: Publish release assets')
+    verify_release = workflow.index('- name: Verify published APK byte identity')
+    if verify_release <= publish_release:
+        raise AssertionError('published APK byte-identical verification must run after asset publication')
 
     refs = must('docs/upstream/TESTDPC-PROVISIONING.md', 'googlesamples/android-testdpc')
     for token in ['PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME', 'PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM']:
