@@ -45,6 +45,7 @@ import io.dpcaio.samsung.settings.android.AndroidSamsungSettingGateway
 import io.dpcaio.scenario.ScenarioEventType
 import io.dpcaio.scenario.android.AndroidScenarioBridge
 import io.dpcaio.selfupdate.SelfUpdatePlanner
+import io.dpcaio.selfupdate.android.SelfUpdateClient
 import io.dpcaio.shizuku.AndroidShizukuRuntime
 
 enum class DpcModuleGroup(val label: String) {
@@ -91,6 +92,7 @@ object DpcModuleRegistry {
         DpcModuleDescriptor(":installer-core", "Installer core", DpcModuleGroup.CORE, InstallPlanner::class.java, AppPackageManagerActivity::class.java),
         DpcModuleDescriptor(":installer-android", "Installer Android", DpcModuleGroup.ANDROID, AndroidPackageInstallerAdapter::class.java, AppPackageManagerActivity::class.java),
         DpcModuleDescriptor(":self-update-core", "Self update core", DpcModuleGroup.CORE, SelfUpdatePlanner::class.java, tags = setOf("update")),
+        DpcModuleDescriptor(":self-update-android", "Self update Android", DpcModuleGroup.ANDROID, SelfUpdateClient::class.java, tags = setOf("update")),
         DpcModuleDescriptor(":delegation-core", "Delegation broker", DpcModuleGroup.CORE, DelegationAuthorizer::class.java),
         DpcModuleDescriptor(":dhizuku-compat", "Dhizuku compatibility", DpcModuleGroup.INTEGRATION, DhizukuCompatRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
         DpcModuleDescriptor(":shizuku-adapter", "Shizuku adapter", DpcModuleGroup.INTEGRATION, AndroidShizukuRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
@@ -100,7 +102,7 @@ object DpcModuleRegistry {
         DpcModuleDescriptor(":network-android", "Network policy Android", DpcModuleGroup.ANDROID, DeviceOwnerPrivateDnsController::class.java, NetworkControlActivity::class.java),
         DpcModuleDescriptor(":knox-license-core", "Knox license core", DpcModuleGroup.CORE, KnoxStartupGate::class.java, requirements = CapabilityRequirements(requiresSamsung = true), tags = setOf("samsung_knox")),
         DpcModuleDescriptor(":knox-official-core", "Knox official policy core", DpcModuleGroup.CORE, KnoxCapabilityReducer::class.java, requirements = CapabilityRequirements(requiresSamsung = true, requiresKnox = true), tags = setOf("samsung_knox", "enterprise")),
-        DpcModuleDescriptor(":knox-official-android", "Knox official Android adapter", DpcModuleGroup.ANDROID, KnoxSdkInventory::class.java, requirements = CapabilityRequirements(requiresSamsung = true, requiresKnox = true), tags = setOf("samsung_knox", "enterprise")),
+        DpcModuleDescriptor(":knox-official-android", "Knox official policy Android", DpcModuleGroup.ANDROID, KnoxSdkInventory::class.java, requirements = CapabilityRequirements(requiresSamsung = true, requiresKnox = true), tags = setOf("samsung_knox", "enterprise")),
         DpcModuleDescriptor(":knox-license-lab", "Knox license lab", DpcModuleGroup.LAB, requirements = CapabilityRequirements(visibility = VisibilityClass.LAB), tags = setOf("lab", "samsung_knox")),
         DpcModuleDescriptor(":knox-mock-core", "Knox mock core", DpcModuleGroup.LAB, KnoxMockLicenseState::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.LAB), tags = setOf("lab", "samsung_knox")),
         DpcModuleDescriptor(":knox-mock-android", "Knox mock Android", DpcModuleGroup.LAB, KnoxMockService::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.LAB), tags = setOf("lab", "samsung_knox")),
