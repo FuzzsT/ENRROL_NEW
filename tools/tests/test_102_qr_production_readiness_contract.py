@@ -30,8 +30,20 @@ def main():
             'DPC_AIO_RELEASE_KEY_ALIAS', 'DPC_AIO_RELEASE_KEY_PASSWORD')
     workflow = text('.github/workflows/build-aio-enrollment.yml')
     for needle in ('assembleEnterpriseRelease', 'DPC-AIO-enterprise-release.apk',
-                   'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256', 'cmp -s'):
+                   'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256'):
         assert needle in workflow, f"workflow missing {needle!r}"
+
+    byte_identity_check = (
+        'cmp -s' in workflow
+        or (
+            'sha256sum dist/DPC-AIO-enterprise-release.apk' in workflow
+            and 'sha256sum public.apk' in workflow
+            and 'observed' in workflow
+            and 'expected' in workflow
+        )
+    )
+    assert byte_identity_check, 'production workflow must verify published APK byte identity'
+
     assert 'assembleEnterpriseDebug' not in workflow, 'production workflow still builds debug APK'
     assert 'outputs/apk/enterprise/debug' not in workflow, 'production workflow still collects debug APK bytes'
     assert 'outputs/apk/enterprise/release' in workflow, 'production workflow must collect enterpriseRelease APK bytes'
