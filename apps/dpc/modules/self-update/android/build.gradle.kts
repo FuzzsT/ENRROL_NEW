@@ -9,4 +9,5 @@ dependencies {
     implementation(project(":self-update-core"))
     implementation(project(":installer-core"))
     implementation(project(":installer-android"))
+    implementation(project(":policy-core"))
 }
