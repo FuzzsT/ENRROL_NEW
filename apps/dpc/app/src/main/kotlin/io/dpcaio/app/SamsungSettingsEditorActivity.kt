@@ -5,6 +5,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.Spinner
@@ -29,8 +33,13 @@ class SamsungSettingsEditorActivity : Activity() {
     private lateinit var namespace: Spinner
     private lateinit var key: EditText
     private lateinit var value: EditText
+    private lateinit var discoveryFilter: EditText
+    private lateinit var discoveredList: TextView
     private lateinit var status: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
+    private var discoveredSettings: List<Pair<String, String?>> = emptyList()
+    @Volatile
+    private var discoveryGeneration = 0L
     @Volatile
     private var activeStabilityMonitor: AutoCloseable? = null
     private var stabilityCleanup: Runnable? = null
@@ -74,6 +83,29 @@ class SamsungSettingsEditorActivity : Activity() {
             }
         )
 
+        body.addView(ModernUi.section(this, "Discovered settings"))
+        body.addView(
+            ModernUi.card(this).apply {
+                discoveryFilter = ModernUi.field(this@SamsungSettingsEditorActivity, "Filter discovered settings")
+                discoveryFilter.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderDiscoveredSettings()
+                    override fun afterTextChanged(s: Editable?) = Unit
+                })
+                addView(discoveryFilter)
+                addView(
+                    ModernUi.action(this@SamsungSettingsEditorActivity, "Discover settings") {
+                        discoverSettings()
+                    }
+                )
+                discoveredList = TextView(this@SamsungSettingsEditorActivity).apply {
+                    text = "No settings discovered yet"
+                    setTextIsSelectable(true)
+                }
+                addView(ModernUi.outputCard(this@SamsungSettingsEditorActivity, discoveredList))
+            }
+        )
+
         body.addView(ModernUi.section(this, "Result"))
         status = TextView(this).apply { text = "Ready"; setTextIsSelectable(true) }
         body.addView(ModernUi.outputCard(this, status))
@@ -92,11 +124,49 @@ class SamsungSettingsEditorActivity : Activity() {
 
         setContentView(ModernUi.scrollPage(this, body))
         shizuku.bind()
+
+        namespace.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                discoverSettings()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        discoverSettings()
     }
 
     private fun selectedNamespace() = SettingNamespace.valueOf(namespace.selectedItem.toString())
 
     private fun gateway() = AndroidSamsungSettingGateway(this, shizuku, AndroidUserId.fromUid(Process.myUid()))
+
+    private fun discoverSettings() {
+        if (!::discoveredList.isInitialized) return
+        val ns = selectedNamespace()
+        val generation = ++discoveryGeneration
+        discoveredList.text = "Discovering ${ns.name.lowercase()} settings…"
+        Thread {
+            val rows = gateway().list(ns)
+            runOnUiThread {
+                if (isFinishing || isDestroyed || generation != discoveryGeneration) return@runOnUiThread
+                discoveredSettings = rows
+                renderDiscoveredSettings()
+                status.text = "Discovered ${rows.size} ${ns.name.lowercase()} settings"
+            }
+        }.start()
+    }
+
+    private fun renderDiscoveredSettings() {
+        if (!::discoveredList.isInitialized) return
+        val filter = if (::discoveryFilter.isInitialized) discoveryFilter.text.toString().trim().lowercase() else ""
+        val rows = discoveredSettings.filter { (name, currentValue) ->
+            filter.isBlank() || name.lowercase().contains(filter) || currentValue.orEmpty().lowercase().contains(filter)
+        }
+        discoveredList.text = if (rows.isEmpty()) {
+            "No matching settings"
+        } else {
+            rows.joinToString("\n") { (name, currentValue) -> "$name = ${currentValue ?: "<null>"}" }
+        }
+    }
 
     private fun readValue() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
@@ -179,6 +249,7 @@ class SamsungSettingsEditorActivity : Activity() {
     }
 
     override fun onDestroy() {
+        discoveryGeneration++
         cancelStabilityCleanup()
         synchronized(this) {
             activeStabilityMonitor?.close()
