@@ -29,6 +29,11 @@ for n in [
     'AppOps',
     'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
     'filteredApps().take(visibleAppLimit)',
+    'STATE_SELECTED_PACKAGES',
+    'override fun onSaveInstanceState',
+    'putStringArrayList(STATE_SELECTED_PACKAGES',
+    'savedInstanceState?.getStringArrayList(STATE_SELECTED_PACKAGES)',
+    'selectedPackages.addAll(',
 ]:
     assert n in ht,n
 for n in [
