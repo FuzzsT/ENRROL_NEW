@@ -2,9 +2,10 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 u=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityExplorerActivity.kt'
 h=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt'
+a=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppOpsVerifiedEditorActivity.kt'
 s=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ComponentStateSnapshotStore.kt'
 assert s.is_file(),s
-t=u.read_text(); ht=h.read_text(); st=s.read_text()
+t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text()
 for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor']:
     assert n in t,n
 for n in [
@@ -30,6 +31,12 @@ for n in [
     'filteredApps().take(visibleAppLimit)',
 ]:
     assert n in ht,n
+for n in [
+    'targetUserIdOrNull()',
+    'takeIf { it >= 0 }',
+    'User ID must be a non-negative integer',
+]:
+    assert n in at,n
 assert 'createDeviceProtectedStorageContext' in st
 assert 'previousOverrideState' in st
 print('COMPONENT_MANAGER_UI_CONTRACT: PASS')
