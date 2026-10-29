@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/release/build_self_update_manifest.py"
+WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 
 
 def invoke(apk: Path, out: Path, apk_url: str):
@@ -72,6 +73,20 @@ def main():
 
         bad = invoke(apk, temp / "bad.json", "http://example.invalid/update.apk")
         assert bad.returncode != 0, "non-HTTPS APK URL must be rejected"
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    for token in [
+        "Build self-update manifest",
+        "tools/release/build_self_update_manifest.py",
+        "dist/self-update.json",
+        "dpc-aio-stable",
+        "DPC-AIO-enterprise-release.apk",
+        "gh release upload",
+    ]:
+        assert token in workflow, f"self-update release workflow missing: {token}"
+    assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
+    assert 'channel="continuous"' in workflow, "rolling release must produce continuous self-update channel"
+    assert 'stable_alias="dpc-aio-stable"' in workflow, "stable self-update must use deterministic alias"
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
