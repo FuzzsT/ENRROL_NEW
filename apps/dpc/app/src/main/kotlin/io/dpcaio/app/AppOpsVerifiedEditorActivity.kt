@@ -6,8 +6,11 @@ import android.os.Process
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.Gravity
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
@@ -18,9 +21,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AppOpsVerifiedEditorActivity : Activity() {
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
+        private const val AUTO_DISCOVERY_DELAY_MS = 450L
         private val mutationInProgress = AtomicBoolean(false)
         private val allowedModes = listOf("allow", "ignore", "deny", "default", "foreground")
     }
+
+    private enum class ModeFilter { ALL, ALLOW, IGNORE, DENY, DEFAULT, FOREGROUND }
 
     private data class AppOpEntry(
         val name: String,
@@ -33,10 +39,12 @@ class AppOpsVerifiedEditorActivity : Activity() {
     private lateinit var opField: EditText
     private lateinit var modeSpinner: Spinner
     private lateinit var discoveryFilter: EditText
+    private lateinit var modeFilterBar: LinearLayout
     private lateinit var discoveredContainer: LinearLayout
     private lateinit var output: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
     private var discoveredOps: List<AppOpEntry> = emptyList()
+    private var currentModeFilter = ModeFilter.ALL
     @Volatile
     private var discoveryGeneration = 0L
 
@@ -49,7 +57,7 @@ class AppOpsVerifiedEditorActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = "Verified AppOps editor",
-                subtitle = "Discover current AppOps as editable tiles, apply one validated mode through Shizuku, then read it back before reporting success.",
+                subtitle = "Discover current AppOps as editable tiles, filter by state, apply one validated mode through Shizuku, then read it back before reporting success.",
                 eyebrow = "Permissions",
             )
         )
@@ -97,6 +105,14 @@ class AppOpsVerifiedEditorActivity : Activity() {
                     override fun afterTextChanged(s: Editable?) = Unit
                 })
                 addView(discoveryFilter)
+
+                modeFilterBar = LinearLayout(this@AppOpsVerifiedEditorActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+                addView(modeFilterBar)
+                renderModeFilters()
+
+                addView(ModernUi.spacer(this@AppOpsVerifiedEditorActivity, 8))
                 addView(
                     ModernUi.action(this@AppOpsVerifiedEditorActivity, "Discover / refresh AppOps") {
                         readCurrent()
@@ -132,12 +148,47 @@ class AppOpsVerifiedEditorActivity : Activity() {
         setContentView(ModernUi.scrollPage(this, body))
         shizuku.bind()
         if (packageNameField.text.isNotBlank()) {
-            output.text = "Target loaded: ${packageNameField.text}. Tap Discover / refresh AppOps."
+            output.text = "Target loaded: ${packageNameField.text}. Discovering AppOps…"
+            discoveredContainer.postDelayed({
+                if (!isFinishing && !isDestroyed && packageNameField.text.isNotBlank()) readCurrent()
+            }, AUTO_DISCOVERY_DELAY_MS)
         }
     }
 
     private fun targetUserId(): Int = userIdField.text.toString().trim().toIntOrNull()
         ?: AndroidUserId.fromUid(Process.myUid())
+
+    private fun renderModeFilters() {
+        if (!::modeFilterBar.isInitialized) return
+        modeFilterBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        ModeFilter.entries.forEach { filter ->
+            val tone = when (filter) {
+                ModeFilter.ALLOW, ModeFilter.FOREGROUND -> ModernUi.Tone.SUCCESS
+                ModeFilter.IGNORE, ModeFilter.DENY -> ModernUi.Tone.WARNING
+                ModeFilter.ALL, ModeFilter.DEFAULT -> ModernUi.Tone.NEUTRAL
+            }
+            val pill = ModernUi.pill(this, filter.name, filter == currentModeFilter, tone) {
+                currentModeFilter = filter
+                renderModeFilters()
+                renderDiscoveredOps()
+            }
+            pill.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@AppOpsVerifiedEditorActivity, 8) }
+            row.addView(pill)
+        }
+        modeFilterBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
+    }
 
     private fun readCurrent() {
         val pkg = packageNameField.text.toString().trim()
@@ -181,8 +232,11 @@ class AppOpsVerifiedEditorActivity : Activity() {
     private fun renderDiscoveredOps() {
         if (!::discoveredContainer.isInitialized) return
         val filter = if (::discoveryFilter.isInitialized) discoveryFilter.text.toString().trim().lowercase() else ""
+        val modeFilter = currentModeFilter.name.lowercase()
         val rows = discoveredOps.filter { entry ->
-            filter.isBlank() || entry.name.lowercase().contains(filter) || entry.mode.contains(filter) || entry.detail.lowercase().contains(filter)
+            val matchesText = filter.isBlank() || entry.name.lowercase().contains(filter) || entry.mode.contains(filter) || entry.detail.lowercase().contains(filter)
+            val matchesMode = currentModeFilter == ModeFilter.ALL || entry.mode == modeFilter
+            matchesText && matchesMode
         }
         discoveredContainer.removeAllViews()
         if (rows.isEmpty()) {
