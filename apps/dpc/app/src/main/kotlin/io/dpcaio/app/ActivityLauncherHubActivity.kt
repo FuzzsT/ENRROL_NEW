@@ -623,7 +623,7 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     private fun selectVisible() {
-        val visible = filteredApps().map { it.packageName }
+        val visible = filteredApps().take(visibleAppLimit).map { it.packageName }
         selectedPackages.addAll(visible)
         status.text = "Selected ${visible.size} visible package(s); total selected=${selectedPackages.size}"
         renderApps(resetLimit = false)
