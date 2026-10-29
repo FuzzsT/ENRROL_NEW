@@ -37,7 +37,21 @@ def main() -> None:
     )
     need(
         "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt",
-        ["val isSystemUid: Boolean", "uid == 1000"],
+        ["val isSystemUid: Boolean", "serverUid == 1000"],
+    )
+    need(
+        "apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioShizukuUserService.aidl",
+        ["listUsers()", "createProfile", "removeProfile", "startProfile", "stopProfile"],
+    )
+    need(
+        "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt",
+        [
+            '"create-user"',
+            '"android.os.usertype.profile.CLONE"',
+            '"--managed"',
+            '"install-existing"',
+            "validProfileName",
+        ],
     )
     print("test_dual_app_workspace_contract: PASS")
 
