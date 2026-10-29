@@ -30,6 +30,13 @@ def main():
     for token in ['"/system/bin/am", "start"', '"/system/bin/am", "broadcast"']:
         if token not in service_text:
             raise AssertionError(f"typed am route missing {token}")
+    for token in [
+        'runTypedCaptureChecked(',
+        'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get"',
+        'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
+    ]:
+        if token not in service_text:
+            raise AssertionError(f"checked AppOps read missing {token}")
     for forbidden in ["Runtime.getRuntime().exec", "newProcess(", "HiddenApiBypass", "setHiddenApiExemptions"]:
         if forbidden in service_text:
             raise AssertionError(f"unsafe Shizuku service token: {forbidden}")
