@@ -26,7 +26,7 @@ class ShizukuUserServiceClient(context: Context) {
         .daemon(false)
         .processNameSuffix("aio")
         .debuggable(false)
-        .version(1)
+        .version(2)
 
     fun bind(): Boolean = runCatching {
         Shizuku.bindUserService(args, connection)
