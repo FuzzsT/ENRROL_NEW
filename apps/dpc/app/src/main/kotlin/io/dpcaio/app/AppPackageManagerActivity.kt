@@ -156,7 +156,7 @@ class AppPackageManagerActivity : Activity() {
                         versionCode = versionCode(info),
                     )
                 }
-                .sortedWith(compareBy<InstalledApp>(String.CASE_INSENSITIVE_ORDER) { it.label }.thenBy { it.packageName })
+                .sortedWith(compareBy<InstalledApp>({ it.label.lowercase(Locale.ROOT) }, { it.packageName }))
                 .toList()
         }.getOrElse { emptyList() }
         installedSpinner.adapter = ArrayAdapter(
