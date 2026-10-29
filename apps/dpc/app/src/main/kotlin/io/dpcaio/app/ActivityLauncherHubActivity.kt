@@ -1,13 +1,18 @@
 package io.dpcaio.app
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.LruCache
@@ -27,13 +32,17 @@ import java.util.concurrent.Executors
 
 class ActivityLauncherHubActivity : Activity() {
     private enum class AppTab { SYSTEM, USER, FAVORITES, RECENT }
-    private enum class AppSort { NAME, PACKAGE, INSTALL_DATE }
+    private enum class AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }
+    private enum class StateFilter { ALL, ENABLED, DISABLED }
 
     private data class AppEntry(
         val packageName: String,
         val label: String,
         val versionName: String,
         val firstInstallTime: Long,
+        val lastUpdateTime: Long,
+        val targetSdk: Int,
+        val installerPackage: String?,
         val system: Boolean,
         val enabled: Boolean,
     )
@@ -41,11 +50,13 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var search: EditText
     private lateinit var tabBar: LinearLayout
     private lateinit var sortBar: LinearLayout
+    private lateinit var stateBar: LinearLayout
     private lateinit var stats: LinearLayout
     private lateinit var appList: LinearLayout
     private lateinit var status: TextView
     private var currentTab = AppTab.USER
     private var currentSort = AppSort.NAME
+    private var currentStateFilter = StateFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
     private val runtime = AndroidShizukuRuntime()
     private val iconCache = LruCache<String, Drawable>(ICON_CACHE_SIZE)
@@ -84,6 +95,8 @@ class ActivityLauncherHubActivity : Activity() {
         super.onResume()
         if (::appList.isInitialized && installedApps.isNotEmpty()) {
             renderTabs()
+            renderSortBar()
+            renderStateBar()
             renderApps(resetLimit = false)
         }
     }
@@ -108,7 +121,7 @@ class ActivityLauncherHubActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = "Activity Launcher",
-                subtitle = "Automatically discover installed apps, pin favorites, revisit recent packages and inspect their activities through guarded routes.",
+                subtitle = "App-manager style inventory with package metadata, fast filters and guarded shortcuts to activities, permissions, updates and Android app info.",
                 eyebrow = if (shizuku.binderAlive && shizuku.permissionGranted) {
                     "SHIZUKU ${shizuku.identity.uppercase()} • READY"
                 } else {
@@ -140,6 +153,13 @@ class ActivityLauncherHubActivity : Activity() {
                 }
                 addView(sortBar)
                 renderSortBar()
+
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
+                stateBar = LinearLayout(this@ActivityLauncherHubActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+                addView(stateBar)
+                renderStateBar()
             }
         )
 
@@ -233,7 +253,12 @@ class ActivityLauncherHubActivity : Activity() {
             ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
             row.addView(pill)
         }
-        sortBar.addView(row)
+        sortBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
         if (currentTab == AppTab.RECENT) {
             sortBar.addView(
                 ModernUi.body(this, "Recent keeps most-recent-first order.").apply {
@@ -241,6 +266,38 @@ class ActivityLauncherHubActivity : Activity() {
                 }
             )
         }
+    }
+
+    private fun renderStateBar() {
+        if (!::stateBar.isInitialized) return
+        stateBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        StateFilter.entries.forEach { filter ->
+            val tone = when (filter) {
+                StateFilter.ALL -> ModernUi.Tone.NEUTRAL
+                StateFilter.ENABLED -> ModernUi.Tone.SUCCESS
+                StateFilter.DISABLED -> ModernUi.Tone.WARNING
+            }
+            val pill = ModernUi.pill(this, "STATE ${filter.name}", filter == currentStateFilter, tone) {
+                currentStateFilter = filter
+                renderStateBar()
+                renderApps()
+            }
+            pill.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
+            row.addView(pill)
+        }
+        stateBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
     }
 
     private fun discoverInstalledApps(resetLimit: Boolean = true) {
@@ -267,6 +324,7 @@ class ActivityLauncherHubActivity : Activity() {
                 status.text = "Installed app inventory loaded: ${mapped.size} packages"
                 renderTabs()
                 renderSortBar()
+                renderStateBar()
                 renderApps(resetLimit = resetLimit)
             }
         }.start()
@@ -285,9 +343,21 @@ class ActivityLauncherHubActivity : Activity() {
             label = label,
             versionName = packageInfo.versionName ?: "unknown",
             firstInstallTime = packageInfo.firstInstallTime,
+            lastUpdateTime = packageInfo.lastUpdateTime,
+            targetSdk = info.targetSdkVersion,
+            installerPackage = installerPackage(info.packageName),
             system = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = info.enabled,
         )
+    }.getOrNull()
+
+    @Suppress("DEPRECATION")
+    private fun installerPackage(packageName: String): String? = runCatching {
+        if (Build.VERSION.SDK_INT >= 30) {
+            packageManager.getInstallSourceInfo(packageName).installingPackageName
+        } else {
+            packageManager.getInstallerPackageName(packageName)
+        }
     }.getOrNull()
 
     private fun loadAppIcon(packageName: String): Drawable? {
@@ -350,7 +420,12 @@ class ActivityLauncherHubActivity : Activity() {
             AppTab.FAVORITES -> installedApps.filter { it.packageName in favorites }
             AppTab.RECENT -> recents.mapNotNull { pkg -> installedApps.find { it.packageName == pkg } }
         }
-        val filtered = base.filter { app ->
+        val stateFiltered = when (currentStateFilter) {
+            StateFilter.ALL -> base
+            StateFilter.ENABLED -> base.filter { it.enabled }
+            StateFilter.DISABLED -> base.filter { !it.enabled }
+        }
+        val filtered = stateFiltered.filter { app ->
             query.isBlank() || app.label.lowercase().contains(query) || app.packageName.lowercase().contains(query)
         }
         if (currentTab == AppTab.RECENT) return filtered
@@ -358,12 +433,13 @@ class ActivityLauncherHubActivity : Activity() {
             AppSort.NAME -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
             AppSort.PACKAGE -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.packageName })
             AppSort.INSTALL_DATE -> filtered.sortedByDescending { it.firstInstallTime }
+            AppSort.UPDATE_DATE -> filtered.sortedByDescending { it.lastUpdateTime }
         }
     }
 
-    private fun formatInstallDate(firstInstallTime: Long): String {
-        if (firstInstallTime <= 0L) return "unknown"
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(firstInstallTime))
+    private fun formatInstallDate(time: Long): String {
+        if (time <= 0L) return "unknown"
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(time))
     }
 
     private fun renderApps(resetLimit: Boolean = true) {
@@ -379,7 +455,7 @@ class ActivityLauncherHubActivity : Activity() {
                 ModernUi.compactCard(this).apply {
                     addView(ModernUi.title(this@ActivityLauncherHubActivity, "No applications"))
                     addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 4))
-                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match this tab and search query."))
+                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state filter and search query."))
                 }
             )
             return
@@ -429,6 +505,7 @@ class ActivityLauncherHubActivity : Activity() {
         }
         add(installedApps.size.toString(), "TOTAL", ModernUi.Tone.NEUTRAL)
         add(shown.size.toString(), "VISIBLE", ModernUi.Tone.SUCCESS)
+        add(installedApps.count { !it.enabled }.toString(), "DISABLED", ModernUi.Tone.WARNING)
         add(favoritePackages.count { it in installedPackages }.toString(), "FAVORITES", ModernUi.Tone.NEUTRAL)
         add(recentPackages.count { it in installedPackages }.toString(), "RECENT", ModernUi.Tone.NEUTRAL)
         stats.addView(
@@ -468,7 +545,19 @@ class ActivityLauncherHubActivity : Activity() {
                         addView(
                             ModernUi.body(
                                 this@ActivityLauncherHubActivity,
-                                "v${app.versionName} • Installed ${formatInstallDate(app.firstInstallTime)}",
+                                "v${app.versionName} • SDK ${app.targetSdk}",
+                            )
+                        )
+                        addView(
+                            ModernUi.body(
+                                this@ActivityLauncherHubActivity,
+                                "Installed ${formatInstallDate(app.firstInstallTime)} • Updated ${formatInstallDate(app.lastUpdateTime)}",
+                            )
+                        )
+                        addView(
+                            ModernUi.body(
+                                this@ActivityLauncherHubActivity,
+                                "Installer: ${app.installerPackage ?: "unknown / preloaded"}",
                             )
                         )
                     },
@@ -482,6 +571,7 @@ class ActivityLauncherHubActivity : Activity() {
             }
             badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, if (app.system) "SYSTEM" else "USER", tone))
             badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, if (app.enabled) "ENABLED" else "DISABLED", if (app.enabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING))
+            badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, "TARGET ${app.targetSdk}", ModernUi.Tone.NEUTRAL))
             if (favorite) badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, "FAVORITE", ModernUi.Tone.NEUTRAL))
             addView(
                 HorizontalScrollView(this@ActivityLauncherHubActivity).apply {
@@ -499,23 +589,76 @@ class ActivityLauncherHubActivity : Activity() {
             addView(
                 ModernUi.actionRow(
                     this@ActivityLauncherHubActivity,
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Open app info") { openAppInfo(app) },
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Permissions") { openPermissions(app) },
+                )
+            )
+            addView(
+                ModernUi.actionRow(
+                    this@ActivityLauncherHubActivity,
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Update app") { openUpdater(app) },
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Copy package") { copyPackage(app) },
+                )
+            )
+            addView(
+                ModernUi.actionRow(
+                    this@ActivityLauncherHubActivity,
                     ModernUi.action(this@ActivityLauncherHubActivity, if (favorite) "Remove favorite" else "Add favorite") {
                         toggleFavorite(app.packageName)
                     },
-                    ModernUi.action(this@ActivityLauncherHubActivity, "Open app") {
-                        val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
-                        if (launchIntent != null) {
-                            startActivity(launchIntent)
-                            recordRecent(app.packageName)
-                            status.text = "Opened ${app.packageName}"
-                            renderTabs()
-                        } else {
-                            status.text = "No launcher intent for ${app.packageName}"
-                        }
-                    },
+                    ModernUi.action(this@ActivityLauncherHubActivity, "Open app") { openApp(app) },
                 )
             )
         }
+    }
+
+    private fun openApp(app: AppEntry) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(app.packageName)
+        if (launchIntent != null) {
+            startActivity(launchIntent)
+            recordRecent(app.packageName)
+            status.text = "Opened ${app.packageName}"
+            renderTabs()
+        } else {
+            status.text = "No launcher intent for ${app.packageName}"
+        }
+    }
+
+    private fun openAppInfo(app: AppEntry) {
+        recordRecent(app.packageName)
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:${app.packageName}"))
+        )
+        status.text = "Opened Android app info for ${app.packageName}"
+        renderTabs()
+    }
+
+    private fun openPermissions(app: AppEntry) {
+        recordRecent(app.packageName)
+        startActivity(
+            Intent(this, PermissionManagerActivity::class.java)
+                .putExtra("package", app.packageName)
+        )
+        status.text = "Opened Permission Manager for ${app.packageName}"
+        renderTabs()
+    }
+
+    private fun openUpdater(app: AppEntry) {
+        recordRecent(app.packageName)
+        startActivity(
+            Intent(this, AppPackageManagerActivity::class.java)
+                .putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_UPDATER)
+                .putExtra("target_package", app.packageName)
+        )
+        status.text = "Opened updater for ${app.packageName}"
+        renderTabs()
+    }
+
+    private fun copyPackage(app: AppEntry) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("package", app.packageName))
+        status.text = "Copied package: ${app.packageName}"
     }
 
     private fun toggleFavorite(packageName: String) {
