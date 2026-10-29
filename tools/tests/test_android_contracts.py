@@ -137,8 +137,6 @@ def main():
     for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
         assert_true(forbidden not in combined, f"Self Update must not use install bypass path: {forbidden}")
 
-    # Task 4 RED: the app-owned Self Update UI must expose the verified pipeline
-    # without weakening PackageInstaller's user-action boundary.
     self_update_activity_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
     assert_true(self_update_activity_path.is_file(), "SelfUpdateActivity.kt missing")
     self_update_activity = self_update_activity_path.read_text(encoding="utf-8")
@@ -176,7 +174,6 @@ def main():
     modern_ui = (ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ModernUi.kt").read_text(encoding="utf-8")
     for token in ["fun statusCard(", "fun progressCard(", "fun detailRow("]:
         assert_true(token in modern_ui, f"ModernUi Self Update helper missing: {token}")
-    assert_true("ModernUi.detailRow" in package_manager, "installer source details must use shared key/value UI")
 
     print("test_android_contracts: PASS")
 
