@@ -20,6 +20,29 @@ for needle in ['ACTION_OPEN_DOCUMENT','AndroidApkPlusStager','AndroidPackageInst
 for forbidden in ['Runtime.getRuntime().exec','ProcessBuilder','pm install','su -c']:
     assert forbidden not in a, forbidden
 
+models=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallQueueModels.kt'
+store=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallQueueStore.kt'
+coordinator=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallQueueCoordinator.kt'
+assert models.exists(), 'InstallQueueModels missing'
+assert store.exists(), 'InstallQueueStore missing'
+assert coordinator.exists(), 'InstallQueueCoordinator missing'
+m=models.read_text('utf-8')
+s=store.read_text('utf-8')
+c=coordinator.read_text('utf-8')
+for needle in ['QUEUED','PREFLIGHT','WAITING_USER','INSTALLING','SUCCESS','FAILED','SKIPPED','InstallHistoryEntry']:
+    assert needle in m, f'InstallQueueModels missing {needle}'
+for needle in ['loadQueue','replaceQueue','updateItem','loadHistory','appendHistory','clearCompleted','100']:
+    assert needle in s, f'InstallQueueStore missing {needle}'
+for needle in ['enqueue','startOrResume','onPackageInstallerResult','retryFailed','clearCompleted','recoverInterrupted']:
+    assert needle in c, f'InstallQueueCoordinator missing {needle}'
+
+receiver=(ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppInstallStatusReceiver.kt').read_text('utf-8')
+for needle in ['QUEUE_ITEM_ID','SESSION_ID','STATUS_PENDING_USER_ACTION']:
+    assert needle in receiver, f'AppInstallStatusReceiver missing {needle}'
+
+for needle in ['EXTRA_ALLOW_MULTIPLE','clipData','Add to queue','Add multiple','Start / Resume queue','Retry failed','Clear completed','History']:
+    assert needle in a, f'AppPackageManagerActivity missing {needle}'
+
 manifest=(ROOT/'apps/dpc/app/src/main/AndroidManifest.xml').read_text('utf-8')
 for needle in ['.AppPackageManagerActivity','.AppInstallStatusReceiver']:
     assert needle in manifest, needle
