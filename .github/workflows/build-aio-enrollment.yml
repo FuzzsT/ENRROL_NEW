@@ -540,6 +540,22 @@ jobs:
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
           fi
 
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            current_bundle="DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip"
+            current_bundle_hash="${current_bundle}.sha256"
+            while IFS= read -r asset; do
+              [[ -n "$asset" ]] || continue
+              case "$asset" in
+                DPC-AIO-*-QR-RELEASE-BUNDLE.zip|DPC-AIO-*-QR-RELEASE-BUNDLE.zip.sha256)
+                  if [[ "$asset" != "$current_bundle" && "$asset" != "$current_bundle_hash" ]]; then
+                    echo "Removing stale rolling release asset: $asset"
+                    gh release delete-asset "$RELEASE_TAG" "$asset" --yes --repo "$GITHUB_REPOSITORY"
+                  fi
+                  ;;
+              esac
+            done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          fi
+
           gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Verify published APK byte identity
