@@ -19,6 +19,16 @@ for needle in [
     'formatInstallDate(app.lastUpdateTime)',
     'packageManager.getInstallSourceInfo',
     'currentStateFilter',
+    'selectedPackages',
+    'renderSelectionBar()',
+    'Select visible',
+    'Clear selection',
+    'Copy selected packages',
+    'Favorite selected',
+    'toggleSelected(',
+    'SELECTED',
+    'AppOps',
+    'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
 ]:
     assert needle in hub, f'ActivityLauncherHubActivity.kt missing {needle}'
 
