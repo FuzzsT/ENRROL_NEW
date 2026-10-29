@@ -18,6 +18,12 @@ required = [
     'before=',
     'after=',
     'verified=',
+    'EXTRA_TARGET_PACKAGE',
+    'Discovered AppOps',
+    'Filter AppOps',
+    'Tap to edit',
+    'renderDiscoveredOps()',
+    'parseAppOps(',
 ]
 
 missing = [needle for needle in required if needle not in activity]
