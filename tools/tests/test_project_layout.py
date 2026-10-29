@@ -23,6 +23,7 @@ EXPECTED = {
     ':installer-core': 'apps/dpc/modules/installer/core',
     ':installer-android': 'apps/dpc/modules/installer/android',
     ':self-update-core': 'apps/dpc/modules/self-update/core',
+    ':self-update-android': 'apps/dpc/modules/self-update/android',
     ':delegation-core': 'apps/dpc/modules/delegation/core',
     ':dhizuku-compat': 'apps/dpc/integrations/dhizuku',
     ':shizuku-adapter': 'apps/dpc/integrations/shizuku',
