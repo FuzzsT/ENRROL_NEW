@@ -12,6 +12,8 @@ interface IAioShizukuUserService {
     int setPackageEnabled(String packageName, boolean enabled, int userId);
     int setComponentEnabledState(String packageName, String className, String state, int userId);
     int installExistingPackage(String packageName, int userId);
+    String listPackagesForUser(int userId);
+    int uninstallPackageForUser(String packageName, int userId);
     String listUsers();
     String createProfile(String name, boolean cloneProfile);
     int removeProfile(int userId);
