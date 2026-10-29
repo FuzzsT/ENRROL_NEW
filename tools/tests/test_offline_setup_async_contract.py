@@ -139,8 +139,8 @@ assert 'fun abandon(plan: OfflineInstallSession)' in installer_text, \
 assert 'installer.abandonSession' in installer_text, \
     'Offline install-plan cleanup must use PackageInstaller.abandonSession'
 
-assert 'runCatching { EnrollmentExecutionRouter(this).execute(intent) }' in policy_activity, \
-    'Policy compliance worker must catch enrollment execution failures'
+assert 'runCatching { EnrollmentExecutionRouter(applicationContext).execute(intent) }' in policy_activity, \
+    'Policy compliance worker must catch enrollment execution failures without retaining the Activity context'
 assert 'OfflineDeploymentStore(applicationContext)' in policy_activity, \
     'Policy compliance persistence recovery must inspect the device-protected offline store'
 assert 'hasPendingPersistence()' in policy_activity, \
@@ -151,7 +151,7 @@ assert 'OfflineInstallStatusReceiver.ACTION_PERSISTENCE_RETRY' in policy_activit
     'Policy compliance pending checkpoint failure must schedule offline persistence recovery'
 assert 'EnrollmentExecutionOutcome.Retryable' in policy_activity, \
     'Policy compliance persistence failure must render a retryable enrollment result'
-router_index = policy_activity.index('EnrollmentExecutionRouter(this).execute(intent)')
+router_index = policy_activity.index('EnrollmentExecutionRouter(applicationContext).execute(intent)')
 pending_index = policy_activity.index('hasPendingPersistence()')
 retry_index = policy_activity.index('retryPendingPersistence()')
 assert pending_index < retry_index < router_index, \
