@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".DpcAioApplication"
@@ -64,6 +65,7 @@
         <activity android:name=".NetworkControlActivity" android:exported="false" />
         <activity android:name=".ScenarioLabActivity" android:exported="false" />
         <activity android:name=".NfcLabActivity" android:exported="false" />
+        <activity android:name=".AppPackageManagerActivity" android:exported="false" />
 
         <activity
             android:name=".ProvisioningModeActivity"
@@ -100,6 +102,10 @@
         </receiver>
         <activity android:name=".SamsungSettingsEditorActivity" android:exported="false" />
         <activity android:name=".KnoxZtManagerActivity" android:exported="false" />
+
+        <receiver
+            android:name=".AppInstallStatusReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".OfflineInstallStatusReceiver"

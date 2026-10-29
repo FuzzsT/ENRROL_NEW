@@ -99,8 +99,8 @@ object DpcModuleRegistry {
         DpcModuleDescriptor(":activity-launcher", "Activity launcher core", DpcModuleGroup.CORE, ActivityAccessPlanner::class.java, ActivityExplorerActivity::class.java),
         DpcModuleDescriptor(":activity-android", "Activity launcher Android", DpcModuleGroup.ANDROID, AndroidActivityInventory::class.java, ActivityExplorerActivity::class.java),
 
-        DpcModuleDescriptor(":installer-core", "Installer core", DpcModuleGroup.CORE, InstallPlanner::class.java),
-        DpcModuleDescriptor(":installer-android", "Installer Android", DpcModuleGroup.ANDROID, AndroidPackageInstallerAdapter::class.java),
+        DpcModuleDescriptor(":installer-core", "Installer core", DpcModuleGroup.CORE, InstallPlanner::class.java, AppPackageManagerActivity::class.java),
+        DpcModuleDescriptor(":installer-android", "Installer Android", DpcModuleGroup.ANDROID, AndroidPackageInstallerAdapter::class.java, AppPackageManagerActivity::class.java),
 
         DpcModuleDescriptor(":delegation-core", "Delegation broker", DpcModuleGroup.CORE, DelegationAuthorizer::class.java),
         DpcModuleDescriptor(":dhizuku-compat", "Dhizuku compatibility", DpcModuleGroup.INTEGRATION, DhizukuCompatRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),

@@ -8,6 +8,7 @@ import android.os.Build
 import io.dpcaio.installer.PackageSource
 import io.dpcaio.policy.PolicyResult
 import io.dpcaio.policy.PolicyStatus
+import java.io.File
 import java.io.InputStream
 
 
@@ -73,7 +74,6 @@ class AndroidPackageInstallerAdapter(context: Context) {
         }
     }
 
-
     fun stageSingleApk(sessionId: Int, input: InputStream, lengthBytes: Long): PolicyResult<Long> {
         return try {
             installer.openSession(sessionId).use { session ->
@@ -94,6 +94,44 @@ class AndroidPackageInstallerAdapter(context: Context) {
             PolicyResult.failure(
                 status = PolicyStatus.FAILED,
                 message = e.message ?: "PackageInstaller staging failed",
+                errorType = e.javaClass.name
+            )
+        }
+    }
+
+    fun stageApkSet(sessionId: Int, files: List<File>): PolicyResult<Long> {
+        if (files.isEmpty()) {
+            return PolicyResult.failure(PolicyStatus.FAILED, "APK set is empty")
+        }
+        return try {
+            installer.openSession(sessionId).use { session ->
+                var total = 0L
+                val usedNames = linkedSetOf<String>()
+                files.forEachIndexed { index, file ->
+                    require(file.isFile) { "APK file missing: ${file.name}" }
+                    val preferred = file.name.takeIf { it.endsWith(".apk", ignoreCase = true) }
+                        ?: if (index == 0) "base.apk" else "split-$index.apk"
+                    val sessionName = if (preferred !in usedNames) preferred else "split-$index.apk"
+                    usedNames += sessionName
+                    file.inputStream().use { input ->
+                        session.openWrite(sessionName, 0, file.length()).use { output ->
+                            total += input.copyTo(output)
+                            session.fsync(output)
+                        }
+                    }
+                }
+                PolicyResult.success(total)
+            }
+        } catch (e: SecurityException) {
+            PolicyResult.failure(
+                status = PolicyStatus.SECURITY_EXCEPTION,
+                message = e.message ?: "PackageInstaller split staging denied",
+                errorType = e.javaClass.name
+            )
+        } catch (e: Exception) {
+            PolicyResult.failure(
+                status = PolicyStatus.FAILED,
+                message = e.message ?: "PackageInstaller split staging failed",
                 errorType = e.javaClass.name
             )
         }
