@@ -69,11 +69,15 @@ class AioDashboardActivity : Activity() {
         root.addView(ModernUi.section(this, label))
     }
 
+    private fun add(root: LinearLayout, label: String, target: () -> Class<out Activity>) {
+        add(root, label, target) { }
+    }
+
     private fun add(
         root: LinearLayout,
         label: String,
         target: () -> Class<out Activity>,
-        configure: (Intent) -> Unit = {},
+        configure: (Intent) -> Unit,
     ) {
         root.addView(ModernUi.compactCard(this).apply {
             addView(ModernUi.action(this@AioDashboardActivity, label) {
