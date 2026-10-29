@@ -65,7 +65,11 @@ explicit_runtime_refs=workflow.count('dist/android-runtime-smoke.json')
 legacy_hashing='find dist -maxdepth 1 -type f ! -name SHA256SUMS.txt' in workflow
 bundle_hashing=('build_qr_release_bundle.py' in workflow and 'android-runtime-smoke.json' in bundle_builder and 'SHA256SUMS.txt' in bundle_builder)
 wildcard_release_upload=('gh release upload "$RELEASE_TAG" dist/*' in workflow or 'gh release upload "$tag" dist/*' in workflow)
-if explicit_runtime_refs < 2 or not (legacy_hashing or bundle_hashing) or not wildcard_release_upload:
+upload_dist=(
+    'uses: actions/upload-artifact@' in workflow
+    and re.search(r'^\s*path:\s*dist/?\s*$', workflow, re.MULTILINE) is not None
+)
+if explicit_runtime_refs < 1 or not (legacy_hashing or bundle_hashing) or not wildcard_release_upload or not upload_dist:
     errors.append('runtime smoke evidence must be generated, integrity-hashed, uploaded as artifact, and published with release assets')
 
 if errors:
