@@ -33,6 +33,9 @@ required = [
     'return "default"',
     'rollbackExit',
     'rollbackVerified',
+    'targetUserIdOrNull()',
+    'takeIf { it >= 0 }',
+    'User ID must be a non-negative integer',
 ]
 
 missing = [needle for needle in required if needle not in activity]
