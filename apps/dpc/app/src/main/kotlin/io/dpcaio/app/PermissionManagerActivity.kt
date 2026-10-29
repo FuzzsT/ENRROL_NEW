@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class PermissionManagerActivity : Activity() {
     companion object {
+        const val EXTRA_TARGET_PACKAGE = "package"
         @Volatile
         private var lastAppliedBatchChanges: List<PermissionBatchChange> = emptyList()
         private val permissionMutationInProgress = AtomicBoolean(false)
@@ -63,6 +64,7 @@ class PermissionManagerActivity : Activity() {
         body.addView(ModernUi.section(this, "Target"))
         val targetCard = ModernUi.card(this, emphasized = true)
         targetPackage = ModernUi.field(this, "Target package, e.g. com.example.app")
+        targetPackage.setText(intent.getStringExtra(EXTRA_TARGET_PACKAGE).orEmpty())
         targetUser = ModernUi.field(this, "Target user ID", InputType.TYPE_CLASS_NUMBER).apply {
             setText(AndroidUserId.fromUid(Process.myUid()).toString())
         }
