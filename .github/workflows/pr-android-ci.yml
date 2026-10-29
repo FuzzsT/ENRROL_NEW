@@ -158,6 +158,7 @@ jobs:
           python3 tools/tests/test_recovery_job_lifecycle_contract.py
           python3 tools/tests/test_knoxzt_startup_coalescing_contract.py
           python3 tools/tests/test_knoxzt_manager_operation_gate_contract.py
+          python3 tools/tests/test_knoxzt_activity_support_context_contract.py
           python3 tools/tests/test_enrollment_coordinator_serialization_contract.py
           python3 tools/tests/test_samsung_settings_operation_gate_contract.py
           python3 tools/tests/test_samsung_settings_cleanup_contract.py
