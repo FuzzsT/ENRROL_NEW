@@ -24,6 +24,11 @@ required = [
     'Tap to edit',
     'renderDiscoveredOps()',
     'parseAppOps(',
+    'ModeFilter { ALL, ALLOW, IGNORE, DENY, DEFAULT, FOREGROUND }',
+    'currentModeFilter',
+    'renderModeFilters()',
+    'AUTO_DISCOVERY_DELAY_MS',
+    'postDelayed',
 ]
 
 missing = [needle for needle in required if needle not in activity]
