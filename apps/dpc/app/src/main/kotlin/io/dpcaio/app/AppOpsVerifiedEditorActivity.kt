@@ -156,8 +156,8 @@ class AppOpsVerifiedEditorActivity : Activity() {
         }
     }
 
-    private fun targetUserId(): Int = userIdField.text.toString().trim().toIntOrNull()
-        ?: AndroidUserId.fromUid(Process.myUid())
+    private fun targetUserIdOrNull(): Int? = userIdField.text.toString().trim().toIntOrNull()
+        ?.takeIf { it >= 0 }
 
     private fun renderModeFilters() {
         if (!::modeFilterBar.isInitialized) return
@@ -193,9 +193,13 @@ class AppOpsVerifiedEditorActivity : Activity() {
 
     private fun readCurrent() {
         val pkg = packageNameField.text.toString().trim()
-        val userId = targetUserId()
+        val userId = targetUserIdOrNull()
         if (pkg.isBlank()) {
             output.text = "Package name required"
+            return
+        }
+        if (userId == null) {
+            output.text = "User ID must be a non-negative integer"
             return
         }
         val generation = ++discoveryGeneration
@@ -274,9 +278,13 @@ class AppOpsVerifiedEditorActivity : Activity() {
         val pkg = packageNameField.text.toString().trim()
         val op = opField.text.toString().trim()
         val mode = modeSpinner.selectedItem?.toString().orEmpty()
-        val userId = targetUserId()
+        val userId = targetUserIdOrNull()
         if (pkg.isBlank() || op.isBlank()) {
             output.text = "Package name and AppOp name are required"
+            return
+        }
+        if (userId == null) {
+            output.text = "User ID must be a non-negative integer"
             return
         }
         if (mode !in allowedModes) {
