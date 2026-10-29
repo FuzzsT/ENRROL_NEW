@@ -44,6 +44,7 @@ import io.dpcaio.samsung.settings.SettingNamespace
 import io.dpcaio.samsung.settings.android.AndroidSamsungSettingGateway
 import io.dpcaio.scenario.ScenarioEventType
 import io.dpcaio.scenario.android.AndroidScenarioBridge
+import io.dpcaio.selfupdate.SelfUpdatePlanner
 import io.dpcaio.shizuku.AndroidShizukuRuntime
 
 enum class DpcModuleGroup(val label: String) {
@@ -89,6 +90,7 @@ object DpcModuleRegistry {
         DpcModuleDescriptor(":activity-android", "Activity launcher Android", DpcModuleGroup.ANDROID, AndroidActivityInventory::class.java, ActivityExplorerActivity::class.java),
         DpcModuleDescriptor(":installer-core", "Installer core", DpcModuleGroup.CORE, InstallPlanner::class.java, AppPackageManagerActivity::class.java),
         DpcModuleDescriptor(":installer-android", "Installer Android", DpcModuleGroup.ANDROID, AndroidPackageInstallerAdapter::class.java, AppPackageManagerActivity::class.java),
+        DpcModuleDescriptor(":self-update-core", "Self update core", DpcModuleGroup.CORE, SelfUpdatePlanner::class.java, tags = setOf("update")),
         DpcModuleDescriptor(":delegation-core", "Delegation broker", DpcModuleGroup.CORE, DelegationAuthorizer::class.java),
         DpcModuleDescriptor(":dhizuku-compat", "Dhizuku compatibility", DpcModuleGroup.INTEGRATION, DhizukuCompatRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
         DpcModuleDescriptor(":shizuku-adapter", "Shizuku adapter", DpcModuleGroup.INTEGRATION, AndroidShizukuRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
