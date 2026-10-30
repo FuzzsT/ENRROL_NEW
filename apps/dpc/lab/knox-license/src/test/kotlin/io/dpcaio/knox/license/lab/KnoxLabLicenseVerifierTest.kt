@@ -34,7 +34,7 @@ fun main() {
     val ok = verifier.verify(token, expectedAudience = "io.dpcaio.app", buildTrack = "lab", nowEpochSeconds = now + 10)
     check(ok.status == KnoxLabLicenseStatus.SIMULATED_ACTIVE)
     check(ok.claims?.licenseType == "KLM_TEST_ONLY")
-    check("knox.mock.active" in (ok.claims?.scopes ?: emptySet()))
+    check("knox.mock.active" in ok.claims.scopes)
 
     val prod = verifier.verify(token, expectedAudience = "io.dpcaio.app", buildTrack = "prd", nowEpochSeconds = now + 10)
     check(prod.status == KnoxLabLicenseStatus.REJECTED_BUILD_TRACK)

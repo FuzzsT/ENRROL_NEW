@@ -8,15 +8,20 @@ def main():
     flavor_provider=ROOT/'apps/dpc/app/src/lab/java/io/dpcaio/app/KnoxFlavorLicenseProvider.kt'
     token=ROOT/'apps/dpc/app/src/lab/assets/knox_lab/dpc-aio-lab-klm.token'
     lab_module=ROOT/'apps/dpc/lab/knox-license/src/main/kotlin/io/dpcaio/knox/license/lab/KnoxLabLicense.kt'
+    lab_test=ROOT/'apps/dpc/lab/knox-license/src/test/kotlin/io/dpcaio/knox/license/lab/KnoxLabLicenseVerifierTest.kt'
     main_tree=ROOT/'apps/dpc/app/src/main'
     assert provider.exists() and flavor_provider.exists(), 'lab providers missing'
     assert token.exists(), 'lab token asset missing'
     assert lab_module.exists(), 'lab verifier module missing'
+    assert lab_test.exists(), 'lab verifier test missing'
     assert 'implementation(project(":knox-license-core"))' in gradle
     assert 'implementation(project(":knox-license-lab"))' in gradle
     txt=provider.read_text()
     for required in ['buildTrack = "lab"', 'SIMULATED_ACTIVE', 'KnoxLabLicenseVerifier']:
         assert required in txt, f'lab provider missing {required}'
+    test_txt=lab_test.read_text()
+    assert 'check("knox.mock.active" in ok.claims.scopes)' in test_txt, 'lab verifier test must use smart-cast non-null claims after the preceding check'
+    assert '(ok.claims?.scopes ?: emptySet())' not in test_txt, 'lab verifier test must not keep the unnecessary nullable fallback'
     for p in main_tree.rglob('*'):
         if p.is_file() and p.suffix in {'.kt','.java','.xml','.kts'}:
             t=p.read_text(errors='ignore')
