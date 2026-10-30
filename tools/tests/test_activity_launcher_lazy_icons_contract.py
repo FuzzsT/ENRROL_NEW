@@ -21,7 +21,7 @@ assert "ICON_CACHE_SIZE" in launcher
 
 # Keep the legacy Android <=13 memory-pressure behavior without referencing the API-35-deprecated symbol.
 assert "override fun onTrimMemory(level: Int)" in launcher, "launcher must continue to trim its icon cache under memory pressure"
-assert "TRIM_MEMORY_RUNNING_LOW" not in launcher, "deprecated TRIM_MEMORY_RUNNING_LOW must not be referenced"
+assert "if (level >= TRIM_MEMORY_RUNNING_LOW)" not in launcher, "deprecated TRIM_MEMORY_RUNNING_LOW comparison must not be referenced"
 assert "private const val TRIM_MEMORY_RUNNING_LOW_COMPAT = 10" in launcher, "legacy running-low threshold must be preserved"
 assert "if (level >= TRIM_MEMORY_RUNNING_LOW_COMPAT) iconCache.evictAll()" in launcher, "icon cache eviction must preserve the legacy threshold"
 
