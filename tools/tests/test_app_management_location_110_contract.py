@@ -22,4 +22,6 @@ for needle in [
     'suppressSearchRender = false',
 ]:
     assert needle in ht, f'ActivityLauncher reset single-render contract missing {needle}'
+assert 'Installer: ${app.installerPackage ?: "unknown"}' in ht, 'ActivityLauncher must use neutral installer fallback label'
+assert 'unknown / preloaded' not in ht, 'ActivityLauncher must not infer preloaded state from missing installer source'
 print('test_app_management_location_110_contract: PASS')
