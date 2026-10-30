@@ -169,9 +169,13 @@ def main():
         "val silentAvailable = autoSilentEnabled && silentInstallLikelyAvailable()",
         "autoSilentAfterDownload = silentAvailable",
         "operations.handoffDownloadToInstall()",
-        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT, installSlotAlreadyHeld = true)",
+        "SelfUpdateInstallPolicy.AUTO_SILENT",
+        "installSlotAlreadyHeld = true",
     ]:
         assert token in download_body, f"Self Update atomic auto-silent handoff missing: {token}"
+    assert download_body.rfind("operations.handoffDownloadToInstall()") < download_body.rfind("installSlotAlreadyHeld = true"), (
+        "Self Update must acquire the INSTALL slot atomically before staging auto-silent install"
+    )
 
     submit_body = activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
     assert "installSlotAlreadyHeld: Boolean = false" in submit_body, (
