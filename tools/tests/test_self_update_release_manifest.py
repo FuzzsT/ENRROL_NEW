@@ -134,6 +134,18 @@ def main():
     assert "operations.tryStartCheck()" in check_body, "Self Update check must use the shared operation gate"
     assert "operations.finishCheck()" in check_body, "Self Update check gate must be released in all outcomes"
 
+    download_body = activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
+    for token in [
+        "var autoSilentAfterDownload = false",
+        "autoSilentAfterDownload = true",
+        "operations.finishDownload()",
+        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)",
+    ]:
+        assert token in download_body, f"Self Update auto-silent handoff missing: {token}"
+    assert download_body.rfind("operations.finishDownload()") < download_body.rfind(
+        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)"
+    ), "auto-silent install must start only after the DOWNLOAD operation slot is released"
+
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
 
