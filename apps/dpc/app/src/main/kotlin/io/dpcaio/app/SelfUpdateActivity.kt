@@ -279,10 +279,14 @@ class SelfUpdateActivity : Activity() {
     }
 
     private fun checkNow() {
+        if (!operations.tryStartCheck()) {
+            setState(SelfUpdateState.ERROR, "Another Self Update operation is already in progress")
+            return
+        }
         val channel = selectedChannel
         setState(SelfUpdateState.CHECKING, "Checking ${channel.name.lowercase(Locale.ROOT)} channel…")
         Thread {
-            runCatching {
+            try {
                 val manifest = client.fetchManifest(manifestUrl(channel))
                 val installed = installedVersion().second
                 val decision = planner.evaluate(packageName, installed, channel, manifest)
@@ -292,8 +296,14 @@ class SelfUpdateActivity : Activity() {
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
                     setState(decision.state, decision.reason.replace('_', ' '))
                 }
-            }.onFailure { error ->
-                runOnUiThread { setState(SelfUpdateState.ERROR, "Update check failed: ${error.message ?: error.javaClass.simpleName}") }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    setState(SelfUpdateState.ERROR, "Update check failed: ${error.message ?: error.javaClass.simpleName}")
+                }
+            } finally {
+                operations.finishCheck()
+                notifyStateChanged()
+                runOnUiThread { render() }
             }
         }.start()
     }
