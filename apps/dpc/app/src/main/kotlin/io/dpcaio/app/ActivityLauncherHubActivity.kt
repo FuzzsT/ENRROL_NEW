@@ -168,7 +168,7 @@ class ActivityLauncherHubActivity : Activity() {
         body.addView(ModernUi.section(this, "Applications"))
         body.addView(
             ModernUi.compactCard(this).apply {
-                search = ModernUi.field(this@ActivityLauncherHubActivity, "Search app name, package, UID or installer")
+                search = ModernUi.field(this@ActivityLauncherHubActivity, "Search app name, package, version, UID or installer")
                 search.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -707,6 +707,7 @@ class ActivityLauncherHubActivity : Activity() {
             query.isBlank() ||
                 app.label.lowercase().contains(query) ||
                 app.packageName.lowercase().contains(query) ||
+                app.versionName.lowercase().contains(query) ||
                 app.uid.toString().contains(query) ||
                 app.installerPackage?.lowercase()?.contains(query) == true
         }
