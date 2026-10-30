@@ -41,10 +41,17 @@ object UiSurfaceController : Application.ActivityLifecycleCallbacks {
 
     private fun configureSystemBars(activity: Activity) {
         val window = activity.window
-        // Keep the bars visually quiet while content receives explicit safe-area insets.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            configureLegacySystemBarColors(activity)
+        }
+        window.isNavigationBarContrastEnforced = true
+    }
+
+    @Suppress("DEPRECATION")
+    private fun configureLegacySystemBarColors(activity: Activity) {
+        val window = activity.window
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        window.isNavigationBarContrastEnforced = true
     }
 
     private fun installSafeAreaInsets(content: View) {
