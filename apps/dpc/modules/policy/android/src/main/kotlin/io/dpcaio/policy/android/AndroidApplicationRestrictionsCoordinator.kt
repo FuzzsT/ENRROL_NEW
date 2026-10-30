@@ -50,6 +50,6 @@ class AndroidApplicationRestrictionsCoordinator(
         }
     }
 
-    private fun canonicalMap(bundle: Bundle): Map<String, String> = bundle.keySet().sorted().associateWith { key -> bundle.get(key)?.toString().orEmpty() }
+    private fun canonicalMap(bundle: Bundle): Map<String, String> = bundle.keySet().sorted().associateWith { key -> bundle.getString(key).orEmpty() }
     private fun canonical(map: Map<String, String>): String = map.toSortedMap().entries.joinToString("\u001f") { (key, value) -> "$key\u001e$value" }
 }
