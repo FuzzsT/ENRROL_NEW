@@ -86,6 +86,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var renderGeneration = 0L
     private var inventoryGeneration = 0L
     private var visibleAppLimit = INITIAL_RENDER_LIMIT
+    private var suppressSearchRender = false
 
     private val preferences: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -170,7 +171,9 @@ class ActivityLauncherHubActivity : Activity() {
                 search = ModernUi.field(this@ActivityLauncherHubActivity, "Search app name, package, UID or installer")
                 search.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderApps()
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        if (!suppressSearchRender) renderApps()
+                    }
                     override fun afterTextChanged(s: Editable?) = Unit
                 })
                 addView(search)
@@ -267,7 +270,14 @@ class ActivityLauncherHubActivity : Activity() {
         currentInstallSourceFilter = InstallSourceFilter.ALL
         currentTargetSdkFilter = TargetSdkFilter.ALL
         currentDebuggableFilter = DebuggableFilter.ALL
-        if (::search.isInitialized) search.setText("")
+        if (::search.isInitialized) {
+            suppressSearchRender = true
+            try {
+                search.setText("")
+            } finally {
+                suppressSearchRender = false
+            }
+        }
         renderStateBar()
         renderInstallSourceBar()
         renderTargetSdkBar()
