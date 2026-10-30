@@ -13,4 +13,6 @@ for n in ['getLockTaskPolicySpec','setLockTaskPolicySpec','setDeviceSecurityPoli
 low=(g+'\n'+c).lower()
 assert '.wipedata(' not in low
 assert '.factoryreset(' not in low
+assert '{ _, _ -> Unit }' not in g, 'clearApplicationUserData callback must not contain an unused Unit expression'
+assert 'clearApplicationUserData(admin, packageName, appContext.mainExecutor) { _, _ -> }' in g, 'clearApplicationUserData must keep an explicit no-op completion callback'
 print('test_device_lifecycle_android_contract: PASS')

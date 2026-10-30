@@ -472,7 +472,7 @@ class AndroidDevicePolicyGateway(
     override fun clearManagedApplicationData(packageName: String): PolicyResult<Unit> {
         if (Build.VERSION.SDK_INT < 28) return unsupported("Clear application user data requires API 28+")
         return policyCall {
-            dpm.clearApplicationUserData(admin, packageName, appContext.mainExecutor) { _, _ -> Unit }
+            dpm.clearApplicationUserData(admin, packageName, appContext.mainExecutor) { _, _ -> }
             PolicyResult.success(message = "Clear application data request submitted")
         }
     }
