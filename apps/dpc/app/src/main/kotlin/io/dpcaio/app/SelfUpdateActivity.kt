@@ -302,12 +302,14 @@ class SelfUpdateActivity : Activity() {
         val manifest = currentManifest
         if (manifest == null) {
             operations.finishDownload()
+            notifyStateChanged()
             return setState(SelfUpdateState.ERROR, "Check for an update first")
         }
         val installedVersionCode = installedVersion().second
         val decision = planner.evaluate(packageName, installedVersionCode, selectedChannel, manifest)
         if (!decision.accepted) {
             operations.finishDownload()
+            notifyStateChanged()
             return setState(decision.state, decision.reason.replace('_', ' '))
         }
 
@@ -356,6 +358,7 @@ class SelfUpdateActivity : Activity() {
                 }
             } finally {
                 operations.finishDownload()
+                notifyStateChanged()
                 runOnUiThread { render() }
             }
         }.start()
@@ -398,6 +401,7 @@ class SelfUpdateActivity : Activity() {
                 }
             } finally {
                 operations.finishInstall()
+                notifyStateChanged()
                 runOnUiThread { render() }
             }
         }.start()
@@ -420,10 +424,18 @@ class SelfUpdateActivity : Activity() {
             .onFailure { setState(SelfUpdateState.ERROR, "Cannot open release notes") }
     }
 
+    private fun notifyStateChanged() {
+        sendBroadcast(
+            Intent(SelfUpdateStatusReceiver.ACTION_STATE_CHANGED)
+                .setPackage(packageName)
+        )
+    }
+
     private fun setState(next: SelfUpdateState, detail: String) {
         state = next
         message = detail
         SelfUpdateUiStateStore.write(this, next, detail)
+        notifyStateChanged()
         render()
     }
 
