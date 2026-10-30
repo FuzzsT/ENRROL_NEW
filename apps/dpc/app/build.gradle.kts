@@ -107,6 +107,7 @@ dependencies {
     implementation(project(":delegation-core"))
     implementation(project(":dhizuku-compat"))
     implementation(project(":shizuku-adapter"))
+    implementation(project(":file-manager-android"))
     implementation(project(":native-diagnostics"))
     implementation(project(":network-android"))
     implementation(project(":network-control"))
