@@ -13,6 +13,8 @@ for needle in ['WholeAppStatePlanner','setApplicationEnabledSetting','setPackage
     assert needle in wt, needle
 for needle in ['setApplicationRestrictions','getApplicationRestrictions','Executors.newSingleThreadExecutor','canonical']:
     assert needle in rt, needle
+assert 'bundle.get(key)' not in rt, 'managed-configuration readback must not use deprecated Bundle.get(String)'
+assert 'bundle.getString(key).orEmpty()' in rt, 'string-only managed-configuration readback must use typed Bundle.getString(String)'
 for needle in ['isDeviceOwnerApp','setLocationEnabled','LocationManager','isLocationEnabled']:
     assert needle in lt, needle
 assert 'Settings.Secure' not in lt
