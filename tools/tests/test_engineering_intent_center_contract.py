@@ -63,6 +63,8 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'CALL_PHONE',
     'SamsungSecretCodeDiscovery',
     'DeveloperActivitiesActivity::class.java',
+    'Open calculator',
+    'Intent.CATEGORY_APP_CALCULATOR',
 ])
 assert 'Runtime.getRuntime' not in center
 assert 'Shizuku.newProcess' not in center
