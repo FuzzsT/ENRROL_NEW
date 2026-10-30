@@ -33,6 +33,8 @@ for needle in [
     'DebuggableFilter.DEBUGGABLE -> targetFiltered.filter { it.debuggable }',
     'DebuggableFilter.RELEASE -> targetFiltered.filter { !it.debuggable }',
     'if (app.debuggable) "DEBUGGABLE" else "RELEASE"',
+    'Search app name, package, UID or installer',
+    'app.installerPackage?.lowercase()?.contains(query) == true',
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
     'SortDirection { ASCENDING, DESCENDING }',
     'private var currentSortDirection = SortDirection.ASCENDING',
