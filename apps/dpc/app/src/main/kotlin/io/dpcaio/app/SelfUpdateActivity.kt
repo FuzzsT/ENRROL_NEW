@@ -25,6 +25,7 @@ import io.dpcaio.selfupdate.android.SelfUpdateVerifier
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SelfUpdateActivity : Activity() {
     private val planner = SelfUpdatePlanner()
@@ -33,6 +34,7 @@ class SelfUpdateActivity : Activity() {
     private val verifier by lazy { SelfUpdateVerifier(this) }
     private val installer by lazy { SelfUpdateInstaller(this) }
     private val preferences by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
+    private val downloadInFlight = AtomicBoolean(false)
 
     private var selectedChannel = UpdateChannel.STABLE
     private var selectedPolicy = SelfUpdateInstallPolicy.SILENT_IF_ALLOWED
@@ -105,6 +107,7 @@ class SelfUpdateActivity : Activity() {
         val candidate = store.loadCandidate()
         val manifest = currentManifest ?: candidate?.manifest
         val silentAvailable = silentInstallLikelyAvailable()
+        val busy = downloadInFlight.get()
 
         body.addView(
             ModernUi.hero(
@@ -164,11 +167,14 @@ class SelfUpdateActivity : Activity() {
                         channel == selectedChannel,
                         if (channel == UpdateChannel.STABLE) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
                     ) {
-                        selectedChannel = channel
-                        currentManifest = null
-                        preferences.edit().putString(KEY_CHANNEL, channel.name).apply()
-                        setState(SelfUpdateState.IDLE, "Channel changed to ${channel.name.lowercase(Locale.ROOT)}")
-                    }
+                        if (channel != selectedChannel) {
+                            store.clearCandidate()
+                            selectedChannel = channel
+                            currentManifest = null
+                            preferences.edit().putString(KEY_CHANNEL, channel.name).apply()
+                            setState(SelfUpdateState.IDLE, "Channel changed to ${channel.name.lowercase(Locale.ROOT)}; cached candidate cleared")
+                        }
+                    }.apply { isEnabled = !busy }
                     row.addView(
                         pill,
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -205,7 +211,7 @@ class SelfUpdateActivity : Activity() {
                         selectedPolicy = policy
                         preferences.edit().putString(KEY_POLICY, policy.name).apply()
                         render()
-                    }
+                    }.apply { isEnabled = !busy }
                     row.addView(
                         pill,
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -218,6 +224,7 @@ class SelfUpdateActivity : Activity() {
                 addView(CheckBox(this@SelfUpdateActivity).apply {
                     text = "Automatically install a downloaded verified update when silent install is supported"
                     isChecked = preferences.getBoolean(KEY_AUTO_SILENT, false)
+                    isEnabled = !busy
                     setOnCheckedChangeListener { _, checked ->
                         preferences.edit().putBoolean(KEY_AUTO_SILENT, checked).apply()
                     }
@@ -229,28 +236,30 @@ class SelfUpdateActivity : Activity() {
         val updateAvailable = currentManifest?.let {
             planner.evaluate(packageName, installed.second, selectedChannel, it).accepted
         } == true
-        val verifiedCandidate = candidate?.verified == true && candidate.apkFile.isFile
+        val verifiedCandidate = candidate?.let {
+            it.verified && it.apkFile.isFile && planner.evaluate(packageName, installed.second, selectedChannel, it.manifest).accepted
+        } == true
         val notesAvailable = manifest?.releaseNotesUrl?.startsWith("https://", ignoreCase = true) == true
 
         body.addView(
             ModernUi.actionRow(
                 this,
-                ModernUi.action(this, "Check now", primary = true) { checkNow() },
-                ModernUi.action(this, "Download & verify") { downloadAndVerify() }.apply { isEnabled = updateAvailable },
+                ModernUi.action(this, "Check now", primary = true) { checkNow() }.apply { isEnabled = !busy },
+                ModernUi.action(this, "Download & verify") { downloadAndVerify() }.apply { isEnabled = updateAvailable && !busy },
             )
         )
         body.addView(
             ModernUi.actionRow(
                 this,
-                ModernUi.action(this, "Install update", primary = true) { submitInstall(selectedPolicy) }.apply { isEnabled = verifiedCandidate },
-                ModernUi.action(this, "Install silently") { submitInstall(SelfUpdateInstallPolicy.SILENT_IF_ALLOWED) }.apply { isEnabled = verifiedCandidate },
+                ModernUi.action(this, "Install update", primary = true) { submitInstall(selectedPolicy) }.apply { isEnabled = verifiedCandidate && !busy },
+                ModernUi.action(this, "Install silently") { submitInstall(SelfUpdateInstallPolicy.SILENT_IF_ALLOWED) }.apply { isEnabled = verifiedCandidate && !busy },
             )
         )
         body.addView(
             ModernUi.actionRow(
                 this,
                 ModernUi.action(this, "Release notes") { openReleaseNotes() }.apply { isEnabled = notesAvailable },
-                ModernUi.action(this, "Clear downloaded update", destructive = true) { clearCandidate() }.apply { isEnabled = candidate != null },
+                ModernUi.action(this, "Clear downloaded update", destructive = true) { clearCandidate() }.apply { isEnabled = candidate != null && !busy },
             )
         )
 
@@ -286,16 +295,27 @@ class SelfUpdateActivity : Activity() {
     }
 
     private fun downloadAndVerify() {
-        val manifest = currentManifest ?: return setState(SelfUpdateState.ERROR, "Check for an update first")
+        if (!downloadInFlight.compareAndSet(false, true)) {
+            setState(SelfUpdateState.ERROR, "Download or verification already in progress")
+            return
+        }
+        val manifest = currentManifest
+        if (manifest == null) {
+            downloadInFlight.set(false)
+            return setState(SelfUpdateState.ERROR, "Check for an update first")
+        }
         val installedVersionCode = installedVersion().second
         val decision = planner.evaluate(packageName, installedVersionCode, selectedChannel, manifest)
-        if (!decision.accepted) return setState(decision.state, decision.reason.replace('_', ' '))
+        if (!decision.accepted) {
+            downloadInFlight.set(false)
+            return setState(decision.state, decision.reason.replace('_', ' '))
+        }
 
         progressPercent = 0
         setState(SelfUpdateState.DOWNLOADING, "Downloading verified candidate…")
         Thread {
             val temp = store.newDownloadFile()
-            runCatching {
+            try {
                 client.downloadApk(manifest.apkUrl, temp) { downloaded, total ->
                     val percent = total?.takeIf { it > 0L }?.let { ((downloaded * 100L) / it).toInt().coerceIn(0, 100) }
                     if (percent != null && percent != progressPercent) {
@@ -328,12 +348,15 @@ class SelfUpdateActivity : Activity() {
                         }
                     }
                 }
-            }.onFailure { error ->
+            } catch (error: Exception) {
                 temp.delete()
                 runOnUiThread {
                     progressPercent = null
                     setState(SelfUpdateState.ERROR, "Verification failed: ${error.message ?: error.javaClass.simpleName}")
                 }
+            } finally {
+                downloadInFlight.set(false)
+                runOnUiThread { render() }
             }
         }.start()
     }
@@ -343,6 +366,10 @@ class SelfUpdateActivity : Activity() {
             ?: return setState(SelfUpdateState.ERROR, "No verified update candidate")
         if (!candidate.verified || !candidate.apkFile.isFile) {
             return setState(SelfUpdateState.ERROR, "Candidate is not verified")
+        }
+        val decision = planner.evaluate(packageName, installedVersion().second, selectedChannel, candidate.manifest)
+        if (!decision.accepted) {
+            return setState(decision.state, "Cached candidate rejected: ${decision.reason.replace('_', ' ')}")
         }
 
         setState(SelfUpdateState.INSTALLING, "Submitting ${policy.name.lowercase(Locale.ROOT)} PackageInstaller session…")
