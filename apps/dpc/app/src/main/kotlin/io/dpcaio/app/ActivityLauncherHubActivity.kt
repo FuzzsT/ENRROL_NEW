@@ -37,7 +37,7 @@ class ActivityLauncherHubActivity : Activity() {
     private enum class AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }
     private enum class SortDirection { ASCENDING, DESCENDING }
     private enum class StateFilter { ALL, ENABLED, DISABLED }
-    private enum class InstallSourceFilter { ALL, INSTALLED, PRELOADED }
+    private enum class InstallSourceFilter { ALL, INSTALLED, NO_SOURCE }
     private enum class TargetSdkFilter { ALL, CURRENT, LEGACY }
     private enum class DebuggableFilter { ALL, DEBUGGABLE, RELEASE }
 
@@ -442,7 +442,7 @@ class ActivityLauncherHubActivity : Activity() {
             val tone = when (filter) {
                 InstallSourceFilter.ALL -> ModernUi.Tone.NEUTRAL
                 InstallSourceFilter.INSTALLED -> ModernUi.Tone.SUCCESS
-                InstallSourceFilter.PRELOADED -> ModernUi.Tone.WARNING
+                InstallSourceFilter.NO_SOURCE -> ModernUi.Tone.WARNING
             }
             val pill = ModernUi.pill(this, "SOURCE ${filter.name}", filter == currentInstallSourceFilter, tone) {
                 currentInstallSourceFilter = filter
@@ -681,7 +681,7 @@ class ActivityLauncherHubActivity : Activity() {
         val sourceFiltered = when (currentInstallSourceFilter) {
             InstallSourceFilter.ALL -> stateFiltered
             InstallSourceFilter.INSTALLED -> stateFiltered.filter { !it.installerPackage.isNullOrBlank() }
-            InstallSourceFilter.PRELOADED -> stateFiltered.filter { it.installerPackage.isNullOrBlank() }
+            InstallSourceFilter.NO_SOURCE -> stateFiltered.filter { it.installerPackage.isNullOrBlank() }
         }
         val targetFiltered = when (currentTargetSdkFilter) {
             TargetSdkFilter.ALL -> sourceFiltered
