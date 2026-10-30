@@ -1,0 +1,66 @@
+name: Temporary Activity Launcher restore-state patch
+
+on:
+  push:
+    branches:
+      - fix/activity-launcher-restore-view-state
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/activity-launcher-restore-view-state
+          fetch-depth: 1
+      - name: Apply exact restore-state patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt')
+          s = p.read_text()
+
+          helper_anchor = '''    override fun onCreate(savedInstanceState: Bundle?) {\n'''
+          helper = '''    private inline fun <reified T : Enum<T>> restoredEnum(\n        state: Bundle?,\n        key: String,\n        fallback: T,\n    ): T = state?.getString(key)\n        ?.let { saved -> enumValues<T>().firstOrNull { it.name == saved } }\n        ?: fallback\n\n'''
+          if s.count(helper_anchor) != 1:
+              raise SystemExit(f'Expected one onCreate anchor, got {s.count(helper_anchor)}')
+          s = s.replace(helper_anchor, helper + helper_anchor, 1)
+
+          old_create = '''    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        savedInstanceState?.getStringArrayList(STATE_SELECTED_PACKAGES)?.let { selectedPackages.addAll(it) }\n        title = "Activity Launcher"\n        renderShell()\n        discoverInstalledApps()\n    }\n'''
+          new_create = '''    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        currentTab = restoredEnum(savedInstanceState, STATE_CURRENT_TAB, currentTab)\n        currentSort = restoredEnum(savedInstanceState, STATE_CURRENT_SORT, currentSort)\n        currentSortDirection = restoredEnum(savedInstanceState, STATE_SORT_DIRECTION, currentSortDirection)\n        currentStateFilter = restoredEnum(savedInstanceState, STATE_STATE_FILTER, currentStateFilter)\n        currentInstallSourceFilter = restoredEnum(savedInstanceState, STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter)\n        currentInstallAgeFilter = restoredEnum(savedInstanceState, STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter)\n        currentUpdateAgeFilter = restoredEnum(savedInstanceState, STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter)\n        currentTargetSdkFilter = restoredEnum(savedInstanceState, STATE_TARGET_SDK_FILTER, currentTargetSdkFilter)\n        currentDebuggableFilter = restoredEnum(savedInstanceState, STATE_DEBUGGABLE_FILTER, currentDebuggableFilter)\n        visibleAppLimit = savedInstanceState\n            ?.getInt(STATE_VISIBLE_APP_LIMIT, INITIAL_RENDER_LIMIT)\n            ?.coerceAtLeast(INITIAL_RENDER_LIMIT)\n            ?: INITIAL_RENDER_LIMIT\n        savedInstanceState?.getStringArrayList(STATE_SELECTED_PACKAGES)?.let { selectedPackages.addAll(it) }\n        title = "Activity Launcher"\n        renderShell()\n        val restoredSearch = savedInstanceState?.getString(STATE_SEARCH_QUERY).orEmpty()\n        suppressSearchRender = true\n        try {\n            search.setText(restoredSearch)\n        } finally {\n            suppressSearchRender = false\n        }\n        discoverInstalledApps(resetLimit = savedInstanceState == null)\n    }\n'''
+          if s.count(old_create) != 1:
+              raise SystemExit(f'Expected one old onCreate block, got {s.count(old_create)}')
+          s = s.replace(old_create, new_create, 1)
+
+          old_save = '''    override fun onSaveInstanceState(outState: Bundle) {\n        outState.putStringArrayList(STATE_SELECTED_PACKAGES, ArrayList(selectedPackages))\n        super.onSaveInstanceState(outState)\n    }\n'''
+          new_save = '''    override fun onSaveInstanceState(outState: Bundle) {\n        outState.putString(STATE_CURRENT_TAB, currentTab.name)\n        outState.putString(STATE_CURRENT_SORT, currentSort.name)\n        outState.putString(STATE_SORT_DIRECTION, currentSortDirection.name)\n        outState.putString(STATE_STATE_FILTER, currentStateFilter.name)\n        outState.putString(STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter.name)\n        outState.putString(STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter.name)\n        outState.putString(STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter.name)\n        outState.putString(STATE_TARGET_SDK_FILTER, currentTargetSdkFilter.name)\n        outState.putString(STATE_DEBUGGABLE_FILTER, currentDebuggableFilter.name)\n        outState.putString(STATE_SEARCH_QUERY, search.text.toString())\n        outState.putInt(STATE_VISIBLE_APP_LIMIT, visibleAppLimit)\n        outState.putStringArrayList(STATE_SELECTED_PACKAGES, ArrayList(selectedPackages))\n        super.onSaveInstanceState(outState)\n    }\n'''
+          if s.count(old_save) != 1:
+              raise SystemExit(f'Expected one old onSaveInstanceState block, got {s.count(old_save)}')
+          s = s.replace(old_save, new_save, 1)
+
+          old_constants = '''        private const val KEY_RECENTS = "recentPackages"\n        private const val STATE_SELECTED_PACKAGES = "selectedPackages"\n'''
+          new_constants = '''        private const val KEY_RECENTS = "recentPackages"\n        private const val STATE_CURRENT_TAB = "activity_launcher_current_tab"\n        private const val STATE_CURRENT_SORT = "activity_launcher_current_sort"\n        private const val STATE_SORT_DIRECTION = "activity_launcher_sort_direction"\n        private const val STATE_STATE_FILTER = "activity_launcher_state_filter"\n        private const val STATE_INSTALL_SOURCE_FILTER = "activity_launcher_install_source_filter"\n        private const val STATE_INSTALL_AGE_FILTER = "activity_launcher_install_age_filter"\n        private const val STATE_UPDATE_AGE_FILTER = "activity_launcher_update_age_filter"\n        private const val STATE_TARGET_SDK_FILTER = "activity_launcher_target_sdk_filter"\n        private const val STATE_DEBUGGABLE_FILTER = "activity_launcher_debuggable_filter"\n        private const val STATE_SEARCH_QUERY = "activity_launcher_search_query"\n        private const val STATE_VISIBLE_APP_LIMIT = "activity_launcher_visible_app_limit"\n        private const val STATE_SELECTED_PACKAGES = "selectedPackages"\n'''
+          if s.count(old_constants) != 1:
+              raise SystemExit(f'Expected one constants anchor, got {s.count(old_constants)}')
+          s = s.replace(old_constants, new_constants, 1)
+          p.write_text(s)
+          PY
+          python3 tools/tests/test_activity_launcher_app_manager_contract.py
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt"
+      - name: Commit exact production change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt
+          git commit -m "fix: restore Activity Launcher transient view state"
+          git push origin HEAD:fix/activity-launcher-restore-view-state
