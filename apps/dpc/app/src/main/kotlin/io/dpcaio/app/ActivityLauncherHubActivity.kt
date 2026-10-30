@@ -489,6 +489,20 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
+    private fun installAgeLabel(filter: InstallAgeFilter): String = when (filter) {
+        InstallAgeFilter.ALL -> "ALL"
+        InstallAgeFilter.HOURS_24 -> "24H"
+        InstallAgeFilter.DAYS_7 -> "7D"
+        InstallAgeFilter.DAYS_30 -> "30D"
+    }
+
+    private fun updateAgeLabel(filter: UpdateAgeFilter): String = when (filter) {
+        UpdateAgeFilter.ALL -> "ALL"
+        UpdateAgeFilter.HOURS_24 -> "24H"
+        UpdateAgeFilter.DAYS_7 -> "7D"
+        UpdateAgeFilter.DAYS_30 -> "30D"
+    }
+
     private fun renderDateAgeBar() {
         if (!::dateAgeBar.isInitialized) return
         dateAgeBar.removeAllViews()
@@ -501,7 +515,7 @@ class ActivityLauncherHubActivity : Activity() {
                 InstallAgeFilter.ALL -> ModernUi.Tone.NEUTRAL
                 InstallAgeFilter.HOURS_24, InstallAgeFilter.DAYS_7, InstallAgeFilter.DAYS_30 -> ModernUi.Tone.SUCCESS
             }
-            val pill = ModernUi.pill(this, "INST ${filter.name}", filter == currentInstallAgeFilter, tone) {
+            val pill = ModernUi.pill(this, "INST ${installAgeLabel(filter)}", filter == currentInstallAgeFilter, tone) {
                 currentInstallAgeFilter = filter
                 renderDateAgeBar()
                 renderApps()
@@ -517,7 +531,7 @@ class ActivityLauncherHubActivity : Activity() {
                 UpdateAgeFilter.ALL -> ModernUi.Tone.NEUTRAL
                 UpdateAgeFilter.HOURS_24, UpdateAgeFilter.DAYS_7, UpdateAgeFilter.DAYS_30 -> ModernUi.Tone.SUCCESS
             }
-            val pill = ModernUi.pill(this, "UPD ${filter.name}", filter == currentUpdateAgeFilter, tone) {
+            val pill = ModernUi.pill(this, "UPD ${updateAgeLabel(filter)}", filter == currentUpdateAgeFilter, tone) {
                 currentUpdateAgeFilter = filter
                 renderDateAgeBar()
                 renderApps()
