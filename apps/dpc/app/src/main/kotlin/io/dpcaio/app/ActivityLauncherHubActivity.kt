@@ -34,6 +34,7 @@ import java.util.concurrent.Executors
 class ActivityLauncherHubActivity : Activity() {
     private enum class AppTab { ALL, SYSTEM, USER, FAVORITES, RECENT }
     private enum class AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }
+    private enum class SortDirection { ASCENDING, DESCENDING }
     private enum class StateFilter { ALL, ENABLED, DISABLED }
 
     private data class AppEntry(
@@ -60,6 +61,7 @@ class ActivityLauncherHubActivity : Activity() {
 
     private var currentTab = AppTab.ALL
     private var currentSort = AppSort.NAME
+    private var currentSortDirection = SortDirection.ASCENDING
     private var currentStateFilter = StateFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
     private val selectedPackages = linkedSetOf<String>()
@@ -255,6 +257,10 @@ class ActivityLauncherHubActivity : Activity() {
                 tone = ModernUi.Tone.NEUTRAL,
             ) {
                 currentSort = sort
+                currentSortDirection = when (sort) {
+                    AppSort.NAME, AppSort.PACKAGE -> SortDirection.ASCENDING
+                    AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> SortDirection.DESCENDING
+                }
                 renderSortBar()
                 renderApps()
             }
@@ -278,7 +284,26 @@ class ActivityLauncherHubActivity : Activity() {
                     setPadding(ModernUi.dp(this@ActivityLauncherHubActivity, 2), ModernUi.dp(this@ActivityLauncherHubActivity, 5), 0, 0)
                 }
             )
+        } else {
+            sortBar.addView(ModernUi.spacer(this, 6))
+            sortBar.addView(
+                ModernUi.action(this, "Direction: ${sortDirectionLabel()}") { toggleSortDirection() }
+            )
         }
+    }
+
+    private fun sortDirectionLabel(): String = when (currentSort) {
+        AppSort.NAME, AppSort.PACKAGE -> if (currentSortDirection == SortDirection.ASCENDING) "A → Z" else "Z → A"
+        AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> if (currentSortDirection == SortDirection.ASCENDING) "Oldest → newest" else "Newest → oldest"
+    }
+
+    private fun toggleSortDirection() {
+        currentSortDirection = when (currentSortDirection) {
+            SortDirection.ASCENDING -> SortDirection.DESCENDING
+            SortDirection.DESCENDING -> SortDirection.ASCENDING
+        }
+        renderSortBar()
+        renderApps()
     }
 
     private fun renderStateBar() {
@@ -466,12 +491,13 @@ class ActivityLauncherHubActivity : Activity() {
                 app.uid.toString().contains(query)
         }
         if (currentTab == AppTab.RECENT) return filtered
-        return when (currentSort) {
+        val sorted = when (currentSort) {
             AppSort.NAME -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
             AppSort.PACKAGE -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.packageName })
-            AppSort.INSTALL_DATE -> filtered.sortedByDescending { it.firstInstallTime }
-            AppSort.UPDATE_DATE -> filtered.sortedByDescending { it.lastUpdateTime }
+            AppSort.INSTALL_DATE -> filtered.sortedBy { it.firstInstallTime }
+            AppSort.UPDATE_DATE -> filtered.sortedBy { it.lastUpdateTime }
         }
+        return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted
     }
 
     private fun formatInstallDate(time: Long): String {
