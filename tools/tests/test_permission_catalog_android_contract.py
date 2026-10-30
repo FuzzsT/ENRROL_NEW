@@ -18,6 +18,9 @@ def main():
     assert 'PermissionInfo.PROTECTION_MASK_FLAGS' not in catalog, 'permission protection classification must not use deprecated PROTECTION_MASK_FLAGS'
     assert 'PermissionInfoCompat.getProtection(info)' in catalog, 'permission protection classification must use PermissionInfoCompat.getProtection'
     assert 'PermissionInfoCompat.getProtectionFlags(info)' in catalog, 'permission protection classification must use PermissionInfoCompat.getProtectionFlags'
+    assert 'info.protectionLevel' not in catalog, 'permission catalog must not read deprecated PermissionInfo.protectionLevel directly'
+    assert '@Suppress("DEPRECATION")' not in catalog, 'permission catalog must not need broad deprecation suppression'
+    assert 'rawProtectionLevel = PermissionInfoCompat.getProtection(info) or PermissionInfoCompat.getProtectionFlags(info)' in catalog, 'raw permission protection diagnostics must be reconstructed from compat base and flags'
     need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessInspector.kt', [
         'OPSTR_GET_USAGE_STATS', 'canRequestPackageInstalls(', 'getEnabledListenerPackages('
     ])
