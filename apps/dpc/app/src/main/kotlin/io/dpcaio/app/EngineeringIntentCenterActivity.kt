@@ -121,10 +121,7 @@ class EngineeringIntentCenterActivity : Activity() {
                 )
                 addView(
                     ModernUi.action(this@EngineeringIntentCenterActivity, "Developer Activities", primary = true) {
-                        startActivity(
-                            Intent(this@EngineeringIntentCenterActivity, ActivityExplorerActivity::class.java)
-                                .putExtra(ActivityExplorerActivity.EXTRA_DEVELOPER_FILTER, true)
-                        )
+                        startActivity(Intent(this@EngineeringIntentCenterActivity, DeveloperActivitiesActivity::class.java))
                     }
                 )
             }
