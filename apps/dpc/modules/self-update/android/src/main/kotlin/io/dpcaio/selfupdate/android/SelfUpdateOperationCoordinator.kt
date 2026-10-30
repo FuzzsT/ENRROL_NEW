@@ -1,22 +1,33 @@
 package io.dpcaio.selfupdate.android
 
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 object SelfUpdateOperationCoordinator {
-    private val downloadInFlight = AtomicBoolean(false)
-    private val installInFlight = AtomicBoolean(false)
+    private enum class Operation {
+        CHECK,
+        DOWNLOAD,
+        INSTALL,
+    }
 
-    fun tryStartDownload(): Boolean = downloadInFlight.compareAndSet(false, true)
+    private val activeOperation = AtomicReference<Operation?>(null)
+
+    fun tryStartCheck(): Boolean = activeOperation.compareAndSet(null, Operation.CHECK)
+
+    fun finishCheck() {
+        activeOperation.compareAndSet(Operation.CHECK, null)
+    }
+
+    fun tryStartDownload(): Boolean = activeOperation.compareAndSet(null, Operation.DOWNLOAD)
 
     fun finishDownload() {
-        downloadInFlight.set(false)
+        activeOperation.compareAndSet(Operation.DOWNLOAD, null)
     }
 
-    fun tryStartInstall(): Boolean = installInFlight.compareAndSet(false, true)
+    fun tryStartInstall(): Boolean = activeOperation.compareAndSet(null, Operation.INSTALL)
 
     fun finishInstall() {
-        installInFlight.set(false)
+        activeOperation.compareAndSet(Operation.INSTALL, null)
     }
 
-    fun isBusy(): Boolean = downloadInFlight.get() || installInFlight.get()
+    fun isBusy(): Boolean = activeOperation.get() != null
 }
