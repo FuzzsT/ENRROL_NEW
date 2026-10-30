@@ -503,6 +503,9 @@ class ActivityLauncherHubActivity : Activity() {
         UpdateAgeFilter.DAYS_30 -> "30D"
     }
 
+    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =
+        timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs
+
     private fun renderDateAgeBar() {
         if (!::dateAgeBar.isInitialized) return
         dateAgeBar.removeAllViews()
@@ -774,15 +777,15 @@ class ActivityLauncherHubActivity : Activity() {
         val now = System.currentTimeMillis()
         val ageFiltered = when (currentInstallAgeFilter) {
             InstallAgeFilter.ALL -> sourceFiltered
-            InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_24H_MS }
-            InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_7D_MS }
-            InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_30D_MS }
+            InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_24H_MS) }
+            InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_7D_MS) }
+            InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_30D_MS) }
         }
         val updateAgeFiltered = when (currentUpdateAgeFilter) {
             UpdateAgeFilter.ALL -> ageFiltered
-            UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_24H_MS }
-            UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_7D_MS }
-            UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_30D_MS }
+            UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_24H_MS) }
+            UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_7D_MS) }
+            UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_30D_MS) }
         }
         val targetFiltered = when (currentTargetSdkFilter) {
             TargetSdkFilter.ALL -> updateAgeFiltered
