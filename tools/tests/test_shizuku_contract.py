@@ -20,13 +20,28 @@ def main():
     aidl = ROOT / "apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioShizukuUserService.aidl"
     editor = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppOpsVerifiedEditorActivity.kt"
     activity_executor = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt"
+    control_center = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt"
     manifest = ROOT / "apps/dpc/integrations/shizuku/src/main/AndroidManifest.xml"
     catalog = ROOT / "gradle/libs.versions.toml"
 
     runtime_text = must(runtime, "Shizuku.checkSelfPermission()")
-    for token in ["Shizuku.getUid()", "Shizuku.getVersion()", "Shizuku.requestPermission("]:
+    for token in [
+        "Shizuku.getUid()",
+        "Shizuku.getVersion()",
+        "Shizuku.requestPermission(",
+        "Sui.isSui()",
+        "onChanged(probe())",
+        "RETRY_DELAYS_MS",
+        "handler.postDelayed",
+        "handler.removeCallbacks",
+    ]:
         if token not in runtime_text:
             raise AssertionError(f"runtime missing {token}")
+    for delay in ["250L", "1000L", "2500L"]:
+        if delay not in runtime_text:
+            raise AssertionError(f"runtime retry schedule missing {delay}")
+    if 'val backend:' not in runtime_text:
+        raise AssertionError("runtime state must expose detected Shizuku/Sui backend")
 
     aidl_text = must(aidl, 'String getAppOp(String packageName, String op, int userId);')
     for token in [
@@ -89,6 +104,11 @@ def main():
     activity_text = must(activity_executor, "ActivityRoute.SHIZUKU")
     if "client.startActivity(" not in activity_text:
         raise AssertionError("Shizuku activity executor must invoke typed user-service startActivity")
+
+    control_text = control_center.read_text(encoding="utf-8", errors="ignore")
+    for token in ["state.backend", '"BACKEND"']:
+        if token not in control_text:
+            raise AssertionError(f"Control Center must show detected backend: {token}")
 
     must(manifest, "rikka.shizuku.ShizukuProvider")
     must(catalog, 'shizuku = "13.1.5"')
