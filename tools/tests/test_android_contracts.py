@@ -154,6 +154,13 @@ def main():
     ]:
         assert_true(token in self_update_activity, f"Self Update UI missing: {token}")
 
+    download_body = self_update_activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
+    assert_true("compareAndSet(false, true)" in download_body, "Self Update download must reject a second in-flight worker")
+    assert_true("set(false)" in download_body, "Self Update download guard must be released after completion")
+    assert_true(self_update_activity.count("store.clearCandidate()") >= 2, "changing Self Update channel must invalidate the cached candidate")
+    submit_body = self_update_activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
+    assert_true("planner.evaluate" in submit_body and "selectedChannel" in submit_body, "Self Update install must revalidate cached candidate against the selected channel")
+
     status_receiver_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateStatusReceiver.kt"
     assert_true(status_receiver_path.is_file(), "SelfUpdateStatusReceiver.kt missing")
     status_receiver = status_receiver_path.read_text(encoding="utf-8")
