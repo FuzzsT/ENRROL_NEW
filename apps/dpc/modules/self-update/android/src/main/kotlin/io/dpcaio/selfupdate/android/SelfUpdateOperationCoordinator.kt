@@ -19,6 +19,9 @@ object SelfUpdateOperationCoordinator {
 
     fun tryStartDownload(): Boolean = activeOperation.compareAndSet(null, Operation.DOWNLOAD)
 
+    fun handoffDownloadToInstall(): Boolean =
+        activeOperation.compareAndSet(Operation.DOWNLOAD, Operation.INSTALL)
+
     fun finishDownload() {
         activeOperation.compareAndSet(Operation.DOWNLOAD, null)
     }
