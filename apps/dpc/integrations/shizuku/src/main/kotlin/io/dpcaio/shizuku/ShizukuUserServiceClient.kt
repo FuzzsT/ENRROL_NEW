@@ -3,6 +3,7 @@ package io.dpcaio.shizuku
 import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.IBinder
 import rikka.shizuku.Shizuku
 
@@ -12,24 +13,45 @@ class ShizukuUserServiceClient(context: Context) {
 
     @Volatile private var remote: IAioShizukuUserService? = null
     @Volatile private var serviceBinder: IBinder? = null
+    @Volatile private var autoRebindEnabled = false
+    @Volatile private var bindInFlight = false
+    @Volatile private var readinessListening = false
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        retryBindIfReady()
+    }
+
+    private val permissionResultListener = Shizuku.OnRequestPermissionResultListener { _, result ->
+        if (result == PackageManager.PERMISSION_GRANTED) {
+            retryBindIfReady()
+        } else {
+            stopReadinessListeners()
+        }
+    }
 
     private val deathRecipient = IBinder.DeathRecipient {
         clearRemote()
+        if (autoRebindEnabled) startReadinessListeners()
     }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
+            var accepted = false
             synchronized(connectionLock) {
                 clearRemoteLocked()
+                bindInFlight = false
                 if (!service.isBinderAlive) return
                 if (runCatching { service.linkToDeath(deathRecipient, 0) }.isFailure) return
                 serviceBinder = service
                 remote = IAioShizukuUserService.Stub.asInterface(service)
+                accepted = true
             }
+            if (accepted) stopReadinessListeners()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
             clearRemote()
+            if (autoRebindEnabled) startReadinessListeners()
         }
     }
 
@@ -42,14 +64,15 @@ class ShizukuUserServiceClient(context: Context) {
         .version(2)
 
     fun bind(): Boolean {
-        if (isConnected()) return true
-        return runCatching {
-            Shizuku.bindUserService(args, connection)
-            true
-        }.getOrDefault(false)
+        autoRebindEnabled = true
+        startReadinessListeners()
+        return retryBindIfReady()
     }
 
     fun unbind(): Boolean {
+        autoRebindEnabled = false
+        stopReadinessListeners()
+        synchronized(connectionLock) { bindInFlight = false }
         val unbound = runCatching {
             Shizuku.unbindUserService(args, connection, true)
             true
@@ -67,9 +90,71 @@ class ShizukuUserServiceClient(context: Context) {
         return remote?.asBinder()?.isBinderAlive == true
     }
 
+    private fun startReadinessListeners() {
+        synchronized(connectionLock) {
+            if (readinessListening || !autoRebindEnabled) return
+            readinessListening = true
+        }
+        val binderAdded = runCatching {
+            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+            true
+        }.getOrDefault(false)
+        val permissionAdded = runCatching {
+            Shizuku.addRequestPermissionResultListener(permissionResultListener)
+            true
+        }.getOrDefault(false)
+        if (!binderAdded || !permissionAdded) {
+            stopReadinessListeners()
+        }
+    }
+
+    private fun stopReadinessListeners() {
+        val shouldRemove = synchronized(connectionLock) {
+            if (!readinessListening) false else {
+                readinessListening = false
+                true
+            }
+        }
+        if (!shouldRemove) return
+        runCatching { Shizuku.removeBinderReceivedListener(binderReceivedListener) }
+        runCatching { Shizuku.removeRequestPermissionResultListener(permissionResultListener) }
+    }
+
+    private fun retryBindIfReady(): Boolean {
+        if (!autoRebindEnabled) return false
+        if (isConnected()) {
+            stopReadinessListeners()
+            return true
+        }
+
+        val binderAlive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+        val permissionGranted = binderAlive && runCatching {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        if (!binderAlive || !permissionGranted) {
+            startReadinessListeners()
+            return true
+        }
+
+        synchronized(connectionLock) {
+            if (bindInFlight) return true
+            bindInFlight = true
+        }
+        val submitted = runCatching {
+            Shizuku.bindUserService(args, connection)
+            true
+        }.getOrDefault(false)
+        if (!submitted) {
+            synchronized(connectionLock) { bindInFlight = false }
+            startReadinessListeners()
+        }
+        return submitted
+    }
+
     private fun clearRemote() {
         synchronized(connectionLock) {
             clearRemoteLocked()
+            bindInFlight = false
         }
     }
 
