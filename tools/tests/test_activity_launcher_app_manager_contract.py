@@ -24,8 +24,18 @@ for needle in [
     'private var currentUpdateAgeFilter = UpdateAgeFilter.ALL',
     'private lateinit var dateAgeBar: LinearLayout',
     'renderDateAgeBar()',
-    'INST ${filter.name}',
-    'UPD ${filter.name}',
+    'private fun installAgeLabel(filter: InstallAgeFilter): String',
+    'private fun updateAgeLabel(filter: UpdateAgeFilter): String',
+    'InstallAgeFilter.ALL -> "ALL"',
+    'InstallAgeFilter.HOURS_24 -> "24H"',
+    'InstallAgeFilter.DAYS_7 -> "7D"',
+    'InstallAgeFilter.DAYS_30 -> "30D"',
+    'UpdateAgeFilter.ALL -> "ALL"',
+    'UpdateAgeFilter.HOURS_24 -> "24H"',
+    'UpdateAgeFilter.DAYS_7 -> "7D"',
+    'UpdateAgeFilter.DAYS_30 -> "30D"',
+    'INST ${installAgeLabel(filter)}',
+    'UPD ${updateAgeLabel(filter)}',
     'InstallAgeFilter.entries.forEach { filter ->',
     'UpdateAgeFilter.entries.forEach { filter ->',
     'if (currentInstallAgeFilter != InstallAgeFilter.ALL) count++',
@@ -123,8 +133,10 @@ for stale in [
     'private lateinit var updateAgeBar: LinearLayout',
     'renderInstallAgeBar()',
     'renderUpdateAgeBar()',
+    'INST ${filter.name}',
+    'UPD ${filter.name}',
 ]:
-    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter layout token {stale}'
+    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter layout/label token {stale}'
 
 for needle in [
     'EXTRA_TARGET_PACKAGE',
