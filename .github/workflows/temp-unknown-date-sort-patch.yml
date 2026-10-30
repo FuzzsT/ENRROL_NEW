@@ -1,0 +1,97 @@
+name: TEMP unknown date sort patch
+
+on:
+  push:
+    branches:
+      - fix/activity-launcher-unknown-date-sort
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/activity-launcher-unknown-date-sort
+          fetch-depth: 0
+
+      - name: Apply exact unknown-date sort patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          path = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt')
+          source = path.read_text(encoding='utf-8')
+
+          def git_blob_sha(text: str) -> str:
+              data = text.encode('utf-8')
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+
+          expected_before = '14761d05dbd9b71e8c81a0e5f4ad31fcee66142d'
+          actual_before = git_blob_sha(source)
+          if actual_before != expected_before:
+              raise SystemExit(f'Unexpected input blob: {actual_before} != {expected_before}')
+
+          anchor = '    private fun filteredApps(): List<AppEntry> {'
+          helper = (
+              '    private fun sortByTimestampUnknownLast(\n'
+              '        apps: List<AppEntry>,\n'
+              '        timestamp: (AppEntry) -> Long,\n'
+              '    ): List<AppEntry> {\n'
+              '        val (valid, unknown) = apps.partition { timestamp(it) > 0L }\n'
+              '        val sortedValid = valid.sortedBy(timestamp)\n'
+              '        val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid\n'
+              '        return directed + unknown\n'
+              '    }\n\n'
+          )
+          if source.count(anchor) != 1:
+              raise SystemExit(f'Expected exactly one filteredApps anchor, got {source.count(anchor)}')
+          source = source.replace(anchor, helper + anchor, 1)
+
+          replacements = {
+              '            AppSort.INSTALL_DATE -> filtered.sortedBy { it.firstInstallTime }':
+                  '            AppSort.INSTALL_DATE -> sortByTimestampUnknownLast(filtered) { it.firstInstallTime }',
+              '            AppSort.UPDATE_DATE -> filtered.sortedBy { it.lastUpdateTime }':
+                  '            AppSort.UPDATE_DATE -> sortByTimestampUnknownLast(filtered) { it.lastUpdateTime }',
+              '        return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted':
+                  '        return when (currentSort) {\n'
+                  '            AppSort.NAME, AppSort.PACKAGE -> if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted\n'
+                  '            AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> sorted\n'
+                  '        }',
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one old sort token: {old!r}; got {source.count(old)}')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source, encoding='utf-8')
+          print(f'PATCH_BLOB_OK: {git_blob_sha(source)}')
+          PY
+
+      - name: Verify focused contract and diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_activity_launcher_app_manager_contract.py
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt"
+          git diff -- apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt
+
+      - name: Commit exact GREEN implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt
+          git commit -m 'fix: keep unknown Activity Launcher dates last'
+          git push origin HEAD:fix/activity-launcher-unknown-date-sort
