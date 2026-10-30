@@ -338,7 +338,7 @@ class SelfUpdateActivity : Activity() {
                     if (percent != null && percent != progressPercent) {
                         progressPercent = percent
                         runOnUiThread {
-                            message = "${formatBytes(downloaded)}${total?.let { " / ${formatBytes(it)}" }.orEmpty()}"
+                            message = "${formatBytes(downloaded)} / ${formatBytes(total)}"
                             render()
                         }
                     }
