@@ -7,8 +7,16 @@ package_manager = (ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppPackage
 source_reader_path = ROOT / 'apps/dpc/modules/installer/android/src/main/kotlin/io/dpcaio/installer/android/InstallSourceDetails.kt'
 
 for needle in [
+    'AppTab { ALL, SYSTEM, USER, FAVORITES, RECENT }',
+    'private var currentTab = AppTab.ALL',
+    'AppTab.ALL -> installedApps.size',
+    'AppTab.ALL -> installedApps',
     'StateFilter { ALL, ENABLED, DISABLED }',
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
+    'val uid: Int',
+    'uid = info.uid',
+    'app.uid.toString().contains(query)',
+    'UID ${app.uid}',
     'val firstInstallTime: Long',
     'val lastUpdateTime: Long',
     'val targetSdk: Int',

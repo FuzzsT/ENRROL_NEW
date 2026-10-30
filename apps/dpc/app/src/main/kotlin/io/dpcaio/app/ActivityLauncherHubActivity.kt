@@ -32,7 +32,7 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 class ActivityLauncherHubActivity : Activity() {
-    private enum class AppTab { SYSTEM, USER, FAVORITES, RECENT }
+    private enum class AppTab { ALL, SYSTEM, USER, FAVORITES, RECENT }
     private enum class AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }
     private enum class StateFilter { ALL, ENABLED, DISABLED }
 
@@ -40,6 +40,7 @@ class ActivityLauncherHubActivity : Activity() {
         val packageName: String,
         val label: String,
         val versionName: String,
+        val uid: Int,
         val firstInstallTime: Long,
         val lastUpdateTime: Long,
         val targetSdk: Int,
@@ -57,7 +58,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var appList: LinearLayout
     private lateinit var status: TextView
 
-    private var currentTab = AppTab.USER
+    private var currentTab = AppTab.ALL
     private var currentSort = AppSort.NAME
     private var currentStateFilter = StateFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
@@ -147,7 +148,7 @@ class ActivityLauncherHubActivity : Activity() {
         body.addView(ModernUi.section(this, "Applications"))
         body.addView(
             ModernUi.compactCard(this).apply {
-                search = ModernUi.field(this@ActivityLauncherHubActivity, "Search app name or package")
+                search = ModernUi.field(this@ActivityLauncherHubActivity, "Search app name, package or UID")
                 search.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderApps()
@@ -196,6 +197,7 @@ class ActivityLauncherHubActivity : Activity() {
     private fun tabLabel(tab: AppTab): String {
         val installedPackages = installedPackageNames()
         val count = when (tab) {
+            AppTab.ALL -> installedApps.size
             AppTab.SYSTEM -> installedApps.count { it.system }
             AppTab.USER -> installedApps.count { !it.system }
             AppTab.FAVORITES -> favoritePackages.count { it in installedPackages }
@@ -215,7 +217,7 @@ class ActivityLauncherHubActivity : Activity() {
             val tone = when (tab) {
                 AppTab.SYSTEM -> ModernUi.Tone.WARNING
                 AppTab.USER -> ModernUi.Tone.SUCCESS
-                AppTab.FAVORITES, AppTab.RECENT -> ModernUi.Tone.NEUTRAL
+                AppTab.ALL, AppTab.FAVORITES, AppTab.RECENT -> ModernUi.Tone.NEUTRAL
             }
             val pill = ModernUi.pill(this, tabLabel(tab), tab == currentTab, tone) {
                 currentTab = tab
@@ -382,6 +384,7 @@ class ActivityLauncherHubActivity : Activity() {
             packageName = info.packageName,
             label = label,
             versionName = packageInfo.versionName ?: "unknown",
+            uid = info.uid,
             firstInstallTime = packageInfo.firstInstallTime,
             lastUpdateTime = packageInfo.lastUpdateTime,
             targetSdk = info.targetSdkVersion,
@@ -445,6 +448,7 @@ class ActivityLauncherHubActivity : Activity() {
         val favorites = favoritePackages
         val recents = recentPackages
         val base = when (currentTab) {
+            AppTab.ALL -> installedApps
             AppTab.SYSTEM -> installedApps.filter { it.system }
             AppTab.USER -> installedApps.filter { !it.system }
             AppTab.FAVORITES -> installedApps.filter { it.packageName in favorites }
@@ -456,7 +460,10 @@ class ActivityLauncherHubActivity : Activity() {
             StateFilter.DISABLED -> base.filter { !it.enabled }
         }
         val filtered = stateFiltered.filter { app ->
-            query.isBlank() || app.label.lowercase().contains(query) || app.packageName.lowercase().contains(query)
+            query.isBlank() ||
+                app.label.lowercase().contains(query) ||
+                app.packageName.lowercase().contains(query) ||
+                app.uid.toString().contains(query)
         }
         if (currentTab == AppTab.RECENT) return filtered
         return when (currentSort) {
@@ -573,7 +580,7 @@ class ActivityLauncherHubActivity : Activity() {
                         addView(ModernUi.title(this@ActivityLauncherHubActivity, app.label))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, app.packageName))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, "v${app.versionName} • SDK ${app.targetSdk} • Installed ${formatInstallDate(app.firstInstallTime)}"))
-                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Updated ${formatInstallDate(app.lastUpdateTime)}"))
+                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Updated ${formatInstallDate(app.lastUpdateTime)} • UID ${app.uid}"))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, "Installer: ${app.installerPackage ?: "unknown / preloaded"}"))
                     },
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
