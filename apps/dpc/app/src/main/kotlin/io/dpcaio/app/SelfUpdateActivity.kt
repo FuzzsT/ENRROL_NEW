@@ -372,39 +372,83 @@ class SelfUpdateActivity : Activity() {
                     setState(SelfUpdateState.ERROR, "Verification failed: ${error.message ?: error.javaClass.simpleName}")
                 }
             } finally {
-                operations.finishDownload()
-                notifyStateChanged()
-                if (autoSilentAfterDownload) {
-                    runOnUiThread { submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT) }
+                if (autoSilentAfterDownload && operations.handoffDownloadToInstall()) {
+                    notifyStateChanged()
+                    runOnUiThread {
+                        submitInstall(
+                            SelfUpdateInstallPolicy.AUTO_SILENT,
+                            installSlotAlreadyHeld = true,
+                        )
+                    }
                 } else {
-                    runOnUiThread { render() }
+                    operations.finishDownload()
+                    notifyStateChanged()
+                    if (autoSilentAfterDownload) {
+                        runOnUiThread {
+                            setState(SelfUpdateState.ERROR, "Verified update could not reserve the install stage")
+                        }
+                    } else {
+                        runOnUiThread { render() }
+                    }
                 }
             }
         }.start()
     }
 
-    private fun submitInstall(policy: SelfUpdateInstallPolicy) {
+    private fun submitInstall(
+        policy: SelfUpdateInstallPolicy,
+        installSlotAlreadyHeld: Boolean = false,
+    ) {
+        var installSlotHeld = installSlotAlreadyHeld
+
+        fun failBeforeStaging(next: SelfUpdateState, detail: String) {
+            if (installSlotHeld) {
+                operations.finishInstall()
+                installSlotHeld = false
+            }
+            setState(next, detail)
+        }
+
         val candidate = store.loadCandidate()
-            ?: return setState(SelfUpdateState.ERROR, "No verified update candidate")
+        if (candidate == null) {
+            failBeforeStaging(SelfUpdateState.ERROR, "No verified update candidate")
+            return
+        }
         if (!candidate.verified || !candidate.apkFile.isFile) {
-            return setState(SelfUpdateState.ERROR, "Candidate is not verified")
+            failBeforeStaging(SelfUpdateState.ERROR, "Candidate is not verified")
+            return
         }
         val decision = planner.evaluate(packageName, installedVersion().second, selectedChannel, candidate.manifest)
         if (!decision.accepted) {
-            return setState(decision.state, "Cached candidate rejected: ${decision.reason.replace('_', ' ')}")
+            failBeforeStaging(
+                decision.state,
+                "Cached candidate rejected: ${decision.reason.replace('_', ' ')}",
+            )
+            return
         }
 
-        val callback = Intent(this, SelfUpdateStatusReceiver::class.java)
-            .setAction(SelfUpdateStatusReceiver.ACTION_INSTALL_STATUS)
-            .putExtra(SelfUpdateStatusReceiver.EXTRA_POLICY, policy.name)
-        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
-        val requestCode = (candidate.manifest.versionCode and 0x7fffffff).toInt()
-        val sender = PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags).intentSender
-
-        if (!operations.tryStartInstall()) {
-            setState(SelfUpdateState.ERROR, "Install staging already in progress")
+        val sender = runCatching {
+            val callback = Intent(this, SelfUpdateStatusReceiver::class.java)
+                .setAction(SelfUpdateStatusReceiver.ACTION_INSTALL_STATUS)
+                .putExtra(SelfUpdateStatusReceiver.EXTRA_POLICY, policy.name)
+            val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            val requestCode = (candidate.manifest.versionCode and 0x7fffffff).toInt()
+            PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags).intentSender
+        }.getOrElse { error ->
+            failBeforeStaging(
+                SelfUpdateState.ERROR,
+                "Install preparation failed: ${error.message ?: error.javaClass.simpleName}",
+            )
             return
+        }
+
+        if (!installSlotHeld) {
+            if (!operations.tryStartInstall()) {
+                setState(SelfUpdateState.ERROR, "Install staging already in progress")
+                return
+            }
+            installSlotHeld = true
         }
         setState(SelfUpdateState.INSTALLING, "Submitting ${policy.name.lowercase(Locale.ROOT)} PackageInstaller session…")
 
