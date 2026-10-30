@@ -253,6 +253,17 @@ class ActivityLauncherHubActivity : Activity() {
 
     private fun installedPackageNames(): Set<String> = installedApps.asSequence().map { it.packageName }.toSet()
 
+    private fun tabCandidateCount(): Int {
+        val installedPackages = installedPackageNames()
+        return when (currentTab) {
+            AppTab.ALL -> installedApps.size
+            AppTab.SYSTEM -> installedApps.count { it.system }
+            AppTab.USER -> installedApps.count { !it.system }
+            AppTab.FAVORITES -> favoritePackages.count { it in installedPackages }
+            AppTab.RECENT -> recentPackages.count { it in installedPackages }
+        }
+    }
+
     private fun tabLabel(tab: AppTab): String {
         val installedPackages = installedPackageNames()
         val count = when (tab) {
@@ -682,9 +693,11 @@ class ActivityLauncherHubActivity : Activity() {
     private fun renderApps(resetLimit: Boolean = true) {
         if (!::appList.isInitialized || isFinishing || isDestroyed) return
         if (resetLimit) visibleAppLimit = INITIAL_RENDER_LIMIT
-        renderFilterSummary()
         val generation = ++renderGeneration
         val shown = filteredApps()
+        if (::filterSummary.isInitialized) {
+            filterSummary.text = "${filterSummaryText()} • SHOWING ${shown.size} / ${tabCandidateCount()}"
+        }
         appList.removeAllViews()
         renderStats(shown)
         renderSelectionBar()

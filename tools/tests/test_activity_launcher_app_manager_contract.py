@@ -44,6 +44,8 @@ for needle in [
     'currentTargetSdkFilter = TargetSdkFilter.ALL',
     'currentDebuggableFilter = DebuggableFilter.ALL',
     'search.setText("")',
+    'tabCandidateCount()',
+    'SHOWING ${shown.size} / ${tabCandidateCount()}',
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
     'SortDirection { ASCENDING, DESCENDING }',
     'private var currentSortDirection = SortDirection.ASCENDING',
