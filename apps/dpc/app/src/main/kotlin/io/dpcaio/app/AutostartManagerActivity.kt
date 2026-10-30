@@ -94,7 +94,10 @@ class AutostartManagerActivity : Activity() {
                     )
                 }
             }.distinctBy { it.component.flattenToString() }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label }.thenBy { it.component.flattenToString() })
+                .sortedWith(
+                    compareBy<BootReceiver>(String.CASE_INSENSITIVE_ORDER) { it.label }
+                        .thenBy { it.component.flattenToString() },
+                )
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
