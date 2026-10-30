@@ -43,6 +43,7 @@ include(
     ":delegation-core",
     ":dhizuku-compat",
     ":shizuku-adapter",
+    ":file-manager-android",
     ":knox-license-core",
     ":knox-official-core",
     ":knox-official-android",
@@ -91,6 +92,7 @@ project(":self-update-android").projectDir = file("apps/dpc/modules/self-update/
 project(":delegation-core").projectDir = file("apps/dpc/modules/delegation/core")
 project(":dhizuku-compat").projectDir = file("apps/dpc/integrations/dhizuku")
 project(":shizuku-adapter").projectDir = file("apps/dpc/integrations/shizuku")
+project(":file-manager-android").projectDir = file("apps/dpc/modules/file-manager/android")
 project(":knox-license-core").projectDir = file("apps/dpc/modules/knox/license/core")
 project(":knox-official-core").projectDir = file("apps/dpc/modules/knox/official/core")
 project(":knox-official-android").projectDir = file("apps/dpc/modules/knox/official/android")
