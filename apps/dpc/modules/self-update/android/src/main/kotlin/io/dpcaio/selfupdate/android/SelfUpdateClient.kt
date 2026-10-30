@@ -3,8 +3,10 @@ package io.dpcaio.selfupdate.android
 import io.dpcaio.selfupdate.SelfUpdateManifest
 import io.dpcaio.selfupdate.UpdateChannel
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -17,7 +19,13 @@ class SelfUpdateClient(
         val connection = openHttps(url)
         return try {
             ensureSuccess(connection)
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val expectedLength = connection.contentLengthLong.takeIf { it >= 0L }
+            if (expectedLength != null && expectedLength > MAX_MANIFEST_BYTES) {
+                throw IOException("Manifest exceeds size limit")
+            }
+            val body = connection.inputStream.use { input ->
+                String(readLimited(input, MAX_MANIFEST_BYTES), Charsets.UTF_8)
+            }
             parseManifest(JSONObject(body))
         } finally {
             connection.disconnect()
@@ -27,13 +35,18 @@ class SelfUpdateClient(
     fun downloadApk(
         url: String,
         destination: File,
+        maxBytes: Long = MAX_APK_BYTES,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
     ): Long {
+        require(maxBytes in 1..MAX_APK_BYTES) { "APK download limit out of range" }
         val connection = openHttps(url)
         try {
             ensureSuccess(connection)
             destination.parentFile?.mkdirs()
             val expectedLength = connection.contentLengthLong.takeIf { it >= 0L }
+            if (expectedLength != null && expectedLength > maxBytes) {
+                throw IOException("APK exceeds download limit")
+            }
             var downloaded = 0L
             connection.inputStream.use { input ->
                 destination.outputStream().use { output ->
@@ -41,6 +54,10 @@ class SelfUpdateClient(
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
+                        if (count == 0) continue
+                        if (downloaded + count > maxBytes) {
+                            throw IOException("APK exceeds download limit")
+                        }
                         output.write(buffer, 0, count)
                         downloaded += count
                         onProgress(downloaded, expectedLength)
@@ -102,8 +119,28 @@ class SelfUpdateClient(
         }
     }
 
-    private companion object {
-        const val HTTPS_PREFIX = "https://"
-        const val MAX_REDIRECTS = 4
+    private fun readLimited(input: InputStream, maxBytes: Long): ByteArray {
+        require(maxBytes > 0L) { "Read limit must be positive" }
+        val output = ByteArrayOutputStream(minOf(maxBytes, 64L * 1024L).toInt())
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var downloaded = 0L
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            if (downloaded + count > maxBytes) {
+                throw IOException("Response exceeds size limit")
+            }
+            output.write(buffer, 0, count)
+            downloaded += count
+        }
+        return output.toByteArray()
+    }
+
+    companion object {
+        const val MAX_MANIFEST_BYTES: Long = 256L * 1024L
+        const val MAX_APK_BYTES: Long = 512L * 1024L * 1024L
+        private const val HTTPS_PREFIX = "https://"
+        private const val MAX_REDIRECTS = 4
     }
 }
