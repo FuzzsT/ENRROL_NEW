@@ -45,12 +45,14 @@ for needle in [
     'currentUpdateAgeFilter = UpdateAgeFilter.ALL',
     'updateAge=${currentUpdateAgeFilter.name}',
     'val now = System.currentTimeMillis()',
-    'InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_24H_MS }',
-    'InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_7D_MS }',
-    'InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_30D_MS }',
-    'UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_24H_MS }',
-    'UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_7D_MS }',
-    'UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_30D_MS }',
+    'private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean',
+    'timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs',
+    'InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_24H_MS) }',
+    'InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_7D_MS) }',
+    'InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_30D_MS) }',
+    'UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_24H_MS) }',
+    'UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_7D_MS) }',
+    'UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { isTimestampWithinAge(it.lastUpdateTime, now, UPDATE_AGE_30D_MS) }',
     'private const val INSTALL_AGE_24H_MS = 24L * 60L * 60L * 1000L',
     'private const val INSTALL_AGE_7D_MS = 7L * INSTALL_AGE_24H_MS',
     'private const val INSTALL_AGE_30D_MS = 30L * INSTALL_AGE_24H_MS',
@@ -135,8 +137,14 @@ for stale in [
     'renderUpdateAgeBar()',
     'INST ${filter.name}',
     'UPD ${filter.name}',
+    'InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_24H_MS }',
+    'InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_7D_MS }',
+    'InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_30D_MS }',
+    'UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_24H_MS }',
+    'UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_7D_MS }',
+    'UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_30D_MS }',
 ]:
-    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter layout/label token {stale}'
+    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter/future-age token {stale}'
 
 for needle in [
     'EXTRA_TARGET_PACKAGE',
