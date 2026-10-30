@@ -36,10 +36,25 @@ class AndroidPermissionGrantCoordinator(
     private val appOps = appContext.getSystemService(AppOpsManager::class.java)
     private val planner = PermissionGrantPlanner()
 
-    fun grantAllAuto(packageName: String, userId: Int, entries: List<PermissionCatalogEntry>, systemPrivilegedAvailable: Boolean): List<PermissionGrantExecution> =
-        entries.distinctBy { it.name }.map { grantAuto(packageName, userId, it, systemPrivilegedAvailable) }
+    fun grantAllAuto(packageName: String, userId: Int, entries: List<PermissionCatalogEntry>, systemPrivilegedAvailable: Boolean): List<PermissionGrantExecution> {
+        val shizukuReady = shizuku?.awaitConnected(SHIZUKU_READY_TIMEOUT_MS) == true
+        return entries.distinctBy { it.name }.map {
+            grantAuto(packageName, userId, it, systemPrivilegedAvailable, shizukuReady)
+        }
+    }
 
     fun grantAuto(packageName: String, userId: Int, entry: PermissionCatalogEntry, systemPrivilegedAvailable: Boolean): PermissionGrantExecution {
+        val shizukuReady = shizuku?.awaitConnected(SHIZUKU_READY_TIMEOUT_MS) == true
+        return grantAuto(packageName, userId, entry, systemPrivilegedAvailable, shizukuReady)
+    }
+
+    private fun grantAuto(
+        packageName: String,
+        userId: Int,
+        entry: PermissionCatalogEntry,
+        systemPrivilegedAvailable: Boolean,
+        shizukuReady: Boolean,
+    ): PermissionGrantExecution {
         val already = pm.checkPermission(entry.name, packageName) == PackageManager.PERMISSION_GRANTED
         val dpcCanGrant = entry.protection == PermissionProtection.DANGEROUS &&
             (dpm.isDeviceOwnerApp(appContext.packageName) || dpm.isProfileOwnerApp(appContext.packageName))
@@ -49,7 +64,7 @@ class AndroidPermissionGrantCoordinator(
                 entry = entry,
                 alreadyGranted = already,
                 dpcCanGrantRuntime = dpcCanGrant,
-                shizukuAvailable = shizuku?.identity() != null,
+                shizukuAvailable = shizukuReady,
                 samsungKnoxSpecialAvailable = special && knox?.supports(entry.name) == true,
                 systemPrivilegedAvailable = systemPrivilegedAvailable,
                 userActionAvailable = special,
@@ -112,6 +127,7 @@ class AndroidPermissionGrantCoordinator(
     private data class AppOpMapping(val commandName: String, val opStr: String)
 
     companion object {
+        private const val SHIZUKU_READY_TIMEOUT_MS = 1500L
         private val APP_OPS = mapOf(
             "android.permission.SYSTEM_ALERT_WINDOW" to AppOpMapping("SYSTEM_ALERT_WINDOW", "android:system_alert_window"),
             "android.permission.WRITE_SETTINGS" to AppOpMapping("WRITE_SETTINGS", "android:write_settings"),
