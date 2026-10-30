@@ -139,7 +139,9 @@ def main():
     coordinator = coordinator_file.read_text(encoding="utf-8")
     for token in [
         "object SelfUpdateOperationCoordinator",
-        "AtomicBoolean",
+        "AtomicReference",
+        "tryStartCheck",
+        "finishCheck",
         "tryStartDownload",
         "finishDownload",
         "tryStartInstall",
@@ -147,6 +149,7 @@ def main():
         "isBusy",
     ]:
         assert_true(token in coordinator, f"Self Update operation coordinator missing: {token}")
+    assert_true("AtomicBoolean" not in coordinator, "Self Update operation coordinator must use one shared atomic slot")
 
     combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file, coordinator_file])
     for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
@@ -170,6 +173,10 @@ def main():
     ]:
         assert_true(token in self_update_activity, f"Self Update UI missing: {token}")
 
+    check_body = self_update_activity.split("private fun checkNow()", 1)[1].split("private fun downloadAndVerify()", 1)[0]
+    assert_true("operations.tryStartCheck()" in check_body, "Self Update check must use the lifecycle-independent operation gate")
+    assert_true("operations.finishCheck()" in check_body, "Self Update check gate must be released after completion")
+    assert_true("notifyStateChanged()" in check_body, "Self Update check completion must notify recreated activities after gate release")
     download_body = self_update_activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
     assert_true("operations.tryStartDownload()" in download_body, "Self Update download must use the lifecycle-independent operation gate")
     assert_true("operations.finishDownload()" in download_body, "Self Update download gate must be released after completion")
