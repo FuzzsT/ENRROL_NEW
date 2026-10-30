@@ -414,10 +414,12 @@ class ActivityLauncherHubActivity : Activity() {
                 selected = sort == currentSort && currentTab != AppTab.RECENT,
                 tone = ModernUi.Tone.NEUTRAL,
             ) {
-                currentSort = sort
-                currentSortDirection = when (sort) {
-                    AppSort.NAME, AppSort.PACKAGE -> SortDirection.ASCENDING
-                    AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> SortDirection.DESCENDING
+                if (sort != currentSort) {
+                    currentSort = sort
+                    currentSortDirection = when (sort) {
+                        AppSort.NAME, AppSort.PACKAGE -> SortDirection.ASCENDING
+                        AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> SortDirection.DESCENDING
+                    }
                 }
                 renderSortBar()
                 renderApps()
