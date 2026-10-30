@@ -20,7 +20,7 @@ class InstallerDoctor(private val context: Context) {
         } else {
             true
         }
-        val packageInstallerAvailable = runCatching { packageManager.packageInstaller != null }.getOrDefault(false)
+        val packageInstallerAvailable = runCatching { packageManager.packageInstaller; true }.getOrDefault(false)
         val deviceOwner = runCatching { dpm.isDeviceOwnerApp(context.packageName) }.getOrDefault(false)
         val profileOwner = runCatching { dpm.isProfileOwnerApp(context.packageName) }.getOrDefault(false)
 

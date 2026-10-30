@@ -63,8 +63,9 @@ assert doctor.exists(), 'InstallerDoctor missing'
 d=doctor.read_text('utf-8')
 for needle in ['canRequestPackageInstalls','DevicePolicyManager','AndroidShizukuRuntime','binderAlive','permissionGranted','DIAGNOSTIC_ONLY']:
     assert needle in d, needle
-for forbidden in ['Runtime.getRuntime().exec','ProcessBuilder','pm install','su -c']:
+for forbidden in ['Runtime.getRuntime().exec','ProcessBuilder','pm install','su -c','packageManager.packageInstaller != null']:
     assert forbidden not in d, forbidden
+assert 'runCatching { packageManager.packageInstaller; true }.getOrDefault(false)' in d, 'PackageInstaller availability must be exception-based, not null-based'
 
 history=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppInstallHistoryStore.kt'
 assert history.exists(), 'AppInstallHistoryStore missing'
