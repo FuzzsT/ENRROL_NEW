@@ -18,6 +18,7 @@ import android.text.TextWatcher
 import android.util.LruCache
 import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -62,6 +63,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var targetSdkBar: LinearLayout
     private lateinit var debuggableBar: LinearLayout
     private lateinit var filterSummary: TextView
+    private lateinit var resetFiltersButton: Button
     private lateinit var selectionBar: LinearLayout
     private lateinit var stats: LinearLayout
     private lateinit var appList: LinearLayout
@@ -206,7 +208,12 @@ class ActivityLauncherHubActivity : Activity() {
                 filterSummary = ModernUi.body(this@ActivityLauncherHubActivity, filterSummaryText())
                 addView(filterSummary)
                 addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 6))
-                addView(ModernUi.action(this@ActivityLauncherHubActivity, "Reset filters") { resetFilters() })
+                resetFiltersButton = ModernUi.action(
+                    this@ActivityLauncherHubActivity,
+                    "Reset filters (${activeFilterCount()})",
+                ) { resetFilters() }
+                addView(resetFiltersButton)
+                renderFilterControls()
             }
         )
 
@@ -243,8 +250,16 @@ class ActivityLauncherHubActivity : Activity() {
     private fun filterSummaryText(): String =
         "ACTIVE FILTERS ${activeFilterCount()} • FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
 
+    private fun renderFilterControls() {
+        if (!::resetFiltersButton.isInitialized) return
+        resetFiltersButton.text = "Reset filters (${activeFilterCount()})"
+        resetFiltersButton.isEnabled = activeFilterCount() > 0
+        resetFiltersButton.alpha = if (resetFiltersButton.isEnabled) 1f else 0.55f
+    }
+
     private fun renderFilterSummary() {
         if (::filterSummary.isInitialized) filterSummary.text = filterSummaryText()
+        renderFilterControls()
     }
 
     private fun resetFilters() {
@@ -708,6 +723,7 @@ class ActivityLauncherHubActivity : Activity() {
         if (::filterSummary.isInitialized) {
             filterSummary.text = "${filterSummaryText()} • SHOWING ${shown.size} / ${tabCandidateCount()}"
         }
+        renderFilterControls()
         appList.removeAllViews()
         renderStats(shown)
         renderSelectionBar()
