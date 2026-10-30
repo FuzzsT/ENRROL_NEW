@@ -9,6 +9,7 @@ source_reader_path = ROOT / 'apps/dpc/modules/installer/android/src/main/kotlin/
 for needle in [
     'StateFilter { ALL, ENABLED, DISABLED }',
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
+    'val firstInstallTime: Long',
     'val lastUpdateTime: Long',
     'val targetSdk: Int',
     'val installerPackage: String?',
@@ -18,7 +19,10 @@ for needle in [
     'Copy package',
     'Settings.ACTION_APPLICATION_DETAILS_SETTINGS',
     'AppPackageManagerActivity.MODE_UPDATER',
+    'formatInstallDate(app.firstInstallTime)',
     'formatInstallDate(app.lastUpdateTime)',
+    '"v${app.versionName} • SDK ${app.targetSdk} • Installed ${formatInstallDate(app.firstInstallTime)}"',
+    'AppSort.INSTALL_DATE -> filtered.sortedByDescending { it.firstInstallTime }',
     'AndroidInstallSourceReader',
     'currentStateFilter',
     'selectedPackages',
