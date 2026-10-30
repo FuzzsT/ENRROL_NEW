@@ -11,6 +11,7 @@ SCRIPT = ROOT / "tools/release/build_self_update_manifest.py"
 WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 CLIENT = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateClient.kt"
 STORE = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateStore.kt"
+COORDINATOR = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateOperationCoordinator.kt"
 ACTIVITY = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 
 
@@ -111,11 +112,27 @@ def main():
     ]:
         assert token in store, f"checked Self Update manifest persistence missing: {token}"
 
+    coordinator = COORDINATOR.read_text(encoding="utf-8")
+    for token in [
+        "AtomicReference",
+        "enum class Operation",
+        "Operation.CHECK",
+        "Operation.DOWNLOAD",
+        "Operation.INSTALL",
+        "tryStartCheck",
+        "finishCheck",
+    ]:
+        assert token in coordinator, f"Self Update unified operation gate missing: {token}"
+    assert "AtomicBoolean" not in coordinator, "Self Update operations must share one atomic slot"
+
     activity = ACTIVITY.read_text(encoding="utf-8")
     assert "store.saveCheckedManifest(manifest)" in activity, "successful update check must persist the checked manifest"
     assert activity.count("store.loadCheckedManifest()") >= 2, (
         "Self Update must restore the checked manifest across Activity recreation/resume"
     )
+    check_body = activity.split("private fun checkNow()", 1)[1].split("private fun downloadAndVerify()", 1)[0]
+    assert "operations.tryStartCheck()" in check_body, "Self Update check must use the shared operation gate"
+    assert "operations.finishCheck()" in check_body, "Self Update check gate must be released in all outcomes"
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
