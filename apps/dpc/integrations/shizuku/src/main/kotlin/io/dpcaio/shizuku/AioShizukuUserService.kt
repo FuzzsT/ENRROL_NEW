@@ -1,5 +1,6 @@
 package io.dpcaio.shizuku
 
+import android.app.AppOpsManager
 import android.content.Context
 import android.os.Process
 import java.util.concurrent.TimeUnit
@@ -45,6 +46,31 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
     override fun getAppOp(packageName: String, op: String, userId: Int): String {
         if (!validPackage(packageName) || !validOp(op) || userId < 0) return "INVALID_ARGUMENT"
         return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName, op))
+    }
+
+    override fun resolveAppOp(op: String): String {
+        if (!validOp(op)) return "INVALID_ARGUMENT"
+        return try {
+            val appOpsClass = AppOpsManager::class.java
+            val intClass = Int::class.javaPrimitiveType!!
+            val requestedCode = op.toIntOrNull() ?: runCatching {
+                appOpsClass.getDeclaredMethod("strOpToOp", String::class.java).invoke(null, op) as Int
+            }.getOrElse {
+                appOpsClass.getDeclaredMethod("strDebugOpToOp", String::class.java).invoke(null, op) as Int
+            }
+            val switchCode = appOpsClass.getDeclaredMethod("opToSwitch", intClass).invoke(null, requestedCode) as Int
+            val opToName = appOpsClass.getDeclaredMethod("opToName", intClass)
+            val requestedName = opToName.invoke(null, requestedCode) as String
+            val switchName = opToName.invoke(null, switchCode) as String
+            buildString {
+                appendLine("requested=$requestedName")
+                appendLine("requestedCode=$requestedCode")
+                appendLine("switch=$switchName")
+                append("switchCode=$switchCode")
+            }
+        } catch (_: Exception) {
+            "EXECUTION_ERROR"
+        }
     }
 
     override fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int {

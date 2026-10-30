@@ -10,6 +10,7 @@ interface IAioShizukuUserService {
     int setAppOp(String packageName, String op, String mode, int userId);
     String getAppOps(String packageName, int userId);
     String getAppOp(String packageName, String op, int userId);
+    String resolveAppOp(String op);
     int setPackageEnabled(String packageName, boolean enabled, int userId);
     int setComponentEnabledState(String packageName, String className, String state, int userId);
     int installExistingPackage(String packageName, int userId);
