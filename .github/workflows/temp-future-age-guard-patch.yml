@@ -42,10 +42,11 @@ jobs:
               raise SystemExit(f'Unexpected input blob: {actual_before} != {expected_before}')
 
           anchor = '    private fun renderDateAgeBar() {'
-          helper = '''    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =
-              timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs
-
-          '''
+          helper = (
+              '    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =\n'
+              '        timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs\n'
+              '\n'
+          )
           if source.count(anchor) != 1:
               raise SystemExit(f'Expected exactly one renderDateAgeBar anchor, got {source.count(anchor)}')
           source = source.replace(anchor, helper + anchor, 1)
