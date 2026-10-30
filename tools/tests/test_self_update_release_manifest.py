@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/release/build_self_update_manifest.py"
 WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
+CLIENT = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateClient.kt"
+ACTIVITY = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 
 
 def invoke(apk: Path, out: Path, apk_url: str):
@@ -87,6 +89,21 @@ def main():
     assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
     assert 'channel="continuous"' in workflow, "rolling release must produce continuous self-update channel"
     assert 'stable_alias="dpc-aio-stable"' in workflow, "stable self-update must use deterministic alias"
+
+    client = CLIENT.read_text(encoding="utf-8")
+    for token in [
+        "MAX_MANIFEST_BYTES",
+        "MAX_APK_BYTES",
+        "readLimited",
+        "expectedLength > maxBytes",
+        "downloaded + count > maxBytes",
+    ]:
+        assert token in client, f"self-update network payload limit missing: {token}"
+
+    activity = ACTIVITY.read_text(encoding="utf-8")
+    assert "manifest.apkSize ?: SelfUpdateClient.MAX_APK_BYTES" in activity, (
+        "Self Update must constrain APK download to the manifest size or hard client cap"
+    )
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
