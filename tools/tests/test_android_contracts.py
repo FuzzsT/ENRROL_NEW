@@ -132,6 +132,8 @@ def main():
     installer = installer_file.read_text(encoding="utf-8")
     for token in ["class SelfUpdateInstaller", "AndroidPackageInstallerAdapter", "InstallSessionSpec", "PackageSource.DOWNLOADED_FILE", "requireUserAction", "SILENT_IF_ALLOWED", "AUTO_SILENT"]:
         assert_true(token in installer, f"Self Update installer missing: {token}")
+    assert_true("catch (error: Exception)" in installer, "Self Update installer must catch staging exceptions")
+    assert_true("runCatching { adapter.abandon(sessionId) }" in installer, "Self Update installer must abandon the session after a staging exception")
 
     combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file])
     for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
@@ -160,6 +162,9 @@ def main():
     assert_true(self_update_activity.count("store.clearCandidate()") >= 2, "changing Self Update channel must invalidate the cached candidate")
     submit_body = self_update_activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
     assert_true("planner.evaluate" in submit_body and "selectedChannel" in submit_body, "Self Update install must revalidate cached candidate against the selected channel")
+    assert_true("installInFlight.compareAndSet(false, true)" in submit_body, "Self Update install staging must be single-flight")
+    assert_true("installInFlight.set(false)" in submit_body, "Self Update install guard must be released after staging")
+    assert_true("downloadInFlight.get() || installInFlight.get()" in self_update_activity, "candidate-mutating controls must stay disabled during install staging")
 
     status_receiver_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateStatusReceiver.kt"
     assert_true(status_receiver_path.is_file(), "SelfUpdateStatusReceiver.kt missing")
