@@ -107,6 +107,7 @@ class EngineeringIntentCenterActivity : Activity() {
                 addView(secretCode)
                 addView(ModernUi.spacer(this@EngineeringIntentCenterActivity, 8))
                 addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Scan secret-code receivers") { scanSecretCodeReceivers() })
+                addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Open calculator") { openCalculator() })
             }
         )
 
@@ -205,6 +206,15 @@ class EngineeringIntentCenterActivity : Activity() {
             startActivity(intent)
             "ACTION_CALL submitted for ${intent.data}"
         }.getOrElse { "Direct call failed: ${it.message}" }
+    }
+
+    private fun openCalculator() {
+        output.text = runCatching {
+            val intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALCULATOR)
+            if (intent.resolveActivity(packageManager) == null) error("No calculator handles CATEGORY_APP_CALCULATOR")
+            startActivity(intent)
+            "Calculator opened through the system app category."
+        }.getOrElse { "Calculator launch failed: ${it.message}" }
     }
 
     private fun scanSecretCodeReceivers() {
