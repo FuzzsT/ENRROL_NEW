@@ -349,7 +349,7 @@ class AndroidDevicePolicyGateway(
             if (spec.freezePeriods.isNotEmpty()) {
                 if (Build.VERSION.SDK_INT < 28) return@policyCall unsupported("Freeze periods require API 28+")
                 policy.setFreezePeriods(spec.freezePeriods.map {
-                    FreezePeriod(MonthDay.of(it.startMonth, it.startDay), MonthDay.of(it.end.monthValue, it.end.dayOfMonth))
+                    FreezePeriod(MonthDay.of(it.startMonth, it.startDay), MonthDay.of(it.endMonth, it.endDay))
                 })
             }
             dpm.setSystemUpdatePolicy(admin, policy)
