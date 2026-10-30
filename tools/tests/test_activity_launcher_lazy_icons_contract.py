@@ -16,7 +16,6 @@ assert "runOnUiThread" in launcher
 assert "val icon = loadAppIcon(app.packageName)" not in launcher, "renderApp must not synchronously load a cache miss"
 assert "renderGeneration" in launcher, "icon requests must be scoped to the current render generation"
 assert "generation != renderGeneration" in launcher
-assert "if (isFinishing || isDestroyed) return@runOnUiThread" in launcher, "inventory completion must be discarded after destruction"
 assert "iconExecutor.isShutdown" in launcher, "icon submission must be guarded after executor shutdown"
 assert "ICON_CACHE_SIZE" in launcher
 
@@ -59,6 +58,8 @@ discover_start = launcher.index("private fun discoverInstalledApps")
 discover_end = launcher.index("private fun toEntry", discover_start)
 discover_body = launcher[discover_start:discover_end]
 assert "++inventoryGeneration" in discover_body, "each inventory scan must get a monotonically increasing generation"
+assert "isFinishing || isDestroyed" in discover_body, "inventory completion must be discarded after destruction"
+assert "return@runOnUiThread" in discover_body, "destroyed/stale inventory completion must return before mutating UI state"
 assert "generation != inventoryGeneration" in discover_body, "stale installed-app scans must not overwrite newer inventory"
 assert "renderApps(resetLimit = resetLimit)" in discover_body, "restart refresh should be able to preserve already materialized depth"
 assert "iconCache.evictAll()" in discover_body, "accepted inventory refresh must invalidate cached icons so package updates cannot show stale artwork"
