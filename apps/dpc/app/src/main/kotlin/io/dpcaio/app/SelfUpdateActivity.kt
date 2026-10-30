@@ -49,6 +49,7 @@ class SelfUpdateActivity : Activity() {
             val snapshot = SelfUpdateUiStateStore.read(this@SelfUpdateActivity)
             state = snapshot.state
             message = snapshot.message
+            currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
             progressPercent = null
             render()
         }
@@ -66,6 +67,7 @@ class SelfUpdateActivity : Activity() {
                     ?: SelfUpdateInstallPolicy.SILENT_IF_ALLOWED.name
             )
         }.getOrDefault(SelfUpdateInstallPolicy.SILENT_IF_ALLOWED)
+        currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
         val snapshot = SelfUpdateUiStateStore.read(this)
         state = snapshot.state
         message = snapshot.message
@@ -90,6 +92,7 @@ class SelfUpdateActivity : Activity() {
         val snapshot = SelfUpdateUiStateStore.read(this)
         state = snapshot.state
         message = snapshot.message
+        currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
         render()
     }
 
@@ -283,6 +286,7 @@ class SelfUpdateActivity : Activity() {
                 val manifest = client.fetchManifest(manifestUrl(channel))
                 val installed = installedVersion().second
                 val decision = planner.evaluate(packageName, installed, channel, manifest)
+                store.saveCheckedManifest(manifest)
                 runOnUiThread {
                     currentManifest = manifest
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
