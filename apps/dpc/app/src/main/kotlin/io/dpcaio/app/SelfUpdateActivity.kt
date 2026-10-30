@@ -20,12 +20,12 @@ import io.dpcaio.selfupdate.SelfUpdateState
 import io.dpcaio.selfupdate.UpdateChannel
 import io.dpcaio.selfupdate.android.SelfUpdateClient
 import io.dpcaio.selfupdate.android.SelfUpdateInstaller
+import io.dpcaio.selfupdate.android.SelfUpdateOperationCoordinator
 import io.dpcaio.selfupdate.android.SelfUpdateStore
 import io.dpcaio.selfupdate.android.SelfUpdateVerifier
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 
 class SelfUpdateActivity : Activity() {
     private val planner = SelfUpdatePlanner()
@@ -34,8 +34,7 @@ class SelfUpdateActivity : Activity() {
     private val verifier by lazy { SelfUpdateVerifier(this) }
     private val installer by lazy { SelfUpdateInstaller(this) }
     private val preferences by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
-    private val downloadInFlight = AtomicBoolean(false)
-    private val installInFlight = AtomicBoolean(false)
+    private val operations = SelfUpdateOperationCoordinator
 
     private var selectedChannel = UpdateChannel.STABLE
     private var selectedPolicy = SelfUpdateInstallPolicy.SILENT_IF_ALLOWED
@@ -108,7 +107,7 @@ class SelfUpdateActivity : Activity() {
         val candidate = store.loadCandidate()
         val manifest = currentManifest ?: candidate?.manifest
         val silentAvailable = silentInstallLikelyAvailable()
-        val busy = downloadInFlight.get() || installInFlight.get()
+        val busy = operations.isBusy()
 
         body.addView(
             ModernUi.hero(
@@ -296,19 +295,19 @@ class SelfUpdateActivity : Activity() {
     }
 
     private fun downloadAndVerify() {
-        if (!downloadInFlight.compareAndSet(false, true)) {
+        if (!operations.tryStartDownload()) {
             setState(SelfUpdateState.ERROR, "Download or verification already in progress")
             return
         }
         val manifest = currentManifest
         if (manifest == null) {
-            downloadInFlight.set(false)
+            operations.finishDownload()
             return setState(SelfUpdateState.ERROR, "Check for an update first")
         }
         val installedVersionCode = installedVersion().second
         val decision = planner.evaluate(packageName, installedVersionCode, selectedChannel, manifest)
         if (!decision.accepted) {
-            downloadInFlight.set(false)
+            operations.finishDownload()
             return setState(decision.state, decision.reason.replace('_', ' '))
         }
 
@@ -356,7 +355,7 @@ class SelfUpdateActivity : Activity() {
                     setState(SelfUpdateState.ERROR, "Verification failed: ${error.message ?: error.javaClass.simpleName}")
                 }
             } finally {
-                downloadInFlight.set(false)
+                operations.finishDownload()
                 runOnUiThread { render() }
             }
         }.start()
@@ -381,7 +380,7 @@ class SelfUpdateActivity : Activity() {
         val requestCode = (candidate.manifest.versionCode and 0x7fffffff).toInt()
         val sender = PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags).intentSender
 
-        if (!installInFlight.compareAndSet(false, true)) {
+        if (!operations.tryStartInstall()) {
             setState(SelfUpdateState.ERROR, "Install staging already in progress")
             return
         }
@@ -398,7 +397,7 @@ class SelfUpdateActivity : Activity() {
                     setState(SelfUpdateState.ERROR, "Install staging failed: ${error.message ?: error.javaClass.simpleName}")
                 }
             } finally {
-                installInFlight.set(false)
+                operations.finishInstall()
                 runOnUiThread { render() }
             }
         }.start()
