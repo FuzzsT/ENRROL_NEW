@@ -54,7 +54,8 @@ def main():
         'ANDROID_CLI="$(command -v android)"',
         '"$ANDROID_CLI" sdk list --all --all-versions --canary',
         '"$ANDROID_CLI" sdk install --canary',
-        'platforms/android-37',
+        "awk '$1 ~ /^platforms\\/android-37\\.[0-9]+$/ { print $1 }'",
+        'sort -V | tail -n1',
         'platforms/android-CinnamonBun',
         'build-tools/36.0.0',
         'ndk/28.2.13676358',
@@ -104,6 +105,8 @@ def main():
     install_step = workflow[workflow.index('- name: Install Android 17 SDK + native toolchain'):workflow.index('- name: Set up Python QR dependencies')]
     if 'SDKMANAGER=' in install_step or '--channel=3' in install_step:
         raise AssertionError('release Android 17 install step must use Android SDK CLI instead of sdkmanager channel flags')
+    if 'if has_package "platforms/android-37"' in install_step:
+        raise AssertionError('Android CLI exposes versioned Android 17 platform paths; do not require nonexistent platforms/android-37 alias')
 
     if not (
         'cmp -s' in workflow
