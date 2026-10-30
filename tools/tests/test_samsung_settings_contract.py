@@ -23,6 +23,12 @@ def main():
         'Discover / refresh settings', 'discoverSettings()', 'discoveredContainer', 'Filter discovered settings',
         'showDiscoveredSettingEditor', 'DiscoveredValueType', 'Default / baseline',
         '.setPositiveButton("OK"', '.setNegativeButton("Anuluj"',
+        'DiscoveryScope { ALL, SYSTEM, SECURE, GLOBAL }',
+        'listOf("ALL", "SYSTEM", "SECURE", "GLOBAL")',
+        'SettingNamespace.SYSTEM, SettingNamespace.SECURE, SettingNamespace.GLOBAL',
+        'DiscoveredSettingRow',
+        'row.namespace.name',
+        'ALL namespaces',
     ])
     print('test_samsung_settings_contract: PASS')
 
