@@ -62,7 +62,7 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'ACTION_DIAL',
     'CALL_PHONE',
     'SamsungSecretCodeDiscovery',
-    'ActivityExplorerActivity',
+    'DeveloperActivitiesActivity::class.java',
 ])
 assert 'Runtime.getRuntime' not in center
 assert 'Shizuku.newProcess' not in center
@@ -78,14 +78,18 @@ classifier = need(ACTIVITY_CORE / 'DeveloperActivityClassifier.kt', [
     'test',
 ])
 
-explorer = need(APP / 'ActivityExplorerActivity.kt', [
-    'DEVELOPER',
-    'DeveloperActivityClassifier.isDeveloperLike',
-    'developerFilterRequested',
+developer = need(APP / 'DeveloperActivitiesActivity.kt', [
+    'Hidden Developer Activities',
+    'AndroidActivityInventory',
+    'DeveloperActivityClassifier::isDeveloperLike',
+    'exported=',
+    'permission=',
+    'ActivityExplorerActivity::class.java',
 ])
 
 manifest = need(ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml', [
     '.EngineeringIntentCenterActivity',
+    '.DeveloperActivitiesActivity',
 ])
 
 dashboard = need(APP / 'AioDashboardActivity.kt', [
