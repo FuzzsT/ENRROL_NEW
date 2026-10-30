@@ -108,6 +108,31 @@ def main():
     if 'if has_package "platforms/android-37"' in install_step:
         raise AssertionError('Android CLI exposes versioned Android 17 platform paths; do not require nonexistent platforms/android-37 alias')
 
+    pr_workflow = must('.github/workflows/pr-android-ci.yml', 'Enterprise debug APK')
+    pr_install_step = pr_workflow[
+        pr_workflow.index('- name: Install Android 17 SDK and native toolchain'):
+        pr_workflow.index('- name: Install provisioning build dependencies')
+    ]
+    for token in [
+        'ANDROID_CLI="$(command -v android)"',
+        '"$ANDROID_CLI" sdk list --all --all-versions --canary',
+        '"$ANDROID_CLI" sdk install --canary',
+        "awk '$1 ~ /^platforms\\/android-37\\.[0-9]+$/ { print $1 }'",
+        'platforms/android-CinnamonBun',
+        'build-tools/36.0.0',
+        'ndk/28.2.13676358',
+        'cmake/3.22.1',
+        'test -e "$installed_path/android.jar"',
+        'test -d "$ANDROID_SDK_ROOT/ndk/28.2.13676358"',
+        'test -x "$ANDROID_SDK_ROOT/cmake/3.22.1/bin/cmake"',
+    ]:
+        if token not in pr_install_step:
+            raise AssertionError(f'PR Android 17 install step missing {token}')
+    if 'SDKMANAGER=' in pr_install_step or '--channel=3' in pr_install_step:
+        raise AssertionError('PR Android 17 install step must use Android SDK CLI instead of sdkmanager channel flags')
+    if 'if has_package "platforms/android-37"' in pr_install_step:
+        raise AssertionError('PR Android CLI install step must select a versioned stable Android 17 platform path')
+
     if not (
         'cmp -s' in workflow
         or (
