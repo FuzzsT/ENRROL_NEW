@@ -230,8 +230,18 @@ class ActivityLauncherHubActivity : Activity() {
         setContentView(ModernUi.scrollPage(this, body))
     }
 
+    private fun activeFilterCount(): Int {
+        var count = 0
+        if (currentStateFilter != StateFilter.ALL) count++
+        if (currentInstallSourceFilter != InstallSourceFilter.ALL) count++
+        if (currentTargetSdkFilter != TargetSdkFilter.ALL) count++
+        if (currentDebuggableFilter != DebuggableFilter.ALL) count++
+        if (::search.isInitialized && search.text.toString().isNotBlank()) count++
+        return count
+    }
+
     private fun filterSummaryText(): String =
-        "FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
+        "ACTIVE FILTERS ${activeFilterCount()} • FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
 
     private fun renderFilterSummary() {
         if (::filterSummary.isInitialized) filterSummary.text = filterSummaryText()
