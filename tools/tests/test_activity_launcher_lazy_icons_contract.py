@@ -19,6 +19,12 @@ assert "generation != renderGeneration" in launcher
 assert "iconExecutor.isShutdown" in launcher, "icon submission must be guarded after executor shutdown"
 assert "ICON_CACHE_SIZE" in launcher
 
+# Keep the legacy Android <=13 memory-pressure behavior without referencing the API-35-deprecated symbol.
+assert "override fun onTrimMemory(level: Int)" in launcher, "launcher must continue to trim its icon cache under memory pressure"
+assert "if (level >= TRIM_MEMORY_RUNNING_LOW)" not in launcher, "deprecated TRIM_MEMORY_RUNNING_LOW comparison must not be referenced"
+assert "private const val TRIM_MEMORY_RUNNING_LOW_COMPAT = 10" in launcher, "legacy running-low threshold must be preserved"
+assert "if (level >= TRIM_MEMORY_RUNNING_LOW_COMPAT) iconCache.evictAll()" in launcher, "icon cache eviction must preserve the legacy threshold"
+
 # Favorites/Recent counters must reflect the current installed inventory, not stale persisted package names.
 assert "private fun installedPackageNames(): Set<String>" in launcher, "launcher should centralize installed package membership"
 assert "favoritePackages.count { it in installedPackages }" in launcher, "Favorites overview count must ignore uninstalled packages"
