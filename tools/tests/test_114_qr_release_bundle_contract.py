@@ -73,6 +73,14 @@ for action, sha in ARTIFACT_ACTION_PINS.items():
     if marker not in workflow:
         errors.append(f'unified workflow must pin {action} to current Node 24 release SHA {sha}')
 
+SETUP_ANDROID_PIN = 'android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd'
+for name, text in [
+    ('pr-android-ci.yml', pr_workflow),
+    ('build-aio-enrollment.yml', workflow),
+]:
+    if SETUP_ANDROID_PIN not in text:
+        errors.append(f'{name} must pin setup-android v4.0.4')
+
 # Both PR CI and release CI must keep Android minor releases at the canonical sdkmanager path.
 # Aliasing android-37.2 as android-37 makes CMake/AGP emit CXX5304 package-location warnings.
 def require_canonical_sdk_path(name, text):

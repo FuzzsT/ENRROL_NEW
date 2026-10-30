@@ -50,7 +50,7 @@ def main():
         raise AssertionError('workflow must use immutable checkout v5.1.0 pin on the Node 24 runner')
     for token in [
         'actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95',
-        'android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699',
+        'android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd',
         '--list --channel=3',
         'platforms;android-37',
         'build-tools;36.0.0',
