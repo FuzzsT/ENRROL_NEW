@@ -137,7 +137,8 @@ def main():
     download_body = activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
     for token in [
         "var autoSilentAfterDownload = false",
-        "autoSilentAfterDownload = true",
+        "val silentAvailable = autoSilentEnabled && silentInstallLikelyAvailable()",
+        "autoSilentAfterDownload = silentAvailable",
         "operations.finishDownload()",
         "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)",
     ]:
