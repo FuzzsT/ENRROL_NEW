@@ -62,16 +62,16 @@ for forbidden in [
 ]:
     if forbidden in workflow: errors.append(f'unified workflow contains forbidden/stale marker {forbidden}')
 
-# Android SDK minor releases must stay at their canonical sdkmanager path.
+# PR CI must keep Android minor releases at the canonical sdkmanager path.
 # Aliasing android-37.2 as android-37 makes CMake/AGP emit CXX5304 package-location warnings.
-for workflow_name, workflow_text in [
-    ('build-aio-enrollment.yml', workflow),
-    ('pr-android-ci.yml', pr_workflow),
-]:
-    if 'ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"' in workflow_text:
-        errors.append(f'{workflow_name} must not alias a minor Android SDK package to platforms/android-37')
-    if 'test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"' in workflow_text:
-        errors.append(f'{workflow_name} must validate the canonical installed platform path instead of platforms/android-37')
+if 'ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"' in pr_workflow:
+    errors.append('pr-android-ci.yml must not alias a minor Android SDK package to platforms/android-37')
+if 'test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"' in pr_workflow:
+    errors.append('pr-android-ci.yml must validate the canonical installed platform path instead of platforms/android-37')
+if 'installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"' not in pr_workflow:
+    errors.append('pr-android-ci.yml must resolve the canonical installed platform path')
+if 'test -e "$installed_path/android.jar"' not in pr_workflow:
+    errors.append('pr-android-ci.yml must validate android.jar at the canonical installed platform path')
 
 for token in [
     'id: runtime_smoke_primary',
