@@ -173,14 +173,20 @@ def main():
     download_body = self_update_activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
     assert_true("operations.tryStartDownload()" in download_body, "Self Update download must use the lifecycle-independent operation gate")
     assert_true("operations.finishDownload()" in download_body, "Self Update download gate must be released after completion")
+    assert_true("notifyStateChanged()" in download_body, "Self Update download completion must notify recreated activities after gate release")
     assert_true(self_update_activity.count("store.clearCandidate()") >= 2, "changing Self Update channel must invalidate the cached candidate")
     submit_body = self_update_activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
     assert_true("planner.evaluate" in submit_body and "selectedChannel" in submit_body, "Self Update install must revalidate cached candidate against the selected channel")
     assert_true("operations.tryStartInstall()" in submit_body, "Self Update install staging must use the lifecycle-independent operation gate")
     assert_true("operations.finishInstall()" in submit_body, "Self Update install gate must be released after staging")
+    assert_true("notifyStateChanged()" in submit_body, "Self Update install staging completion must notify recreated activities after gate release")
     assert_true("operations.isBusy()" in self_update_activity, "candidate-mutating controls must read lifecycle-independent busy state")
     assert_true("private val downloadInFlight = AtomicBoolean(false)" not in self_update_activity, "download guard must not be Activity-instance state")
     assert_true("private val installInFlight = AtomicBoolean(false)" not in self_update_activity, "install guard must not be Activity-instance state")
+    set_state_body = self_update_activity.split("private fun setState", 1)[1].split("private fun installedVersion", 1)[0]
+    assert_true("notifyStateChanged()" in set_state_body, "Self Update state writes must notify the currently visible Activity")
+    assert_true("Intent(SelfUpdateStatusReceiver.ACTION_STATE_CHANGED)" in self_update_activity, "Self Update state notification must use the internal state-changed action")
+    assert_true(".setPackage(packageName)" in self_update_activity, "Self Update state notification must stay package-scoped")
 
     status_receiver_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateStatusReceiver.kt"
     assert_true(status_receiver_path.is_file(), "SelfUpdateStatusReceiver.kt missing")
