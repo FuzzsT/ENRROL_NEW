@@ -12,6 +12,7 @@ WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 CLIENT = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateClient.kt"
 STORE = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateStore.kt"
 COORDINATOR = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateOperationCoordinator.kt"
+COORDINATOR_TEST = ROOT / "apps/dpc/modules/self-update/android/src/test/kotlin/io/dpcaio/selfupdate/android/SelfUpdateOperationCoordinatorTest.kt"
 ACTIVITY = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 
 
@@ -34,6 +35,32 @@ def invoke(apk: Path, out: Path, apk_url: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+
+
+def run_coordinator_behavior_test():
+    with tempfile.TemporaryDirectory() as td:
+        classes = Path(td) / "classes"
+        classes.mkdir()
+        compile_proc = subprocess.run(
+            ["kotlinc", str(COORDINATOR), str(COORDINATOR_TEST), "-d", str(classes)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        assert compile_proc.returncode == 0, compile_proc.stdout
+        run_proc = subprocess.run(
+            [
+                "kotlin",
+                "-classpath",
+                str(classes),
+                "io.dpcaio.selfupdate.android.SelfUpdateOperationCoordinatorTestKt",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        assert run_proc.returncode == 0, run_proc.stdout
+        assert "SelfUpdateOperationCoordinatorTest: PASS" in run_proc.stdout, run_proc.stdout
 
 
 def main():
@@ -124,6 +151,7 @@ def main():
     ]:
         assert token in coordinator, f"Self Update unified operation gate missing: {token}"
     assert "AtomicBoolean" not in coordinator, "Self Update operations must share one atomic slot"
+    run_coordinator_behavior_test()
 
     activity = ACTIVITY.read_text(encoding="utf-8")
     assert "store.saveCheckedManifest(manifest)" in activity, "successful update check must persist the checked manifest"
