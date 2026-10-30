@@ -13,25 +13,12 @@ def must(path: Path, token: str):
     return text
 
 
-def require_resume_rebind(path: Path):
-    text = path.read_text(encoding="utf-8", errors="ignore")
-    marker = "override fun onResume()"
-    if marker not in text:
-        raise AssertionError(f"{path.relative_to(ROOT)} must rebind Shizuku from onResume")
-    block = text[text.index(marker):text.index(marker) + 500]
-    if "shizuku.bind()" not in block:
-        raise AssertionError(f"{path.relative_to(ROOT)} onResume must retry shizuku.bind()")
-
-
 def main():
     runtime = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt"
     service = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt"
     client = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt"
     aidl = ROOT / "apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioShizukuUserService.aidl"
     editor = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppOpsVerifiedEditorActivity.kt"
-    permission_manager = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt"
-    activity_explorer = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityExplorerActivity.kt"
-    samsung_settings = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SamsungSettingsEditorActivity.kt"
     activity_executor = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt"
     control_center = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt"
     manifest = ROOT / "apps/dpc/integrations/shizuku/src/main/AndroidManifest.xml"
@@ -98,6 +85,14 @@ def main():
         "fun isConnected(): Boolean",
         "clearRemote(",
         "fun connectedRemote(): IAioShizukuUserService?",
+        "Shizuku.OnBinderReceivedListener",
+        "Shizuku.OnRequestPermissionResultListener",
+        "addBinderReceivedListenerSticky",
+        "addRequestPermissionResultListener",
+        "removeBinderReceivedListener",
+        "removeRequestPermissionResultListener",
+        "retryBindIfReady",
+        "PackageManager.PERMISSION_GRANTED",
         'fun getAppOp(packageName: String, op: String, userId: Int): String?',
         'connectedRemote()?.getAppOp(packageName, op, userId)',
         'fun resolveAppOp(op: String): String?',
@@ -120,9 +115,6 @@ def main():
     ]:
         if token not in editor_text:
             raise AssertionError(f"AppOps switch-aware fail-closed verification missing {token}")
-
-    for screen in [editor, permission_manager, activity_explorer, samsung_settings]:
-        require_resume_rebind(screen)
 
     activity_text = must(activity_executor, "ActivityRoute.SHIZUKU")
     if "client.startActivity(" not in activity_text:
