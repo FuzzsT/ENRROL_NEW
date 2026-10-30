@@ -78,6 +78,12 @@ def main():
         "Shizuku.bindUserService",
         ".processNameSuffix(",
         ".version(",
+        "IBinder.DeathRecipient",
+        "linkToDeath",
+        "unlinkToDeath",
+        "isBinderAlive",
+        "fun isConnected(): Boolean",
+        "clearRemote(",
         'fun getAppOp(packageName: String, op: String, userId: Int): String?',
         'remote?.getAppOp(packageName, op, userId)',
         'fun resolveAppOp(op: String): String?',
@@ -106,9 +112,9 @@ def main():
         raise AssertionError("Shizuku activity executor must invoke typed user-service startActivity")
 
     control_text = control_center.read_text(encoding="utf-8", errors="ignore")
-    for token in ["state.backend", '"BACKEND"']:
+    for token in ["state.backend", '"BACKEND"', "shizuku.isConnected()", '"SERVICE"']:
         if token not in control_text:
-            raise AssertionError(f"Control Center must show detected backend: {token}")
+            raise AssertionError(f"Control Center must show detected backend/service state: {token}")
 
     must(manifest, "rikka.shizuku.ShizukuProvider")
     must(catalog, 'shizuku = "13.1.5"')
