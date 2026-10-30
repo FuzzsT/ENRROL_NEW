@@ -14,7 +14,6 @@ class AndroidPermissionCatalog(context: Context) {
     private val appContext = context.applicationContext
     private val pm = appContext.packageManager
 
-    @Suppress("DEPRECATION")
     fun scan(): PermissionCatalogSnapshot {
         val publicPermissions = Manifest.permission::class.java.fields.mapNotNull { runCatching { it.get(null) as? String }.getOrNull() }.toSet()
         val publicGroups = Manifest.permission_group::class.java.fields.mapNotNull { runCatching { it.get(null) as? String }.getOrNull() }.toSet()
@@ -28,7 +27,7 @@ class AndroidPermissionCatalog(context: Context) {
                 protection = protectionOf(info),
                 publicSdkConstant = info.name in publicPermissions,
                 description = runCatching { info.loadDescription(pm)?.toString() }.getOrNull(),
-                rawProtectionLevel = info.protectionLevel,
+                rawProtectionLevel = PermissionInfoCompat.getProtection(info) or PermissionInfoCompat.getProtectionFlags(info),
                 permissionFlags = info.flags
             )
         }
