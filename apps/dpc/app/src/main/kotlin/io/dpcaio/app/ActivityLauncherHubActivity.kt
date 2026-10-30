@@ -36,6 +36,7 @@ class ActivityLauncherHubActivity : Activity() {
     private enum class AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }
     private enum class SortDirection { ASCENDING, DESCENDING }
     private enum class StateFilter { ALL, ENABLED, DISABLED }
+    private enum class InstallSourceFilter { ALL, INSTALLED, PRELOADED }
 
     private data class AppEntry(
         val packageName: String,
@@ -54,6 +55,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var tabBar: LinearLayout
     private lateinit var sortBar: LinearLayout
     private lateinit var stateBar: LinearLayout
+    private lateinit var installSourceBar: LinearLayout
     private lateinit var selectionBar: LinearLayout
     private lateinit var stats: LinearLayout
     private lateinit var appList: LinearLayout
@@ -63,6 +65,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentSort = AppSort.NAME
     private var currentSortDirection = SortDirection.ASCENDING
     private var currentStateFilter = StateFilter.ALL
+    private var currentInstallSourceFilter = InstallSourceFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
     private val selectedPackages = linkedSetOf<String>()
 
@@ -113,6 +116,7 @@ class ActivityLauncherHubActivity : Activity() {
             renderTabs()
             renderSortBar()
             renderStateBar()
+            renderInstallSourceBar()
             renderSelectionBar()
             renderApps(resetLimit = false)
         }
@@ -171,6 +175,11 @@ class ActivityLauncherHubActivity : Activity() {
                 stateBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
                 addView(stateBar)
                 renderStateBar()
+
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
+                installSourceBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
+                addView(installSourceBar)
+                renderInstallSourceBar()
             }
         )
 
@@ -338,6 +347,38 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
+    private fun renderInstallSourceBar() {
+        if (!::installSourceBar.isInitialized) return
+        installSourceBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        InstallSourceFilter.entries.forEach { filter ->
+            val tone = when (filter) {
+                InstallSourceFilter.ALL -> ModernUi.Tone.NEUTRAL
+                InstallSourceFilter.INSTALLED -> ModernUi.Tone.SUCCESS
+                InstallSourceFilter.PRELOADED -> ModernUi.Tone.WARNING
+            }
+            val pill = ModernUi.pill(this, "SOURCE ${filter.name}", filter == currentInstallSourceFilter, tone) {
+                currentInstallSourceFilter = filter
+                renderInstallSourceBar()
+                renderApps()
+            }
+            pill.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
+            row.addView(pill)
+        }
+        installSourceBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
+    }
+
     private fun renderSelectionBar() {
         if (!::selectionBar.isInitialized) return
         selectionBar.removeAllViews()
@@ -391,6 +432,7 @@ class ActivityLauncherHubActivity : Activity() {
                 renderTabs()
                 renderSortBar()
                 renderStateBar()
+                renderInstallSourceBar()
                 renderSelectionBar()
                 renderApps(resetLimit = resetLimit)
             }
@@ -484,7 +526,12 @@ class ActivityLauncherHubActivity : Activity() {
             StateFilter.ENABLED -> base.filter { it.enabled }
             StateFilter.DISABLED -> base.filter { !it.enabled }
         }
-        val filtered = stateFiltered.filter { app ->
+        val sourceFiltered = when (currentInstallSourceFilter) {
+            InstallSourceFilter.ALL -> stateFiltered
+            InstallSourceFilter.INSTALLED -> stateFiltered.filter { !it.installerPackage.isNullOrBlank() }
+            InstallSourceFilter.PRELOADED -> stateFiltered.filter { it.installerPackage.isNullOrBlank() }
+        }
+        val filtered = sourceFiltered.filter { app ->
             query.isBlank() ||
                 app.label.lowercase().contains(query) ||
                 app.packageName.lowercase().contains(query) ||
@@ -519,7 +566,7 @@ class ActivityLauncherHubActivity : Activity() {
                 ModernUi.compactCard(this).apply {
                     addView(ModernUi.title(this@ActivityLauncherHubActivity, "No applications"))
                     addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 4))
-                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state filter and search query."))
+                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state/source filters and search query."))
                 }
             )
             return
