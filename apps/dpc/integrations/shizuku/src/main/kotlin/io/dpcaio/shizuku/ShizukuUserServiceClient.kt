@@ -8,15 +8,28 @@ import rikka.shizuku.Shizuku
 
 class ShizukuUserServiceClient(context: Context) {
     private val appContext = context.applicationContext
+    private val connectionLock = Any()
+
     @Volatile private var remote: IAioShizukuUserService? = null
+    @Volatile private var serviceBinder: IBinder? = null
+
+    private val deathRecipient = IBinder.DeathRecipient {
+        clearRemote()
+    }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            remote = IAioShizukuUserService.Stub.asInterface(service)
+            synchronized(connectionLock) {
+                clearRemoteLocked()
+                if (!service.isBinderAlive) return
+                if (runCatching { service.linkToDeath(deathRecipient, 0) }.isFailure) return
+                serviceBinder = service
+                remote = IAioShizukuUserService.Stub.asInterface(service)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            remote = null
+            clearRemote()
         }
     }
 
@@ -28,87 +41,122 @@ class ShizukuUserServiceClient(context: Context) {
         .debuggable(false)
         .version(2)
 
-    fun bind(): Boolean = runCatching {
-        Shizuku.bindUserService(args, connection)
-        true
-    }.getOrDefault(false)
+    fun bind(): Boolean {
+        if (isConnected()) return true
+        return runCatching {
+            Shizuku.bindUserService(args, connection)
+            true
+        }.getOrDefault(false)
+    }
 
-    fun unbind(): Boolean = runCatching {
-        Shizuku.unbindUserService(args, connection, true)
+    fun unbind(): Boolean {
+        val unbound = runCatching {
+            Shizuku.unbindUserService(args, connection, true)
+            true
+        }.getOrDefault(false)
+        clearRemote()
+        return unbound
+    }
+
+    fun isConnected(): Boolean {
+        val binder = serviceBinder ?: return false
+        if (!binder.isBinderAlive) {
+            clearRemote()
+            return false
+        }
+        return remote?.asBinder()?.isBinderAlive == true
+    }
+
+    private fun clearRemote() {
+        synchronized(connectionLock) {
+            clearRemoteLocked()
+        }
+    }
+
+    private fun clearRemoteLocked() {
+        val binder = serviceBinder
+        serviceBinder = null
         remote = null
-        true
-    }.getOrDefault(false)
+        if (binder != null) {
+            runCatching { binder.unlinkToDeath(deathRecipient, 0) }
+        }
+    }
 
-    fun identity(): String? = runCatching { remote?.identity() }.getOrNull()
+    private fun connectedRemote(): IAioShizukuUserService? {
+        if (!isConnected()) return null
+        return remote
+    }
+
+    fun identity(): String? = runCatching { connectedRemote()?.identity() }.getOrNull()
 
     fun startActivity(packageName: String, className: String, userId: Int): Int? =
-        runCatching { remote?.startActivity(packageName, className, userId) }.getOrNull()
+        runCatching { connectedRemote()?.startActivity(packageName, className, userId) }.getOrNull()
 
     fun sendBroadcast(action: String, packageName: String, userId: Int): Int? =
-        runCatching { remote?.sendBroadcast(action, packageName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.sendBroadcast(action, packageName, userId) }.getOrNull()
 
-    fun listPermissions(): String? = runCatching { remote?.listPermissions() }.getOrNull()
+    fun listPermissions(): String? = runCatching { connectedRemote()?.listPermissions() }.getOrNull()
 
     fun grantRuntimePermission(packageName: String, permissionName: String, userId: Int): Int? =
-        runCatching { remote?.grantRuntimePermission(packageName, permissionName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.grantRuntimePermission(packageName, permissionName, userId) }.getOrNull()
 
     fun revokeRuntimePermission(packageName: String, permissionName: String, userId: Int): Int? =
-        runCatching { remote?.revokeRuntimePermission(packageName, permissionName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.revokeRuntimePermission(packageName, permissionName, userId) }.getOrNull()
 
     fun setAppOp(packageName: String, op: String, mode: String, userId: Int): Int? =
-        runCatching { remote?.setAppOp(packageName, op, mode, userId) }.getOrNull()
+        runCatching { connectedRemote()?.setAppOp(packageName, op, mode, userId) }.getOrNull()
 
     fun getAppOps(packageName: String, userId: Int): String? =
-        runCatching { remote?.getAppOps(packageName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.getAppOps(packageName, userId) }.getOrNull()
 
     fun getAppOp(packageName: String, op: String, userId: Int): String? =
-        runCatching { remote?.getAppOp(packageName, op, userId) }.getOrNull()
+        runCatching { connectedRemote()?.getAppOp(packageName, op, userId) }.getOrNull()
 
     fun resolveAppOp(op: String): String? =
-        runCatching { remote?.resolveAppOp(op) }.getOrNull()
+        runCatching { connectedRemote()?.resolveAppOp(op) }.getOrNull()
 
     fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int? =
-        runCatching { remote?.setPackageEnabled(packageName, enabled, userId) }.getOrNull()
+        runCatching { connectedRemote()?.setPackageEnabled(packageName, enabled, userId) }.getOrNull()
 
     fun setComponentEnabledState(packageName: String, className: String, state: String, userId: Int): Int? =
-        runCatching { remote?.setComponentEnabledState(packageName, className, state, userId) }.getOrNull()
+        runCatching { connectedRemote()?.setComponentEnabledState(packageName, className, state, userId) }.getOrNull()
 
     fun installExistingPackage(packageName: String, userId: Int): Int? =
-        runCatching { remote?.installExistingPackage(packageName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.installExistingPackage(packageName, userId) }.getOrNull()
 
     fun listPackagesForUser(userId: Int): String? =
-        runCatching { remote?.listPackagesForUser(userId) }.getOrNull()
+        runCatching { connectedRemote()?.listPackagesForUser(userId) }.getOrNull()
 
     fun uninstallPackageForUser(packageName: String, userId: Int): Int? =
-        runCatching { remote?.uninstallPackageForUser(packageName, userId) }.getOrNull()
+        runCatching { connectedRemote()?.uninstallPackageForUser(packageName, userId) }.getOrNull()
 
-    fun listUsers(): String? = runCatching { remote?.listUsers() }.getOrNull()
+    fun listUsers(): String? = runCatching { connectedRemote()?.listUsers() }.getOrNull()
 
     fun createProfile(name: String, cloneProfile: Boolean): String? =
-        runCatching { remote?.createProfile(name, cloneProfile) }.getOrNull()
+        runCatching { connectedRemote()?.createProfile(name, cloneProfile) }.getOrNull()
 
-    fun removeProfile(userId: Int): Int? = runCatching { remote?.removeProfile(userId) }.getOrNull()
+    fun removeProfile(userId: Int): Int? = runCatching { connectedRemote()?.removeProfile(userId) }.getOrNull()
 
-    fun startProfile(userId: Int): Int? = runCatching { remote?.startProfile(userId) }.getOrNull()
+    fun startProfile(userId: Int): Int? = runCatching { connectedRemote()?.startProfile(userId) }.getOrNull()
 
-    fun stopProfile(userId: Int): Int? = runCatching { remote?.stopProfile(userId) }.getOrNull()
+    fun stopProfile(userId: Int): Int? = runCatching { connectedRemote()?.stopProfile(userId) }.getOrNull()
 
     fun readSetting(namespaceName: String, key: String, userId: Int): String? =
-        runCatching { remote?.readSetting(namespaceName, key, userId) }.getOrNull()
+        runCatching { connectedRemote()?.readSetting(namespaceName, key, userId) }.getOrNull()
 
     fun writeSetting(namespaceName: String, key: String, value: String, userId: Int): Int? =
-        runCatching { remote?.writeSetting(namespaceName, key, value, userId) }.getOrNull()
+        runCatching { connectedRemote()?.writeSetting(namespaceName, key, value, userId) }.getOrNull()
 
     fun deleteSetting(namespaceName: String, key: String, userId: Int): Int? =
-        runCatching { remote?.deleteSetting(namespaceName, key, userId) }.getOrNull()
+        runCatching { connectedRemote()?.deleteSetting(namespaceName, key, userId) }.getOrNull()
 
-    fun listPermissionConfigFiles(): String? = runCatching { remote?.listPermissionConfigFiles() }.getOrNull()
+    fun listPermissionConfigFiles(): String? = runCatching { connectedRemote()?.listPermissionConfigFiles() }.getOrNull()
 
     fun readPermissionConfig(partitionName: String, fileName: String): String? =
-        runCatching { remote?.readPermissionConfig(partitionName, fileName) }.getOrNull()
+        runCatching { connectedRemote()?.readPermissionConfig(partitionName, fileName) }.getOrNull()
 
-    fun listSysconfigFiles(): String? = runCatching { remote?.listSysconfigFiles() }.getOrNull()
+    fun listSysconfigFiles(): String? = runCatching { connectedRemote()?.listSysconfigFiles() }.getOrNull()
 
     fun readSysconfigFile(partitionName: String, fileName: String): String? =
-        runCatching { remote?.readSysconfigFile(partitionName, fileName) }.getOrNull()
+        runCatching { connectedRemote()?.readSysconfigFile(partitionName, fileName) }.getOrNull()
 }
