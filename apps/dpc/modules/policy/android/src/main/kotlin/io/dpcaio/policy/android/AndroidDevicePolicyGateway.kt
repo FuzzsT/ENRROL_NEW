@@ -349,7 +349,7 @@ class AndroidDevicePolicyGateway(
             if (spec.freezePeriods.isNotEmpty()) {
                 if (Build.VERSION.SDK_INT < 28) return@policyCall unsupported("Freeze periods require API 28+")
                 policy.setFreezePeriods(spec.freezePeriods.map {
-                    FreezePeriod(MonthDay.of(it.startMonth, it.startDay), MonthDay.of(it.endMonth, it.endDay))
+                    FreezePeriod(MonthDay.of(it.startMonth, it.startDay), MonthDay.of(it.end.monthValue, it.end.dayOfMonth))
                 })
             }
             dpm.setSystemUpdatePolicy(admin, policy)
@@ -472,7 +472,7 @@ class AndroidDevicePolicyGateway(
     override fun clearManagedApplicationData(packageName: String): PolicyResult<Unit> {
         if (Build.VERSION.SDK_INT < 28) return unsupported("Clear application user data requires API 28+")
         return policyCall {
-            dpm.clearApplicationUserData(admin, packageName, appContext.mainExecutor) { _, _ -> Unit }
+            dpm.clearApplicationUserData(admin, packageName, appContext.mainExecutor) { _, _ -> }
             PolicyResult.success(message = "Clear application data request submitted")
         }
     }
