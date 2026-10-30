@@ -542,8 +542,11 @@ class ActivityLauncherHubActivity : Activity() {
         UpdateAgeFilter.DAYS_30 -> "30D"
     }
 
+    private fun isValidTimestamp(timestamp: Long, now: Long): Boolean =
+        timestamp > 0L && timestamp <= now
+
     private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =
-        timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs
+        isValidTimestamp(timestamp, now) && now - timestamp <= maxAgeMs
 
     private fun renderDateAgeBar() {
         if (!::dateAgeBar.isInitialized) return
@@ -796,7 +799,8 @@ class ActivityLauncherHubActivity : Activity() {
         apps: List<AppEntry>,
         timestamp: (AppEntry) -> Long,
     ): List<AppEntry> {
-        val (valid, unknown) = apps.partition { timestamp(it) > 0L }
+        val now = System.currentTimeMillis()
+        val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }
         val sortedValid = valid.sortedBy(timestamp)
         val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid
         return directed + unknown
@@ -868,7 +872,8 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     private fun formatInstallDate(time: Long): String {
-        if (time <= 0L) return "unknown"
+        val now = System.currentTimeMillis()
+        if (!isValidTimestamp(time, now)) return "unknown"
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(time))
     }
 
