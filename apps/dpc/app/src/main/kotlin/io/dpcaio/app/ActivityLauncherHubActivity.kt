@@ -38,6 +38,7 @@ class ActivityLauncherHubActivity : Activity() {
     private enum class SortDirection { ASCENDING, DESCENDING }
     private enum class StateFilter { ALL, ENABLED, DISABLED }
     private enum class InstallSourceFilter { ALL, INSTALLED, NO_SOURCE }
+    private enum class InstallAgeFilter { ALL, HOURS_24, DAYS_7, DAYS_30 }
     private enum class TargetSdkFilter { ALL, CURRENT, LEGACY }
     private enum class DebuggableFilter { ALL, DEBUGGABLE, RELEASE }
 
@@ -60,6 +61,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var sortBar: LinearLayout
     private lateinit var stateBar: LinearLayout
     private lateinit var installSourceBar: LinearLayout
+    private lateinit var installAgeBar: LinearLayout
     private lateinit var targetSdkBar: LinearLayout
     private lateinit var debuggableBar: LinearLayout
     private lateinit var filterSummary: TextView
@@ -74,6 +76,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentSortDirection = SortDirection.ASCENDING
     private var currentStateFilter = StateFilter.ALL
     private var currentInstallSourceFilter = InstallSourceFilter.ALL
+    private var currentInstallAgeFilter = InstallAgeFilter.ALL
     private var currentTargetSdkFilter = TargetSdkFilter.ALL
     private var currentDebuggableFilter = DebuggableFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
@@ -128,6 +131,7 @@ class ActivityLauncherHubActivity : Activity() {
             renderSortBar()
             renderStateBar()
             renderInstallSourceBar()
+            renderInstallAgeBar()
             renderTargetSdkBar()
             renderDebuggableBar()
             renderFilterSummary()
@@ -198,6 +202,11 @@ class ActivityLauncherHubActivity : Activity() {
                 renderInstallSourceBar()
 
                 addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
+                installAgeBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
+                addView(installAgeBar)
+                renderInstallAgeBar()
+
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
                 targetSdkBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
                 addView(targetSdkBar)
                 renderTargetSdkBar()
@@ -244,6 +253,7 @@ class ActivityLauncherHubActivity : Activity() {
         var count = 0
         if (currentStateFilter != StateFilter.ALL) count++
         if (currentInstallSourceFilter != InstallSourceFilter.ALL) count++
+        if (currentInstallAgeFilter != InstallAgeFilter.ALL) count++
         if (currentTargetSdkFilter != TargetSdkFilter.ALL) count++
         if (currentDebuggableFilter != DebuggableFilter.ALL) count++
         if (::search.isInitialized && search.text.toString().isNotBlank()) count++
@@ -251,7 +261,7 @@ class ActivityLauncherHubActivity : Activity() {
     }
 
     private fun filterSummaryText(): String =
-        "ACTIVE FILTERS ${activeFilterCount()} • FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
+        "ACTIVE FILTERS ${activeFilterCount()} • FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • age=${currentInstallAgeFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
 
     private fun renderFilterControls() {
         if (!::resetFiltersButton.isInitialized) return
@@ -268,6 +278,7 @@ class ActivityLauncherHubActivity : Activity() {
     private fun resetFilters() {
         currentStateFilter = StateFilter.ALL
         currentInstallSourceFilter = InstallSourceFilter.ALL
+        currentInstallAgeFilter = InstallAgeFilter.ALL
         currentTargetSdkFilter = TargetSdkFilter.ALL
         currentDebuggableFilter = DebuggableFilter.ALL
         if (::search.isInitialized) {
@@ -280,6 +291,7 @@ class ActivityLauncherHubActivity : Activity() {
         }
         renderStateBar()
         renderInstallSourceBar()
+        renderInstallAgeBar()
         renderTargetSdkBar()
         renderDebuggableBar()
         renderFilterSummary()
@@ -473,6 +485,37 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
+    private fun renderInstallAgeBar() {
+        if (!::installAgeBar.isInitialized) return
+        installAgeBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        InstallAgeFilter.entries.forEach { filter ->
+            val tone = when (filter) {
+                InstallAgeFilter.ALL -> ModernUi.Tone.NEUTRAL
+                InstallAgeFilter.HOURS_24, InstallAgeFilter.DAYS_7, InstallAgeFilter.DAYS_30 -> ModernUi.Tone.SUCCESS
+            }
+            val pill = ModernUi.pill(this, "AGE ${filter.name}", filter == currentInstallAgeFilter, tone) {
+                currentInstallAgeFilter = filter
+                renderInstallAgeBar()
+                renderApps()
+            }
+            pill.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
+            row.addView(pill)
+        }
+        installAgeBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
+    }
+
     private fun renderTargetSdkBar() {
         if (!::targetSdkBar.isInitialized) return
         targetSdkBar.removeAllViews()
@@ -591,6 +634,7 @@ class ActivityLauncherHubActivity : Activity() {
                 renderSortBar()
                 renderStateBar()
                 renderInstallSourceBar()
+                renderInstallAgeBar()
                 renderTargetSdkBar()
                 renderDebuggableBar()
                 renderFilterSummary()
@@ -693,10 +737,17 @@ class ActivityLauncherHubActivity : Activity() {
             InstallSourceFilter.INSTALLED -> stateFiltered.filter { !it.installerPackage.isNullOrBlank() }
             InstallSourceFilter.NO_SOURCE -> stateFiltered.filter { it.installerPackage.isNullOrBlank() }
         }
+        val now = System.currentTimeMillis()
+        val ageFiltered = when (currentInstallAgeFilter) {
+            InstallAgeFilter.ALL -> sourceFiltered
+            InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_24H_MS }
+            InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_7D_MS }
+            InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_30D_MS }
+        }
         val targetFiltered = when (currentTargetSdkFilter) {
-            TargetSdkFilter.ALL -> sourceFiltered
-            TargetSdkFilter.CURRENT -> sourceFiltered.filter { it.targetSdk >= Build.VERSION.SDK_INT }
-            TargetSdkFilter.LEGACY -> sourceFiltered.filter { it.targetSdk < Build.VERSION.SDK_INT }
+            TargetSdkFilter.ALL -> ageFiltered
+            TargetSdkFilter.CURRENT -> ageFiltered.filter { it.targetSdk >= Build.VERSION.SDK_INT }
+            TargetSdkFilter.LEGACY -> ageFiltered.filter { it.targetSdk < Build.VERSION.SDK_INT }
         }
         val debugFiltered = when (currentDebuggableFilter) {
             DebuggableFilter.ALL -> targetFiltered
@@ -744,7 +795,7 @@ class ActivityLauncherHubActivity : Activity() {
                 ModernUi.compactCard(this).apply {
                     addView(ModernUi.title(this@ActivityLauncherHubActivity, "No applications"))
                     addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 4))
-                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state/source/target SDK/debug filters and search query."))
+                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state/source/install age/target SDK/debug filters and search query."))
                 }
             )
             return
@@ -1020,5 +1071,8 @@ class ActivityLauncherHubActivity : Activity() {
         private const val INITIAL_RENDER_LIMIT = 40
         private const val RENDER_PAGE_SIZE = 40
         private const val LOAD_MORE_TAG = "activity_launcher_load_more"
+        private const val INSTALL_AGE_24H_MS = 24L * 60L * 60L * 1000L
+        private const val INSTALL_AGE_7D_MS = 7L * INSTALL_AGE_24H_MS
+        private const val INSTALL_AGE_30D_MS = 30L * INSTALL_AGE_24H_MS
     }
 }
