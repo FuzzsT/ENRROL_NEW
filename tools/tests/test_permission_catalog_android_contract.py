@@ -8,10 +8,16 @@ def need(path, tokens):
         assert token in text, f'{path} missing {token}'
 
 def main():
-    need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt', [
+    catalog_path='apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionCatalog.kt'
+    need(catalog_path, [
         'getAllPermissionGroups(', 'queryPermissionsByGroup(', 'GET_PERMISSIONS',
         'Manifest.permission::class.java.fields', 'Manifest.permission_group::class.java.fields'
     ])
+    catalog=(ROOT/catalog_path).read_text(encoding='utf-8')
+    assert 'PermissionInfo.PROTECTION_MASK_BASE' not in catalog, 'permission protection classification must not use deprecated PROTECTION_MASK_BASE'
+    assert 'PermissionInfo.PROTECTION_MASK_FLAGS' not in catalog, 'permission protection classification must not use deprecated PROTECTION_MASK_FLAGS'
+    assert 'PermissionInfoCompat.getProtection(info)' in catalog, 'permission protection classification must use PermissionInfoCompat.getProtection'
+    assert 'PermissionInfoCompat.getProtectionFlags(info)' in catalog, 'permission protection classification must use PermissionInfoCompat.getProtectionFlags'
     need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessInspector.kt', [
         'OPSTR_GET_USAGE_STATS', 'canRequestPackageInstalls(', 'getEnabledListenerPackages('
     ])
