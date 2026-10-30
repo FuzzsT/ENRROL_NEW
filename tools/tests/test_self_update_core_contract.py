@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# This test also documents the lifecycle-independent operation gate required by the Android contract suite.
 ROOT = Path(__file__).resolve().parents[2]
 settings = (ROOT / "settings.gradle.kts").read_text(encoding="utf-8")
 
