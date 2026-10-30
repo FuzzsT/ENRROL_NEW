@@ -1,0 +1,61 @@
+name: Temporary Activity Launcher future-date GREEN patch
+
+on:
+  push:
+    branches:
+      - fix/activity-launcher-future-date-consistency
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/activity-launcher-future-date-consistency
+          fetch-depth: 1
+      - name: Apply exact future-date consistency patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt')
+          s = p.read_text()
+
+          old_age = '''    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =\n        timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs\n'''
+          new_age = '''    private fun isValidTimestamp(timestamp: Long, now: Long): Boolean =\n        timestamp > 0L && timestamp <= now\n\n    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =\n        isValidTimestamp(timestamp, now) && now - timestamp <= maxAgeMs\n'''
+          if s.count(old_age) != 1:
+              raise SystemExit(f'Expected one age helper anchor, got {s.count(old_age)}')
+          s = s.replace(old_age, new_age, 1)
+
+          old_sort = '''    private fun sortByTimestampUnknownLast(\n        apps: List<AppEntry>,\n        timestamp: (AppEntry) -> Long,\n    ): List<AppEntry> {\n        val (valid, unknown) = apps.partition { timestamp(it) > 0L }\n        val sortedValid = valid.sortedBy(timestamp)\n'''
+          new_sort = '''    private fun sortByTimestampUnknownLast(\n        apps: List<AppEntry>,\n        timestamp: (AppEntry) -> Long,\n    ): List<AppEntry> {\n        val now = System.currentTimeMillis()\n        val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }\n        val sortedValid = valid.sortedBy(timestamp)\n'''
+          if s.count(old_sort) != 1:
+              raise SystemExit(f'Expected one sort helper anchor, got {s.count(old_sort)}')
+          s = s.replace(old_sort, new_sort, 1)
+
+          old_format = '''    private fun formatInstallDate(time: Long): String {\n        if (time <= 0L) return "unknown"\n        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(time))\n    }\n'''
+          new_format = '''    private fun formatInstallDate(time: Long): String {\n        val now = System.currentTimeMillis()\n        if (!isValidTimestamp(time, now)) return "unknown"\n        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(time))\n    }\n'''
+          if s.count(old_format) != 1:
+              raise SystemExit(f'Expected one formatter anchor, got {s.count(old_format)}')
+          s = s.replace(old_format, new_format, 1)
+
+          p.write_text(s)
+          PY
+          python3 tools/tests/test_activity_launcher_app_manager_contract.py
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt"
+      - name: Commit exact production change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt
+          git commit -m "fix: make future app dates consistently unknown"
+          git push origin HEAD:fix/activity-launcher-future-date-consistency
