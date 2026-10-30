@@ -43,24 +43,33 @@ class SelfUpdateInstaller(context: Context) {
         val sessionId = created.value
             ?: return SelfUpdateInstallSubmission(false, message = "SESSION_CREATE_FAILED: ${created.status}: ${created.message}")
 
-        val staged = candidate.apkFile.inputStream().use { input ->
-            adapter.stageSingleApk(sessionId, input, candidate.apkFile.length())
-        }
-        if (!staged.isSuccess) {
-            adapter.abandon(sessionId)
-            return SelfUpdateInstallSubmission(false, message = "STAGE_FAILED: ${staged.status}: ${staged.message}")
-        }
+        return try {
+            val staged = candidate.apkFile.inputStream().use { input ->
+                adapter.stageSingleApk(sessionId, input, candidate.apkFile.length())
+            }
+            if (!staged.isSuccess) {
+                runCatching { adapter.abandon(sessionId) }
+                return SelfUpdateInstallSubmission(false, sessionId, "STAGE_FAILED: ${staged.status}: ${staged.message}")
+            }
 
-        val committed = adapter.commit(sessionId, statusReceiver)
-        if (!committed.isSuccess) {
-            adapter.abandon(sessionId)
-            return SelfUpdateInstallSubmission(false, message = "COMMIT_FAILED: ${committed.status}: ${committed.message}")
-        }
+            val committed = adapter.commit(sessionId, statusReceiver)
+            if (!committed.isSuccess) {
+                runCatching { adapter.abandon(sessionId) }
+                return SelfUpdateInstallSubmission(false, sessionId, "COMMIT_FAILED: ${committed.status}: ${committed.message}")
+            }
 
-        return SelfUpdateInstallSubmission(
-            submitted = true,
-            sessionId = sessionId,
-            message = "INSTALL_SUBMITTED",
-        )
+            SelfUpdateInstallSubmission(
+                submitted = true,
+                sessionId = sessionId,
+                message = "INSTALL_SUBMITTED",
+            )
+        } catch (error: Exception) {
+            runCatching { adapter.abandon(sessionId) }
+            SelfUpdateInstallSubmission(
+                submitted = false,
+                sessionId = sessionId,
+                message = "INSTALL_SESSION_EXCEPTION: ${error.message ?: error.javaClass.simpleName}",
+            )
+        }
     }
 }
