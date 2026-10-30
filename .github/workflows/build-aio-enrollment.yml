@@ -191,10 +191,10 @@ jobs:
             ' "$SDK_LIST"
           }
 
-          platform_pkg=""
-          if has_package "platforms/android-37"; then
-            platform_pkg="platforms/android-37"
-          elif has_package "platforms/android-CinnamonBun"; then
+          platform_pkg="$(
+            awk '$1 ~ /^platforms\/android-37\.[0-9]+$/ { print $1 }' "$SDK_LIST" | sort -V | tail -n1
+          )"
+          if [[ -z "$platform_pkg" ]] && has_package "platforms/android-CinnamonBun"; then
             platform_pkg="platforms/android-CinnamonBun"
           fi
           if [[ -z "$platform_pkg" ]]; then
