@@ -155,6 +155,7 @@ class ControlCenterActivity : Activity() {
             FunctionEntry("Self Update", "Verified DPC-AIO updates with silent install when Android policy allows it.", SelfUpdateActivity::class.java, ModernUi.Tone.SUCCESS),
             FunctionEntry("Enterprise Policy Hub", "Device-owner policy capabilities and explicit apply/readback flows.", EnterprisePolicyHubActivity::class.java),
             FunctionEntry("Permission Manager", "Runtime permissions, AppOps and effective capability inspection.", PermissionManagerActivity::class.java),
+            FunctionEntry("Verified AppOps", "Verified AppOps read, mutation, readback and rollback through the typed Shizuku route.", AppOpsVerifiedEditorActivity::class.java, ModernUi.Tone.WARNING),
             FunctionEntry("Module Center", "Full compile-time module registry and capability visibility.", ModuleCenterActivity::class.java),
             FunctionEntry("Network / DNS / DoH", "Network policy and private DNS controls.", NetworkControlActivity::class.java),
             FunctionEntry("Samsung Settings", "Supported Samsung settings routes with readback.", SamsungSettingsEditorActivity::class.java),

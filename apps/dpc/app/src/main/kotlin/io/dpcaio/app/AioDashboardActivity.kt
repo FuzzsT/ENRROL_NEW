@@ -50,6 +50,7 @@ class AioDashboardActivity : Activity() {
         }
         add(body, "Activity Explorer • direct package mode") { ActivityExplorerActivity::class.java }
         add(body, "Permission Manager") { PermissionManagerActivity::class.java }
+        add(body, "Verified AppOps Editor") { AppOpsVerifiedEditorActivity::class.java }
         add(body, "Samsung Settings") { SamsungSettingsEditorActivity::class.java }
         add(body, "Google Account Manager") { GoogleAccountManagerActivity::class.java }
         add(body, "KnoxZT Framework") { KnoxZtManagerActivity::class.java }

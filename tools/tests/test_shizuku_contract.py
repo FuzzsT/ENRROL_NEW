@@ -29,8 +29,12 @@ def main():
             raise AssertionError(f"runtime missing {token}")
 
     aidl_text = must(aidl, 'String getAppOp(String packageName, String op, int userId);')
-    if 'String getAppOps(String packageName, int userId);' not in aidl_text:
-        raise AssertionError("typed full AppOps discovery contract must remain available")
+    for token in [
+        'String getAppOps(String packageName, int userId);',
+        'String resolveAppOp(String op);',
+    ]:
+        if token not in aidl_text:
+            raise AssertionError(f"typed AppOps contract missing {token}")
 
     service_text = must(service, 'ProcessBuilder(args)')
     for token in ['"/system/bin/am", "start"', '"/system/bin/am", "broadcast"']:
@@ -41,10 +45,15 @@ def main():
         'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName))',
         'override fun getAppOp(packageName: String, op: String, userId: Int): String',
         'return runTypedCaptureChecked(listOf("/system/bin/cmd", "appops", "get", "--user", userId.toString(), packageName, op))',
+        'override fun resolveAppOp(op: String): String',
+        'getDeclaredMethod("opToSwitch"',
+        'getDeclaredMethod("opToName"',
+        'getDeclaredMethod("strOpToOp"',
+        'getDeclaredMethod("strDebugOpToOp"',
         'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
     ]:
         if token not in service_text:
-            raise AssertionError(f"checked AppOps read missing {token}")
+            raise AssertionError(f"checked AppOps read/resolve missing {token}")
     for forbidden in ["Runtime.getRuntime().exec", "newProcess(", "HiddenApiBypass", "setHiddenApiExemptions"]:
         if forbidden in service_text:
             raise AssertionError(f"unsafe Shizuku service token: {forbidden}")
@@ -56,19 +65,26 @@ def main():
         ".version(",
         'fun getAppOp(packageName: String, op: String, userId: Int): String?',
         'remote?.getAppOp(packageName, op, userId)',
+        'fun resolveAppOp(op: String): String?',
+        'remote?.resolveAppOp(op)',
     ]:
         if token not in client_text:
             raise AssertionError(f"client missing {token}")
 
-    editor_text = must(editor, 'val before = shizuku.getAppOp(pkg, op, userId)')
+    editor_text = must(editor, 'val resolved = shizuku.resolveAppOp(op)')
     for token in [
+        'val switchOp = resolvedSwitchOp(resolved)',
+        'val before = shizuku.getAppOp(pkg, switchOp, userId)',
+        'shizuku.setAppOp(pkg, switchOp, mode, userId)',
         'if (!snapshotReadable(before))',
         'Initial AppOps snapshot unreadable; mutation aborted',
         'Uid mode:',
         'Default mode:',
+        'val rollbackMode = beforeState.packageMode ?: beforeState.defaultMode',
+        'read.packageMode == "default"',
     ]:
         if token not in editor_text:
-            raise AssertionError(f"AppOps fail-closed verification missing {token}")
+            raise AssertionError(f"AppOps switch-aware fail-closed verification missing {token}")
 
     activity_text = must(activity_executor, "ActivityRoute.SHIZUKU")
     if "client.startActivity(" not in activity_text:

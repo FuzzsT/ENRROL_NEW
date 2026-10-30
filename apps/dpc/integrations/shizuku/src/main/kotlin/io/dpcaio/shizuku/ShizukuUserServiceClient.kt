@@ -26,7 +26,7 @@ class ShizukuUserServiceClient(context: Context) {
         .daemon(false)
         .processNameSuffix("aio")
         .debuggable(false)
-        .version(1)
+        .version(2)
 
     fun bind(): Boolean = runCatching {
         Shizuku.bindUserService(args, connection)
@@ -63,6 +63,9 @@ class ShizukuUserServiceClient(context: Context) {
 
     fun getAppOp(packageName: String, op: String, userId: Int): String? =
         runCatching { remote?.getAppOp(packageName, op, userId) }.getOrNull()
+
+    fun resolveAppOp(op: String): String? =
+        runCatching { remote?.resolveAppOp(op) }.getOrNull()
 
     fun setPackageEnabled(packageName: String, enabled: Boolean, userId: Int): Int? =
         runCatching { remote?.setPackageEnabled(packageName, enabled, userId) }.getOrNull()
