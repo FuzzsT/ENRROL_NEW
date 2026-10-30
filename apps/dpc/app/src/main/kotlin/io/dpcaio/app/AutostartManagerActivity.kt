@@ -94,10 +94,10 @@ class AutostartManagerActivity : Activity() {
                     )
                 }
             }.distinctBy { it.component.flattenToString() }
-                .sortedWith(
-                    compareBy<BootReceiver>(String.CASE_INSENSITIVE_ORDER) { it.label }
-                        .thenBy { it.component.flattenToString() },
-                )
+                .sortedWith(Comparator<BootReceiver> { left, right ->
+                    val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
+                    if (byLabel != 0) byLabel else left.component.flattenToString().compareTo(right.component.flattenToString())
+                })
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
