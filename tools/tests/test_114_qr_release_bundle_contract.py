@@ -62,16 +62,20 @@ for forbidden in [
 ]:
     if forbidden in workflow: errors.append(f'unified workflow contains forbidden/stale marker {forbidden}')
 
-# PR CI must keep Android minor releases at the canonical sdkmanager path.
+# Both PR CI and release CI must keep Android minor releases at the canonical sdkmanager path.
 # Aliasing android-37.2 as android-37 makes CMake/AGP emit CXX5304 package-location warnings.
-if 'ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"' in pr_workflow:
-    errors.append('pr-android-ci.yml must not alias a minor Android SDK package to platforms/android-37')
-if 'test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"' in pr_workflow:
-    errors.append('pr-android-ci.yml must validate the canonical installed platform path instead of platforms/android-37')
-if 'installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"' not in pr_workflow:
-    errors.append('pr-android-ci.yml must resolve the canonical installed platform path')
-if 'test -e "$installed_path/android.jar"' not in pr_workflow:
-    errors.append('pr-android-ci.yml must validate android.jar at the canonical installed platform path')
+def require_canonical_sdk_path(name, text):
+    if 'ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"' in text:
+        errors.append(f'{name} must not alias a minor Android SDK package to platforms/android-37')
+    if 'test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"' in text:
+        errors.append(f'{name} must validate the canonical installed platform path instead of platforms/android-37')
+    if 'installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"' not in text:
+        errors.append(f'{name} must resolve the canonical installed platform path')
+    if 'test -e "$installed_path/android.jar"' not in text:
+        errors.append(f'{name} must validate android.jar at the canonical installed platform path')
+
+require_canonical_sdk_path('pr-android-ci.yml', pr_workflow)
+require_canonical_sdk_path('build-aio-enrollment.yml', workflow)
 
 for token in [
     'id: runtime_smoke_primary',
