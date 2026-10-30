@@ -38,6 +38,7 @@ class ActivityLauncherHubActivity : Activity() {
     private enum class StateFilter { ALL, ENABLED, DISABLED }
     private enum class InstallSourceFilter { ALL, INSTALLED, PRELOADED }
     private enum class TargetSdkFilter { ALL, CURRENT, LEGACY }
+    private enum class DebuggableFilter { ALL, DEBUGGABLE, RELEASE }
 
     private data class AppEntry(
         val packageName: String,
@@ -50,6 +51,7 @@ class ActivityLauncherHubActivity : Activity() {
         val installerPackage: String?,
         val system: Boolean,
         val enabled: Boolean,
+        val debuggable: Boolean,
     )
 
     private lateinit var search: EditText
@@ -58,6 +60,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var stateBar: LinearLayout
     private lateinit var installSourceBar: LinearLayout
     private lateinit var targetSdkBar: LinearLayout
+    private lateinit var debuggableBar: LinearLayout
     private lateinit var selectionBar: LinearLayout
     private lateinit var stats: LinearLayout
     private lateinit var appList: LinearLayout
@@ -69,6 +72,7 @@ class ActivityLauncherHubActivity : Activity() {
     private var currentStateFilter = StateFilter.ALL
     private var currentInstallSourceFilter = InstallSourceFilter.ALL
     private var currentTargetSdkFilter = TargetSdkFilter.ALL
+    private var currentDebuggableFilter = DebuggableFilter.ALL
     private var installedApps: List<AppEntry> = emptyList()
     private val selectedPackages = linkedSetOf<String>()
 
@@ -121,6 +125,7 @@ class ActivityLauncherHubActivity : Activity() {
             renderStateBar()
             renderInstallSourceBar()
             renderTargetSdkBar()
+            renderDebuggableBar()
             renderSelectionBar()
             renderApps(resetLimit = false)
         }
@@ -189,6 +194,11 @@ class ActivityLauncherHubActivity : Activity() {
                 targetSdkBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
                 addView(targetSdkBar)
                 renderTargetSdkBar()
+
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
+                debuggableBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
+                addView(debuggableBar)
+                renderDebuggableBar()
             }
         )
 
@@ -420,6 +430,38 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
+    private fun renderDebuggableBar() {
+        if (!::debuggableBar.isInitialized) return
+        debuggableBar.removeAllViews()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        DebuggableFilter.entries.forEach { filter ->
+            val tone = when (filter) {
+                DebuggableFilter.ALL -> ModernUi.Tone.NEUTRAL
+                DebuggableFilter.DEBUGGABLE -> ModernUi.Tone.WARNING
+                DebuggableFilter.RELEASE -> ModernUi.Tone.SUCCESS
+            }
+            val pill = ModernUi.pill(this, "DEBUG ${filter.name}", filter == currentDebuggableFilter, tone) {
+                currentDebuggableFilter = filter
+                renderDebuggableBar()
+                renderApps()
+            }
+            pill.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
+            row.addView(pill)
+        }
+        debuggableBar.addView(
+            HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(row)
+            }
+        )
+    }
+
     private fun renderSelectionBar() {
         if (!::selectionBar.isInitialized) return
         selectionBar.removeAllViews()
@@ -475,6 +517,7 @@ class ActivityLauncherHubActivity : Activity() {
                 renderStateBar()
                 renderInstallSourceBar()
                 renderTargetSdkBar()
+                renderDebuggableBar()
                 renderSelectionBar()
                 renderApps(resetLimit = resetLimit)
             }
@@ -500,6 +543,7 @@ class ActivityLauncherHubActivity : Activity() {
             installerPackage = installerPackage(info.packageName),
             system = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             enabled = info.enabled,
+            debuggable = info.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0,
         )
     }.getOrNull()
 
@@ -573,12 +617,17 @@ class ActivityLauncherHubActivity : Activity() {
             InstallSourceFilter.INSTALLED -> stateFiltered.filter { !it.installerPackage.isNullOrBlank() }
             InstallSourceFilter.PRELOADED -> stateFiltered.filter { it.installerPackage.isNullOrBlank() }
         }
-        val targetSdkFiltered = when (currentTargetSdkFilter) {
+        val targetFiltered = when (currentTargetSdkFilter) {
             TargetSdkFilter.ALL -> sourceFiltered
             TargetSdkFilter.CURRENT -> sourceFiltered.filter { it.targetSdk >= Build.VERSION.SDK_INT }
             TargetSdkFilter.LEGACY -> sourceFiltered.filter { it.targetSdk < Build.VERSION.SDK_INT }
         }
-        val filtered = targetSdkFiltered.filter { app ->
+        val debugFiltered = when (currentDebuggableFilter) {
+            DebuggableFilter.ALL -> targetFiltered
+            DebuggableFilter.DEBUGGABLE -> targetFiltered.filter { it.debuggable }
+            DebuggableFilter.RELEASE -> targetFiltered.filter { !it.debuggable }
+        }
+        val filtered = debugFiltered.filter { app ->
             query.isBlank() ||
                 app.label.lowercase().contains(query) ||
                 app.packageName.lowercase().contains(query) ||
@@ -613,7 +662,7 @@ class ActivityLauncherHubActivity : Activity() {
                 ModernUi.compactCard(this).apply {
                     addView(ModernUi.title(this@ActivityLauncherHubActivity, "No applications"))
                     addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 4))
-                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state/source/target SDK filters and search query."))
+                    addView(ModernUi.body(this@ActivityLauncherHubActivity, "No apps match the selected tab, state/source/target SDK/debug filters and search query."))
                 }
             )
             return
@@ -712,6 +761,7 @@ class ActivityLauncherHubActivity : Activity() {
             badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, if (app.system) "SYSTEM" else "USER", tone))
             badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, if (app.enabled) "ENABLED" else "DISABLED", if (app.enabled) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING))
             badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, "TARGET ${app.targetSdk}", ModernUi.Tone.NEUTRAL))
+            badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, if (app.debuggable) "DEBUGGABLE" else "RELEASE", if (app.debuggable) ModernUi.Tone.WARNING else ModernUi.Tone.SUCCESS))
             if (selected) badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, "SELECTED", ModernUi.Tone.SUCCESS))
             if (favorite) badges.addView(ModernUi.chip(this@ActivityLauncherHubActivity, "FAVORITE", ModernUi.Tone.NEUTRAL))
             addView(
