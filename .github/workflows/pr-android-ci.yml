@@ -65,56 +65,46 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$(command -v sdkmanager)"
+          ANDROID_CLI="$(command -v android)"
+          test -x "$ANDROID_CLI"
           SDK_LIST="$RUNNER_TEMP/android-sdk-packages.txt"
-          "$SDKMANAGER" --list --channel=3 > "$SDK_LIST"
+          "$ANDROID_CLI" sdk list --all --all-versions --canary > "$SDK_LIST"
 
           has_package() {
-            awk -F'|' -v wanted="$1" '
-              { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
+            awk -v wanted="$1" '
               $1 == wanted { found=1 }
               END { exit(found ? 0 : 1) }
             ' "$SDK_LIST"
           }
 
-          platform_pkg=""
-          if has_package "platforms;android-37"; then
-            platform_pkg="platforms;android-37"
-          else
-            platform_pkg="$(
-              awk -F'|' '
-                { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
-                $1 ~ /^platforms;android-37\.[0-9]+$/ { print $1 }
-              ' "$SDK_LIST" | sort -V | tail -n1
-            )"
-          fi
-          if [[ -z "$platform_pkg" ]] && has_package "platforms;android-CinnamonBun"; then
-            platform_pkg="platforms;android-CinnamonBun"
+          platform_pkg="$(
+            awk '$1 ~ /^platforms\/android-37\.[0-9]+$/ { print $1 }' "$SDK_LIST" | sort -V | tail -n1
+          )"
+          if [[ -z "$platform_pkg" ]] && has_package "platforms/android-CinnamonBun"; then
+            platform_pkg="platforms/android-CinnamonBun"
           fi
           if [[ -z "$platform_pkg" ]]; then
             echo "Android 17 platform not found." >&2
-            grep -E 'platforms;android-(37|CinnamonBun)' "$SDK_LIST" || true
+            grep -E 'platforms/android-(37|CinnamonBun)' "$SDK_LIST" || true
             exit 1
           fi
 
           build_tools_pkg="$(
-            awk -F'|' '
-              { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1) }
-              $1 ~ /^build-tools;37\./ { print $1 }
-            ' "$SDK_LIST" | sort -V | tail -n1
+            awk '$1 ~ /^build-tools\/37\./ { print $1 }' "$SDK_LIST" | sort -V | tail -n1
           )"
-          [[ -n "$build_tools_pkg" ]] || build_tools_pkg="build-tools;36.0.0"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg="build-tools/36.0.0"
 
-          "$SDKMANAGER" \
+          "$ANDROID_CLI" sdk install --canary \
             "$platform_pkg" \
             "$build_tools_pkg" \
-            "ndk;28.2.13676358" \
-            "cmake;3.22.1" \
-            --channel=3
+            "ndk/28.2.13676358" \
+            "cmake/3.22.1"
 
-          installed_name="${platform_pkg#platforms;}"
+          installed_name="${platform_pkg#platforms/}"
           installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"
           test -e "$installed_path/android.jar"
+          test -d "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+          test -x "$ANDROID_SDK_ROOT/cmake/3.22.1/bin/cmake"
 
       - name: Install provisioning build dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
