@@ -346,6 +346,7 @@ jobs:
           python3 tools/tests/test_112_runtime_smoke_parser.py
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
+          python3 tools/tests/test_self_update_release_manifest.py
 
       - name: Build signed enterpriseRelease
         env:
@@ -403,6 +404,46 @@ jobs:
           printf '%s\n' "$DPC_AIO_SIGNING_MODE" > dist/signing-mode.txt
           printf '%s\n' "$observed" > dist/signing-cert-sha256.txt
           sha256sum dist/DPC-AIO-enterprise-release.apk > dist/DPC-AIO-enterprise-release.apk.sha256
+
+      - name: Build self-update manifest
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' && steps.mode.outputs.should_publish == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="dist/DPC-AIO-enterprise-release.apk"
+          test -s "$apk"
+
+          aapt_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -x "$aapt_bin"
+          package_line="$("$aapt_bin" dump badging "$apk" | head -n1)"
+          package_name="$(printf '%s\n' "$package_line" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
+          version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+          [[ -n "$package_name" && -n "$version_code" && -n "$version_name" ]]
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            channel="stable"
+            asset_tag="dpc-aio-stable"
+          else
+            channel="continuous"
+            asset_tag="$DPC_AIO_RELEASE_TAG"
+          fi
+
+          apk_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${asset_tag}/DPC-AIO-enterprise-release.apk"
+          notes_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${DPC_AIO_RELEASE_TAG}"
+          published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          python3 tools/release/build_self_update_manifest.py \
+            --apk "$apk" \
+            --out dist/self-update.json \
+            --channel "$channel" \
+            --package "$package_name" \
+            --version-name "$version_name" \
+            --version-code "$version_code" \
+            --apk-url "$apk_url" \
+            --published-at "$published_at" \
+            --release-notes-url "$notes_url"
+          test -s dist/self-update.json
 
       - name: Validate QR to exact APK binding
         shell: bash
@@ -558,31 +599,57 @@ jobs:
 
           gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
 
+          if [[ "$MODE" == "stable" && "$GITHUB_REF_TYPE" == "tag" ]]; then
+            stable_alias="dpc-aio-stable"
+            stable_title="DPC-AIO Stable Update Channel"
+            stable_notes="Rolling alias for the latest verified stable-signed DPC-AIO APK. Versioned release notes remain on $RELEASE_TAG."
+            if gh release view "$stable_alias" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release edit "$stable_alias" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$stable_title" --notes "$stable_notes" --prerelease
+            else
+              gh release create "$stable_alias" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$stable_title" --notes "$stable_notes" --prerelease
+            fi
+            test -s dist/self-update.json
+            gh release upload "$stable_alias" \
+              dist/DPC-AIO-enterprise-release.apk \
+              dist/DPC-AIO-enterprise-release.apk.sha256 \
+              dist/signing-cert-sha256.txt \
+              dist/self-update.json \
+              --clobber --repo "$GITHUB_REPOSITORY"
+          fi
+
       - name: Verify published APK byte identity
         env:
+          MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
           expected="$(sha256sum dist/DPC-AIO-enterprise-release.apk | awk '{print $1}')"
-          matched="0"
 
-          for attempt in $(seq 1 12); do
-            cache_bust="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}"
-            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/DPC-AIO-enterprise-release.apk?cb=${cache_bust}"
-            if curl -fL --retry 2 --retry-delay 3 "$url" -o public.apk; then
-              observed="$(sha256sum public.apk | awk '{print $1}')"
-              if cmp -s dist/DPC-AIO-enterprise-release.apk public.apk && [[ "$observed" == "$expected" ]]; then
-                matched="1"
-                break
+          verify_release_asset() {
+            local tag="$1"
+            local matched="0"
+            for attempt in $(seq 1 12); do
+              cache_bust="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}-${attempt}"
+              url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/DPC-AIO-enterprise-release.apk?cb=${cache_bust}"
+              if curl -fL --retry 2 --retry-delay 3 "$url" -o public.apk; then
+                observed="$(sha256sum public.apk | awk '{print $1}')"
+                if cmp -s dist/DPC-AIO-enterprise-release.apk public.apk && [[ "$observed" == "$expected" ]]; then
+                  matched="1"
+                  break
+                fi
+                echo "Attempt $attempt: $tag public APK hash $observed, waiting for release asset propagation..."
               fi
-              echo "Attempt $attempt: public APK hash $observed, waiting for release asset propagation..."
-            fi
-            sleep 10
-          done
-
-          [[ "$matched" == "1" ]] || {
-            echo "PUBLISHED_APK_PUBLIC_VERIFY_FAILED" >&2
-            exit 1
+              sleep 10
+            done
+            [[ "$matched" == "1" ]] || {
+              echo "PUBLISHED_APK_PUBLIC_VERIFY_FAILED tag=$tag" >&2
+              exit 1
+            }
           }
-          echo "Published APK is public and byte-identical to the QR-bound build."
+
+          verify_release_asset "$RELEASE_TAG"
+          if [[ "$MODE" == "stable" && "$GITHUB_REF_TYPE" == "tag" ]]; then
+            verify_release_asset "dpc-aio-stable"
+          fi
+          echo "Published APK asset(s) are public and byte-identical to the QR-bound build."

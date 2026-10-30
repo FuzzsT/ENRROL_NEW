@@ -14,13 +14,16 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
 import io.dpcaio.installer.PackageSource
 import io.dpcaio.installer.android.AndroidApkPlusStager
+import io.dpcaio.installer.android.AndroidInstallSourceReader
 import io.dpcaio.installer.android.AndroidPackageInstallerAdapter
 import io.dpcaio.installer.android.InstallSessionSpec
+import io.dpcaio.installer.android.InstallSourceDetails
 import java.io.File
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -34,6 +37,7 @@ class AppPackageManagerActivity : Activity() {
         val packageName: String,
         val versionName: String?,
         val versionCode: Long,
+        val installSource: InstallSourceDetails,
     ) {
         override fun toString(): String = "$label • $packageName • ${versionName ?: versionCode}"
     }
@@ -53,11 +57,13 @@ class AppPackageManagerActivity : Activity() {
     private lateinit var doctorView: TextView
     private lateinit var operationHistoryView: TextView
     private lateinit var installedSpinner: Spinner
+    private lateinit var installedSourceView: TextView
     private lateinit var queueStore: InstallQueueStore
     private lateinit var queueCoordinator: InstallQueueCoordinator
     private var installedApps: List<InstalledApp> = emptyList()
     private var receiverRegistered = false
     private val operationHistoryStore by lazy { AppInstallHistoryStore(this) }
+    private val installSourceReader by lazy { AndroidInstallSourceReader(this) }
 
     private val mode: Mode by lazy {
         when (intent.getStringExtra(EXTRA_MODE)) {
@@ -91,7 +97,7 @@ class AppPackageManagerActivity : Activity() {
                 this,
                 title = title.toString(),
                 subtitle = if (mode == Mode.UPDATER) {
-                    "Choose an installed app, then queue matching APK or APKS update packages."
+                    "Choose an installed app, inspect its install source, then queue matching APK or APKS update packages."
                 } else {
                     "Install local APK or verified APKS packages sequentially through Android PackageInstaller."
                 },
@@ -104,7 +110,22 @@ class AppPackageManagerActivity : Activity() {
             body.addView(
                 ModernUi.card(this).apply {
                     installedSpinner = Spinner(this@AppPackageManagerActivity)
+                    installedSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                        override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                            renderSelectedInstallSource()
+                        }
+
+                        override fun onNothingSelected(parent: AdapterView<*>?) {
+                            renderSelectedInstallSource()
+                        }
+                    }
                     addView(installedSpinner)
+                    addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
+                    installedSourceView = ModernUi.body(
+                        this@AppPackageManagerActivity,
+                        "Installed by\nUnknown / unavailable",
+                    )
+                    addView(installedSourceView)
                     addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
                     addView(ModernUi.action(this@AppPackageManagerActivity, "Refresh installed apps") { loadInstalledPackages() })
                 }
@@ -243,12 +264,15 @@ class AppPackageManagerActivity : Activity() {
             packageManager.getInstalledPackages(PackageManager.MATCH_ALL)
                 .asSequence()
                 .filter { it.packageName != packageName }
-                .map { info -> InstalledApp(
-                    label = info.applicationInfo?.loadLabel(packageManager)?.toString() ?: info.packageName,
-                    packageName = info.packageName,
-                    versionName = info.versionName,
-                    versionCode = versionCode(info),
-                ) }
+                .map { info ->
+                    InstalledApp(
+                        label = info.applicationInfo?.loadLabel(packageManager)?.toString() ?: info.packageName,
+                        packageName = info.packageName,
+                        versionName = info.versionName,
+                        versionCode = versionCode(info),
+                        installSource = installSourceReader.read(info.packageName),
+                    )
+                }
                 .sortedWith(compareBy<InstalledApp>({ it.label.lowercase(Locale.ROOT) }, { it.packageName }))
                 .toList()
         }.getOrElse { emptyList() }
@@ -257,7 +281,37 @@ class AppPackageManagerActivity : Activity() {
             val requestedIndex = installedApps.indexOfFirst { it.packageName == requestedTargetPackage }
             if (requestedIndex >= 0) installedSpinner.setSelection(requestedIndex)
         }
+        renderSelectedInstallSource()
         status.text = "Installed apps: ${installedApps.size}${if (requestedTargetPackage.isNotBlank()) " • target=$requestedTargetPackage" else ""}"
+    }
+
+    private fun renderSelectedInstallSource() {
+        if (!::installedSourceView.isInitialized || !::installedSpinner.isInitialized) return
+        val selected = installedApps.getOrNull(installedSpinner.selectedItemPosition)
+        if (selected == null) {
+            installedSourceView.text = "Installed by\nUnknown / unavailable"
+            return
+        }
+        val source = selected.installSource
+        val installingPackageName = source.installingPackageName
+        val installingPackageLabel = source.installingPackageLabel
+        installedSourceView.text = buildString {
+            appendLine("Installed by")
+            appendLine(installingPackageLabel ?: "Unknown / unavailable")
+            appendLine(installingPackageName ?: "Unknown / unavailable")
+            appendLine()
+            appendLine("Initiated by")
+            appendLine(source.initiatingPackageName ?: "Unknown / unavailable")
+            appendLine()
+            appendLine("Originating package")
+            appendLine(source.originatingPackageName ?: "Unknown / unavailable")
+            appendLine()
+            appendLine("Package source")
+            appendLine(source.packageSource?.toString() ?: "Unknown / unavailable")
+            appendLine()
+            appendLine("Update owner")
+            append(source.updateOwnerPackageName ?: "Unknown / unavailable")
+        }
     }
 
     private fun openPackagePicker(allowMultiple: Boolean) {
@@ -414,6 +468,7 @@ class AppPackageManagerActivity : Activity() {
             packageName = targetPackage,
             versionName = info.versionName,
             versionCode = versionCode(info),
+            installSource = installSourceReader.read(targetPackage),
         )
     }
 

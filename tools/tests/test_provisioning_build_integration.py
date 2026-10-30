@@ -83,7 +83,7 @@ def main():
         'curl -fL',
         '--expected-apk-url',
         'Verify published APK byte identity',
-        'Published APK is public and byte-identical to the QR-bound build.',
+        'Published APK asset(s) are public and byte-identical to the QR-bound build.',
     ]:
         if token not in workflow:
             raise AssertionError(f'workflow missing {token}')

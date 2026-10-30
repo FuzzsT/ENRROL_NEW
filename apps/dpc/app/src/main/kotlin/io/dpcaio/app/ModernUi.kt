@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 
@@ -193,6 +194,61 @@ object ModernUi {
             setTextColor(colors.secondaryText)
             textSize = 13f
             setLineSpacing(0f, 1.12f)
+        }
+    }
+
+    fun statusCard(
+        activity: Activity,
+        title: String,
+        detail: String,
+        tone: Tone = Tone.NEUTRAL,
+    ): LinearLayout = compactCard(activity, tone).apply {
+        addView(ModernUi.title(activity, title))
+        addView(spacer(activity, 5))
+        addView(body(activity, detail))
+        addView(chip(activity, tone.name, tone))
+    }
+
+    fun progressCard(
+        activity: Activity,
+        title: String,
+        progress: Int?,
+        detail: String,
+    ): LinearLayout = card(activity, emphasized = true).apply {
+        addView(ModernUi.title(activity, title))
+        addView(spacer(activity, 8))
+        addView(ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            isIndeterminate = progress == null
+            if (progress != null) setProgress(progress.coerceIn(0, 100), false)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(activity, 8),
+            )
+        })
+        addView(spacer(activity, 7))
+        addView(body(activity, detail))
+    }
+
+    fun detailRow(activity: Activity, label: String, value: String): LinearLayout {
+        val colors = palette(activity)
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(activity, 5), 0, dp(activity, 5))
+            addView(TextView(activity).apply {
+                text = label.uppercase()
+                setTextColor(colors.secondaryText)
+                textSize = 10.5f
+                letterSpacing = 0.05f
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(activity).apply {
+                text = value
+                setTextColor(colors.text)
+                textSize = 13.5f
+                setTextIsSelectable(true)
+                setPadding(0, dp(activity, 2), 0, 0)
+            })
         }
     }
 

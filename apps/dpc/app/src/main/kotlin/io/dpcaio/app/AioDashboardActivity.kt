@@ -41,6 +41,7 @@ class AioDashboardActivity : Activity() {
 
         addSection(body, "Tools")
         add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
+        add(body, "Self Update • verified / silent if allowed") { SelfUpdateActivity::class.java }
         add(body, "APK / APKS Installer", { AppPackageManagerActivity::class.java }) {
             it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_INSTALLER)
         }
