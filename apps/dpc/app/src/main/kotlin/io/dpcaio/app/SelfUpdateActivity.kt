@@ -35,6 +35,7 @@ class SelfUpdateActivity : Activity() {
     private val installer by lazy { SelfUpdateInstaller(this) }
     private val preferences by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private val downloadInFlight = AtomicBoolean(false)
+    private val installInFlight = AtomicBoolean(false)
 
     private var selectedChannel = UpdateChannel.STABLE
     private var selectedPolicy = SelfUpdateInstallPolicy.SILENT_IF_ALLOWED
@@ -107,7 +108,7 @@ class SelfUpdateActivity : Activity() {
         val candidate = store.loadCandidate()
         val manifest = currentManifest ?: candidate?.manifest
         val silentAvailable = silentInstallLikelyAvailable()
-        val busy = downloadInFlight.get()
+        val busy = downloadInFlight.get() || installInFlight.get()
 
         body.addView(
             ModernUi.hero(
@@ -372,7 +373,6 @@ class SelfUpdateActivity : Activity() {
             return setState(decision.state, "Cached candidate rejected: ${decision.reason.replace('_', ' ')}")
         }
 
-        setState(SelfUpdateState.INSTALLING, "Submitting ${policy.name.lowercase(Locale.ROOT)} PackageInstaller session…")
         val callback = Intent(this, SelfUpdateStatusReceiver::class.java)
             .setAction(SelfUpdateStatusReceiver.ACTION_INSTALL_STATUS)
             .putExtra(SelfUpdateStatusReceiver.EXTRA_POLICY, policy.name)
@@ -381,10 +381,25 @@ class SelfUpdateActivity : Activity() {
         val requestCode = (candidate.manifest.versionCode and 0x7fffffff).toInt()
         val sender = PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags).intentSender
 
+        if (!installInFlight.compareAndSet(false, true)) {
+            setState(SelfUpdateState.ERROR, "Install staging already in progress")
+            return
+        }
+        setState(SelfUpdateState.INSTALLING, "Submitting ${policy.name.lowercase(Locale.ROOT)} PackageInstaller session…")
+
         Thread {
-            val submission = installer.submit(candidate, policy, sender)
-            if (!submission.submitted) {
-                runOnUiThread { setState(SelfUpdateState.ERROR, submission.message) }
+            try {
+                val submission = installer.submit(candidate, policy, sender)
+                if (!submission.submitted) {
+                    runOnUiThread { setState(SelfUpdateState.ERROR, submission.message) }
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    setState(SelfUpdateState.ERROR, "Install staging failed: ${error.message ?: error.javaClass.simpleName}")
+                }
+            } finally {
+                installInFlight.set(false)
+                runOnUiThread { render() }
             }
         }.start()
     }
