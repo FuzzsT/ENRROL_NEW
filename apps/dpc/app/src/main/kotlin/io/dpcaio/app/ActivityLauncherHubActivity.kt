@@ -108,15 +108,54 @@ class ActivityLauncherHubActivity : Activity() {
             .distinct()
             .take(MAX_RECENT)
 
+    private inline fun <reified T : Enum<T>> restoredEnum(
+        state: Bundle?,
+        key: String,
+        fallback: T,
+    ): T = state?.getString(key)
+        ?.let { saved -> enumValues<T>().firstOrNull { it.name == saved } }
+        ?: fallback
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        currentTab = restoredEnum(savedInstanceState, STATE_CURRENT_TAB, currentTab)
+        currentSort = restoredEnum(savedInstanceState, STATE_CURRENT_SORT, currentSort)
+        currentSortDirection = restoredEnum(savedInstanceState, STATE_SORT_DIRECTION, currentSortDirection)
+        currentStateFilter = restoredEnum(savedInstanceState, STATE_STATE_FILTER, currentStateFilter)
+        currentInstallSourceFilter = restoredEnum(savedInstanceState, STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter)
+        currentInstallAgeFilter = restoredEnum(savedInstanceState, STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter)
+        currentUpdateAgeFilter = restoredEnum(savedInstanceState, STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter)
+        currentTargetSdkFilter = restoredEnum(savedInstanceState, STATE_TARGET_SDK_FILTER, currentTargetSdkFilter)
+        currentDebuggableFilter = restoredEnum(savedInstanceState, STATE_DEBUGGABLE_FILTER, currentDebuggableFilter)
+        visibleAppLimit = savedInstanceState
+            ?.getInt(STATE_VISIBLE_APP_LIMIT, INITIAL_RENDER_LIMIT)
+            ?.coerceAtLeast(INITIAL_RENDER_LIMIT)
+            ?: INITIAL_RENDER_LIMIT
         savedInstanceState?.getStringArrayList(STATE_SELECTED_PACKAGES)?.let { selectedPackages.addAll(it) }
         title = "Activity Launcher"
         renderShell()
-        discoverInstalledApps()
+        val restoredSearch = savedInstanceState?.getString(STATE_SEARCH_QUERY).orEmpty()
+        suppressSearchRender = true
+        try {
+            search.setText(restoredSearch)
+        } finally {
+            suppressSearchRender = false
+        }
+        discoverInstalledApps(resetLimit = savedInstanceState == null)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_CURRENT_TAB, currentTab.name)
+        outState.putString(STATE_CURRENT_SORT, currentSort.name)
+        outState.putString(STATE_SORT_DIRECTION, currentSortDirection.name)
+        outState.putString(STATE_STATE_FILTER, currentStateFilter.name)
+        outState.putString(STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter.name)
+        outState.putString(STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter.name)
+        outState.putString(STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter.name)
+        outState.putString(STATE_TARGET_SDK_FILTER, currentTargetSdkFilter.name)
+        outState.putString(STATE_DEBUGGABLE_FILTER, currentDebuggableFilter.name)
+        outState.putString(STATE_SEARCH_QUERY, search.text.toString())
+        outState.putInt(STATE_VISIBLE_APP_LIMIT, visibleAppLimit)
         outState.putStringArrayList(STATE_SELECTED_PACKAGES, ArrayList(selectedPackages))
         super.onSaveInstanceState(outState)
     }
@@ -1120,6 +1159,17 @@ class ActivityLauncherHubActivity : Activity() {
         private const val PREFS_NAME = "activity_launcher_hub"
         private const val KEY_FAVORITES = "favoritePackages"
         private const val KEY_RECENTS = "recentPackages"
+        private const val STATE_CURRENT_TAB = "activity_launcher_current_tab"
+        private const val STATE_CURRENT_SORT = "activity_launcher_current_sort"
+        private const val STATE_SORT_DIRECTION = "activity_launcher_sort_direction"
+        private const val STATE_STATE_FILTER = "activity_launcher_state_filter"
+        private const val STATE_INSTALL_SOURCE_FILTER = "activity_launcher_install_source_filter"
+        private const val STATE_INSTALL_AGE_FILTER = "activity_launcher_install_age_filter"
+        private const val STATE_UPDATE_AGE_FILTER = "activity_launcher_update_age_filter"
+        private const val STATE_TARGET_SDK_FILTER = "activity_launcher_target_sdk_filter"
+        private const val STATE_DEBUGGABLE_FILTER = "activity_launcher_debuggable_filter"
+        private const val STATE_SEARCH_QUERY = "activity_launcher_search_query"
+        private const val STATE_VISIBLE_APP_LIMIT = "activity_launcher_visible_app_limit"
         private const val STATE_SELECTED_PACKAGES = "selectedPackages"
         private const val MAX_RECENT = 24
         private const val ICON_CACHE_SIZE = 48
