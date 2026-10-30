@@ -753,6 +753,16 @@ class ActivityLauncherHubActivity : Activity() {
         }
     }
 
+    private fun sortByTimestampUnknownLast(
+        apps: List<AppEntry>,
+        timestamp: (AppEntry) -> Long,
+    ): List<AppEntry> {
+        val (valid, unknown) = apps.partition { timestamp(it) > 0L }
+        val sortedValid = valid.sortedBy(timestamp)
+        val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid
+        return directed + unknown
+    }
+
     private fun filteredApps(): List<AppEntry> {
         val query = if (::search.isInitialized) search.text.toString().trim().lowercase() else ""
         val favorites = favoritePackages
@@ -809,10 +819,13 @@ class ActivityLauncherHubActivity : Activity() {
         val sorted = when (currentSort) {
             AppSort.NAME -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
             AppSort.PACKAGE -> filtered.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.packageName })
-            AppSort.INSTALL_DATE -> filtered.sortedBy { it.firstInstallTime }
-            AppSort.UPDATE_DATE -> filtered.sortedBy { it.lastUpdateTime }
+            AppSort.INSTALL_DATE -> sortByTimestampUnknownLast(filtered) { it.firstInstallTime }
+            AppSort.UPDATE_DATE -> sortByTimestampUnknownLast(filtered) { it.lastUpdateTime }
         }
-        return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted
+        return when (currentSort) {
+            AppSort.NAME, AppSort.PACKAGE -> if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted
+            AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> sorted
+        }
     }
 
     private fun formatInstallDate(time: Long): String {
