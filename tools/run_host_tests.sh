@@ -216,6 +216,7 @@ python3 "$ROOT/tools/tests/test_activity_launcher_active_filter_count_contract.p
 python3 "$ROOT/tools/tests/test_activity_launcher_compact_filter_controls_contract.py"
 python3 "$ROOT/tools/tests/test_activity_launcher_app_manager_contract.py"
 python3 "$ROOT/tools/tests/test_activity_launcher_date_sort_tiebreaker_contract.py"
+python3 "$ROOT/tools/tests/test_activity_launcher_preserve_sort_direction_contract.py"
 python3 "$ROOT/tools/tests/test_activity_launcher_lazy_icons_contract.py"
 python3 "$ROOT/tools/tests/test_110_verification_report.py"
 python3 "$ROOT/tools/tests/test_110_release_gate_contract.py"
