@@ -148,6 +148,7 @@ def main():
         "Operation.INSTALL",
         "tryStartCheck",
         "finishCheck",
+        "handoffDownloadToInstall",
     ]:
         assert token in coordinator, f"Self Update unified operation gate missing: {token}"
     assert "AtomicBoolean" not in coordinator, "Self Update operations must share one atomic slot"
@@ -167,13 +168,15 @@ def main():
         "var autoSilentAfterDownload = false",
         "val silentAvailable = autoSilentEnabled && silentInstallLikelyAvailable()",
         "autoSilentAfterDownload = silentAvailable",
-        "operations.finishDownload()",
-        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)",
+        "operations.handoffDownloadToInstall()",
+        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT, installSlotAlreadyHeld = true)",
     ]:
-        assert token in download_body, f"Self Update auto-silent handoff missing: {token}"
-    assert download_body.rfind("operations.finishDownload()") < download_body.rfind(
-        "submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)"
-    ), "auto-silent install must start only after the DOWNLOAD operation slot is released"
+        assert token in download_body, f"Self Update atomic auto-silent handoff missing: {token}"
+
+    submit_body = activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
+    assert "installSlotAlreadyHeld: Boolean = false" in submit_body, (
+        "Self Update install must support an already-held INSTALL slot from atomic auto-silent handoff"
+    )
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
