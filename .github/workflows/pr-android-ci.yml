@@ -112,12 +112,9 @@ jobs:
             "cmake;3.22.1" \
             --channel=3
 
-          if [[ ! -e "$ANDROID_SDK_ROOT/platforms/android-37" ]]; then
-            installed_name="${platform_pkg#platforms;}"
-            installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"
-            [[ ! -d "$installed_path" ]] || ln -sfn "$installed_path" "$ANDROID_SDK_ROOT/platforms/android-37"
-          fi
-          test -e "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+          installed_name="${platform_pkg#platforms;}"
+          installed_path="$ANDROID_SDK_ROOT/platforms/$installed_name"
+          test -e "$installed_path/android.jar"
 
       - name: Install provisioning build dependencies
         run: python3 -m pip install -r tools/provisioning/requirements.txt
