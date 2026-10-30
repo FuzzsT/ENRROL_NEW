@@ -52,28 +52,78 @@ class SamsungSettingEditCoordinator(
     fun apply(request: SettingEditRequest): SettingEditResult {
         val before = gateway.read(request.namespace, request.key)
         val attempts = mutableListOf<SettingEditAttempt>()
+        val acceptedRoutes = mutableListOf<SettingWriteRoute>()
+
         for (route in request.routes.distinct()) {
             val accepted = gateway.write(route, request.namespace, request.key, request.value)
-            var readBack: String? = null
-            var stable = accepted
-            for (waitMs in request.verificationDelaysMs) {
-                if (waitMs > 0) delay.await(waitMs)
-                readBack = gateway.read(request.namespace, request.key)
-                if (readBack != request.value) stable = false
-            }
-            attempts += SettingEditAttempt(route, accepted, readBack)
-            if (accepted && stable) {
-                return SettingEditResult(SettingEditStatus.VERIFIED, route, before, readBack, attempts)
+            if (accepted) acceptedRoutes += route
+            val verification = verifyStableValue(request, request.value, accepted)
+            attempts += SettingEditAttempt(route, accepted, verification.readBack)
+            if (accepted && verification.stable) {
+                return SettingEditResult(SettingEditStatus.VERIFIED, route, before, verification.readBack, attempts)
             }
         }
-        val after = gateway.read(request.namespace, request.key)
-        val anyAccepted = attempts.any { it.writeAccepted }
+
+        val afterFailedWrite = gateway.read(request.namespace, request.key)
+        if (acceptedRoutes.isEmpty()) {
+            return SettingEditResult(
+                status = SettingEditStatus.DENIED,
+                verifiedRoute = null,
+                before = before,
+                after = afterFailedWrite,
+                attempts = attempts
+            )
+        }
+
+        if (afterFailedWrite == before) {
+            return SettingEditResult(
+                status = SettingEditStatus.REVERTED,
+                verifiedRoute = null,
+                before = before,
+                after = afterFailedWrite,
+                attempts = attempts
+            )
+        }
+
+        if (before != null) {
+            for (route in acceptedRoutes.asReversed().distinct()) {
+                val rollbackAccepted = gateway.write(route, request.namespace, request.key, before)
+                val rollbackVerification = verifyStableValue(request, before, rollbackAccepted)
+                if (rollbackAccepted && rollbackVerification.stable) {
+                    return SettingEditResult(
+                        status = SettingEditStatus.REVERTED,
+                        verifiedRoute = null,
+                        before = before,
+                        after = rollbackVerification.readBack,
+                        attempts = attempts
+                    )
+                }
+            }
+        }
+
         return SettingEditResult(
-            status = if (anyAccepted) SettingEditStatus.REVERTED else SettingEditStatus.DENIED,
+            status = SettingEditStatus.UNSUPPORTED,
             verifiedRoute = null,
             before = before,
-            after = after,
+            after = gateway.read(request.namespace, request.key),
             attempts = attempts
         )
     }
+
+    private fun verifyStableValue(
+        request: SettingEditRequest,
+        expected: String,
+        writeAccepted: Boolean,
+    ): Verification {
+        var readBack: String? = null
+        var stable = writeAccepted
+        for (waitMs in request.verificationDelaysMs) {
+            if (waitMs > 0) delay.await(waitMs)
+            readBack = gateway.read(request.namespace, request.key)
+            if (readBack != expected) stable = false
+        }
+        return Verification(readBack, stable)
+    }
+
+    private data class Verification(val readBack: String?, val stable: Boolean)
 }
