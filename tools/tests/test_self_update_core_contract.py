@@ -51,14 +51,22 @@ assert coordinator_path.is_file(), "SelfUpdateOperationCoordinator.kt missing"
 coordinator = coordinator_path.read_text(encoding="utf-8")
 for token in [
     "object SelfUpdateOperationCoordinator",
-    "AtomicBoolean",
+    "AtomicReference",
+    "enum class Operation",
+    "Operation.CHECK",
+    "Operation.DOWNLOAD",
+    "Operation.INSTALL",
+    "tryStartCheck",
+    "finishCheck",
     "tryStartDownload",
+    "handoffDownloadToInstall",
     "finishDownload",
     "tryStartInstall",
     "finishInstall",
     "isBusy",
 ]:
     assert token in coordinator, f"Self Update operation coordinator missing: {token}"
+assert "AtomicBoolean" not in coordinator, "Self Update operation coordinator must use one atomic operation slot"
 
 activity_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 activity = activity_path.read_text(encoding="utf-8")
