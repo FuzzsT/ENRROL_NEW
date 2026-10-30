@@ -1,0 +1,60 @@
+name: Temporary Activity Launcher date tie-breaker GREEN
+
+on:
+  push:
+    branches:
+      - fix/activity-launcher-date-sort-tiebreaker
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/activity-launcher-date-sort-tiebreaker
+          fetch-depth: 1
+      - name: Apply exact date tie-breaker patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          activity = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt')
+          s = activity.read_text()
+          old = '''    private fun sortByTimestampUnknownLast(\n        apps: List<AppEntry>,\n        timestamp: (AppEntry) -> Long,\n    ): List<AppEntry> {\n        val now = System.currentTimeMillis()\n        val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }\n        val sortedValid = valid.sortedBy(timestamp)\n        val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid\n        return directed + unknown\n    }\n'''
+          new = '''    private fun dateSortComparator(\n        timestamp: (AppEntry) -> Long,\n    ): Comparator<AppEntry> {\n        val timestampComparator = if (currentSortDirection == SortDirection.DESCENDING) {\n            compareByDescending<AppEntry> { timestamp(it) }\n        } else {\n            compareBy<AppEntry> { timestamp(it) }\n        }\n        return timestampComparator\n            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }\n            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.packageName }\n    }\n\n    private fun sortByTimestampUnknownLast(\n        apps: List<AppEntry>,\n        timestamp: (AppEntry) -> Long,\n    ): List<AppEntry> {\n        val now = System.currentTimeMillis()\n        val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }\n        val sortedValid = valid.sortedWith(dateSortComparator(timestamp))\n        return sortedValid + unknown\n    }\n'''
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly one date-sort helper anchor, got {s.count(old)}')
+          activity.write_text(s.replace(old, new, 1))
+
+          runner = Path('tools/run_host_tests.sh')
+          r = runner.read_text()
+          anchor = 'python3 "$ROOT/tools/tests/test_activity_launcher_app_manager_contract.py"\n'
+          addition = anchor + 'python3 "$ROOT/tools/tests/test_activity_launcher_date_sort_tiebreaker_contract.py"\n'
+          if r.count(anchor) != 1:
+              raise SystemExit(f'Expected exactly one host-test anchor, got {r.count(anchor)}')
+          if 'test_activity_launcher_date_sort_tiebreaker_contract.py' not in r:
+              r = r.replace(anchor, addition, 1)
+          runner.write_text(r)
+          PY
+          python3 tools/tests/test_activity_launcher_date_sort_tiebreaker_contract.py
+          python3 tools/tests/test_activity_launcher_app_manager_contract.py
+          python3 tools/tests/test_component_manager_ui_contract.py
+          git diff --check
+          printf 'Changed files:\n'
+          git diff --name-only
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt tools/run_host_tests.sh "
+      - name: Commit exact GREEN changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt tools/run_host_tests.sh
+          git commit -m "fix: make Activity Launcher date sort deterministic"
+          git push origin HEAD:fix/activity-launcher-date-sort-tiebreaker
