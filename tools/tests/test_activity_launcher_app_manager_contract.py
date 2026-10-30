@@ -45,8 +45,10 @@ for needle in [
     'currentUpdateAgeFilter = UpdateAgeFilter.ALL',
     'updateAge=${currentUpdateAgeFilter.name}',
     'val now = System.currentTimeMillis()',
+    'private fun isValidTimestamp(timestamp: Long, now: Long): Boolean',
+    'timestamp > 0L && timestamp <= now',
     'private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean',
-    'timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs',
+    'isValidTimestamp(timestamp, now) && now - timestamp <= maxAgeMs',
     'InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_24H_MS) }',
     'InstallAgeFilter.DAYS_7 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_7D_MS) }',
     'InstallAgeFilter.DAYS_30 -> sourceFiltered.filter { isTimestampWithinAge(it.firstInstallTime, now, INSTALL_AGE_30D_MS) }',
@@ -101,7 +103,8 @@ for needle in [
     'Newest → oldest',
     'private fun sortByTimestampUnknownLast(',
     'timestamp: (AppEntry) -> Long,',
-    'val (valid, unknown) = apps.partition { timestamp(it) > 0L }',
+    'val now = System.currentTimeMillis()',
+    'val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }',
     'val sortedValid = valid.sortedBy(timestamp)',
     'val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid',
     'return directed + unknown',
@@ -125,6 +128,7 @@ for needle in [
     'AppPackageManagerActivity.MODE_UPDATER',
     'formatInstallDate(app.firstInstallTime)',
     'formatInstallDate(app.lastUpdateTime)',
+    'if (!isValidTimestamp(time, now)) return "unknown"',
     '"v${app.versionName} • SDK ${app.targetSdk} • Installed ${formatInstallDate(app.firstInstallTime)}"',
     'AndroidInstallSourceReader',
     'currentStateFilter',
@@ -194,6 +198,8 @@ for stale in [
     'AppSort.INSTALL_DATE -> filtered.sortedBy { it.firstInstallTime }',
     'AppSort.UPDATE_DATE -> filtered.sortedBy { it.lastUpdateTime }',
     'return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted',
+    'apps.partition { timestamp(it) > 0L }',
+    'if (time <= 0L) return "unknown"',
 ]:
     assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter/date-sort token {stale}'
 
