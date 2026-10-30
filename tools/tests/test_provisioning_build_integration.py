@@ -76,7 +76,7 @@ def main():
         'device-owner-validation.json',
         '--qr',
         '--apk',
-        'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+        'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
         'dpc-aio-continuous',
         'gh release upload',
         '--clobber',
