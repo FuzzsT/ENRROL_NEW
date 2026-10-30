@@ -136,6 +136,45 @@ for needle in [
     'AppOps',
     'AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE',
     'filteredApps().take(visibleAppLimit)',
+    'private inline fun <reified T : Enum<T>> restoredEnum(',
+    'enumValues<T>().firstOrNull { it.name == saved }',
+    'currentTab = restoredEnum(savedInstanceState, STATE_CURRENT_TAB, currentTab)',
+    'currentSort = restoredEnum(savedInstanceState, STATE_CURRENT_SORT, currentSort)',
+    'currentSortDirection = restoredEnum(savedInstanceState, STATE_SORT_DIRECTION, currentSortDirection)',
+    'currentStateFilter = restoredEnum(savedInstanceState, STATE_STATE_FILTER, currentStateFilter)',
+    'currentInstallSourceFilter = restoredEnum(savedInstanceState, STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter)',
+    'currentInstallAgeFilter = restoredEnum(savedInstanceState, STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter)',
+    'currentUpdateAgeFilter = restoredEnum(savedInstanceState, STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter)',
+    'currentTargetSdkFilter = restoredEnum(savedInstanceState, STATE_TARGET_SDK_FILTER, currentTargetSdkFilter)',
+    'currentDebuggableFilter = restoredEnum(savedInstanceState, STATE_DEBUGGABLE_FILTER, currentDebuggableFilter)',
+    'coerceAtLeast(INITIAL_RENDER_LIMIT)',
+    'savedInstanceState?.getString(STATE_SEARCH_QUERY).orEmpty()',
+    'suppressSearchRender = true',
+    'search.setText(restoredSearch)',
+    'suppressSearchRender = false',
+    'discoverInstalledApps(resetLimit = savedInstanceState == null)',
+    'outState.putString(STATE_CURRENT_TAB, currentTab.name)',
+    'outState.putString(STATE_CURRENT_SORT, currentSort.name)',
+    'outState.putString(STATE_SORT_DIRECTION, currentSortDirection.name)',
+    'outState.putString(STATE_STATE_FILTER, currentStateFilter.name)',
+    'outState.putString(STATE_INSTALL_SOURCE_FILTER, currentInstallSourceFilter.name)',
+    'outState.putString(STATE_INSTALL_AGE_FILTER, currentInstallAgeFilter.name)',
+    'outState.putString(STATE_UPDATE_AGE_FILTER, currentUpdateAgeFilter.name)',
+    'outState.putString(STATE_TARGET_SDK_FILTER, currentTargetSdkFilter.name)',
+    'outState.putString(STATE_DEBUGGABLE_FILTER, currentDebuggableFilter.name)',
+    'outState.putString(STATE_SEARCH_QUERY, search.text.toString())',
+    'outState.putInt(STATE_VISIBLE_APP_LIMIT, visibleAppLimit)',
+    'private const val STATE_CURRENT_TAB = "activity_launcher_current_tab"',
+    'private const val STATE_CURRENT_SORT = "activity_launcher_current_sort"',
+    'private const val STATE_SORT_DIRECTION = "activity_launcher_sort_direction"',
+    'private const val STATE_STATE_FILTER = "activity_launcher_state_filter"',
+    'private const val STATE_INSTALL_SOURCE_FILTER = "activity_launcher_install_source_filter"',
+    'private const val STATE_INSTALL_AGE_FILTER = "activity_launcher_install_age_filter"',
+    'private const val STATE_UPDATE_AGE_FILTER = "activity_launcher_update_age_filter"',
+    'private const val STATE_TARGET_SDK_FILTER = "activity_launcher_target_sdk_filter"',
+    'private const val STATE_DEBUGGABLE_FILTER = "activity_launcher_debuggable_filter"',
+    'private const val STATE_SEARCH_QUERY = "activity_launcher_search_query"',
+    'private const val STATE_VISIBLE_APP_LIMIT = "activity_launcher_visible_app_limit"',
 ]:
     assert needle in hub, f'ActivityLauncherHubActivity.kt missing {needle}'
 
@@ -157,6 +196,13 @@ for stale in [
     'return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted',
 ]:
     assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter/date-sort token {stale}'
+
+for transient_key in [
+    'STATE_CURRENT_TAB', 'STATE_CURRENT_SORT', 'STATE_SORT_DIRECTION', 'STATE_STATE_FILTER',
+    'STATE_INSTALL_SOURCE_FILTER', 'STATE_INSTALL_AGE_FILTER', 'STATE_UPDATE_AGE_FILTER',
+    'STATE_TARGET_SDK_FILTER', 'STATE_DEBUGGABLE_FILTER', 'STATE_SEARCH_QUERY', 'STATE_VISIBLE_APP_LIMIT',
+]:
+    assert f'preferences.edit().putString({transient_key}' not in hub, f'{transient_key} must not be persisted in SharedPreferences'
 
 for needle in [
     'EXTRA_TARGET_PACKAGE',
