@@ -73,5 +73,7 @@ activity = activity_path.read_text(encoding="utf-8")
 assert "SelfUpdateOperationCoordinator" in activity, "Self Update activity must use lifecycle-independent operation coordination"
 assert "private val downloadInFlight = AtomicBoolean(false)" not in activity, "download guard must not be Activity-instance state"
 assert "private val installInFlight = AtomicBoolean(false)" not in activity, "install guard must not be Activity-instance state"
+assert 'total?.let { " / ${formatBytes(it)}" }.orEmpty()' not in activity, "progress total is non-null inside the percent branch and must not use a redundant safe call"
+assert 'message = "${formatBytes(downloaded)} / ${formatBytes(total)}"' in activity, "progress message must render downloaded and known total directly"
 
 print("Self Update core contract: PASS")
