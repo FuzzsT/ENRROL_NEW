@@ -1,10 +1,19 @@
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 p=ROOT/'apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionManagerGateway.kt'
+auto=ROOT/'apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/AndroidPermissionGrantCoordinator.kt'
+client=ROOT/'apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt'
 assert p.is_file(),p
-t=p.read_text()
+assert auto.is_file(),auto
+assert client.is_file(),client
+t=p.read_text(); at=auto.read_text(); ct=client.read_text()
 for n in ['getPermissionGrantState','setPermissionGrantState','getPermissionPolicy','setPermissionPolicy','checkPermission','AppOpsManager','permissionToOp','targetUserId','POLICY_READBACK_MISMATCH']:
     assert n in t,n
 for n in ['PERMISSION_POLICY_PROMPT','PERMISSION_POLICY_AUTO_GRANT','PERMISSION_POLICY_AUTO_DENY']:
     assert n in t,n
+for n in ['fun awaitConnected(timeoutMs: Long','SystemClock.elapsedRealtime()','Thread.sleep(','bind()','isConnected()']:
+    assert n in ct,f'Shizuku readiness wait missing {n}'
+for n in ['val shizukuReady = shizuku?.awaitConnected(','shizukuAvailable = shizukuReady']:
+    assert n in at,f'AUTO permission readiness missing {n}'
+assert 'shizuku?.identity() != null' not in at,'AUTO permissions must not race on immediate identity() readback'
 print('PERMISSION_MANAGER_100_ANDROID_CONTRACT: PASS')
