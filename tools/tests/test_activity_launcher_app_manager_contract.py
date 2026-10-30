@@ -99,7 +99,16 @@ for needle in [
     'Z → A',
     'Oldest → newest',
     'Newest → oldest',
-    'if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted',
+    'private fun sortByTimestampUnknownLast(',
+    'timestamp: (AppEntry) -> Long,',
+    'val (valid, unknown) = apps.partition { timestamp(it) > 0L }',
+    'val sortedValid = valid.sortedBy(timestamp)',
+    'val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid',
+    'return directed + unknown',
+    'AppSort.INSTALL_DATE -> sortByTimestampUnknownLast(filtered) { it.firstInstallTime }',
+    'AppSort.UPDATE_DATE -> sortByTimestampUnknownLast(filtered) { it.lastUpdateTime }',
+    'AppSort.NAME, AppSort.PACKAGE -> if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted',
+    'AppSort.INSTALL_DATE, AppSort.UPDATE_DATE -> sorted',
     'val uid: Int',
     'uid = info.uid',
     'app.uid.toString().contains(query)',
@@ -143,8 +152,11 @@ for stale in [
     'UpdateAgeFilter.HOURS_24 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_24H_MS }',
     'UpdateAgeFilter.DAYS_7 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_7D_MS }',
     'UpdateAgeFilter.DAYS_30 -> ageFiltered.filter { it.lastUpdateTime > 0 && now - it.lastUpdateTime <= UPDATE_AGE_30D_MS }',
+    'AppSort.INSTALL_DATE -> filtered.sortedBy { it.firstInstallTime }',
+    'AppSort.UPDATE_DATE -> filtered.sortedBy { it.lastUpdateTime }',
+    'return if (currentSortDirection == SortDirection.DESCENDING) sorted.reversed() else sorted',
 ]:
-    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter/future-age token {stale}'
+    assert stale not in hub, f'ActivityLauncherHubActivity.kt still contains stale date-filter/date-sort token {stale}'
 
 for needle in [
     'EXTRA_TARGET_PACKAGE',
