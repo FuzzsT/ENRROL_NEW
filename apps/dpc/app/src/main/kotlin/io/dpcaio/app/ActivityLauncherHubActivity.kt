@@ -572,8 +572,8 @@ class ActivityLauncherHubActivity : Activity() {
                         orientation = LinearLayout.VERTICAL
                         addView(ModernUi.title(this@ActivityLauncherHubActivity, app.label))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, app.packageName))
-                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "v${app.versionName} • SDK ${app.targetSdk}"))
-                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Installed ${formatInstallDate(app.firstInstallTime)} • Updated ${formatInstallDate(app.lastUpdateTime)}"))
+                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "v${app.versionName} • SDK ${app.targetSdk} • Installed ${formatInstallDate(app.firstInstallTime)}"))
+                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Updated ${formatInstallDate(app.lastUpdateTime)}"))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, "Installer: ${app.installerPackage ?: "unknown / preloaded"}"))
                     },
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
