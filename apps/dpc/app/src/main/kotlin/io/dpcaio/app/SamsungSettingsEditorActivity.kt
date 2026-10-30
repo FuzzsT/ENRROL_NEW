@@ -33,7 +33,14 @@ class SamsungSettingsEditorActivity : Activity() {
         private var operationRunning = false
     }
 
+    private enum class DiscoveryScope { ALL, SYSTEM, SECURE, GLOBAL }
     private enum class DiscoveredValueType { INT, STRING }
+
+    private data class DiscoveredSettingRow(
+        val namespace: SettingNamespace,
+        val name: String,
+        val currentValue: String?,
+    )
 
     private lateinit var namespace: Spinner
     private lateinit var key: EditText
@@ -42,7 +49,7 @@ class SamsungSettingsEditorActivity : Activity() {
     private lateinit var discoveredContainer: LinearLayout
     private lateinit var status: TextView
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
-    private var discoveredSettings: List<Pair<String, String?>> = emptyList()
+    private var discoveredSettings: List<DiscoveredSettingRow> = emptyList()
     private val discoveredBaselines = linkedMapOf<String, String?>()
     @Volatile
     private var discoveryGeneration = 0L
@@ -59,7 +66,7 @@ class SamsungSettingsEditorActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = title.toString(),
-                subtitle = "Discover SYSTEM / SECURE / GLOBAL settings, tap a tile, edit its typed value, then verify the write",
+                subtitle = "Discover ALL / SYSTEM / SECURE / GLOBAL settings, tap a tile, edit its typed value, then verify the write",
                 eyebrow = "SETTINGS",
             )
         )
@@ -71,7 +78,7 @@ class SamsungSettingsEditorActivity : Activity() {
                     adapter = ArrayAdapter(
                         this@SamsungSettingsEditorActivity,
                         android.R.layout.simple_spinner_dropdown_item,
-                        listOf("SYSTEM", "SECURE", "GLOBAL"),
+                        listOf("ALL", "SYSTEM", "SECURE", "GLOBAL"),
                     )
                 }
                 key = ModernUi.field(this@SamsungSettingsEditorActivity, "setting key")
@@ -122,7 +129,7 @@ class SamsungSettingsEditorActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@SamsungSettingsEditorActivity,
-                        "The editor tries only declared routes and reports before/after plus the verified route. The displayed default/baseline is the first value observed during this editor session because Android Settings does not expose a universal factory-default API for every key.",
+                        "ALL discovery aggregates only Android Settings SYSTEM, SECURE and GLOBAL. OEM/Knox namespaces remain explicit because they have different access rules. Manual Read/Write requires one concrete namespace; tapping a discovered tile selects the correct namespace automatically. The displayed default/baseline is the first value observed during this editor session because Android Settings does not expose a universal factory-default API for every key.",
                     )
                 )
             }
@@ -141,23 +148,44 @@ class SamsungSettingsEditorActivity : Activity() {
         discoverSettings()
     }
 
-    private fun selectedNamespace() = SettingNamespace.valueOf(namespace.selectedItem.toString())
+    private fun selectedScope(): DiscoveryScope = DiscoveryScope.valueOf(namespace.selectedItem.toString())
+
+    private fun selectedNamespaceOrNull(): SettingNamespace? = when (selectedScope()) {
+        DiscoveryScope.ALL -> null
+        DiscoveryScope.SYSTEM -> SettingNamespace.SYSTEM
+        DiscoveryScope.SECURE -> SettingNamespace.SECURE
+        DiscoveryScope.GLOBAL -> SettingNamespace.GLOBAL
+    }
+
+    private fun discoveryNamespaces(scope: DiscoveryScope): List<SettingNamespace> = when (scope) {
+        DiscoveryScope.ALL -> listOf(SettingNamespace.SYSTEM, SettingNamespace.SECURE, SettingNamespace.GLOBAL)
+        DiscoveryScope.SYSTEM -> listOf(SettingNamespace.SYSTEM)
+        DiscoveryScope.SECURE -> listOf(SettingNamespace.SECURE)
+        DiscoveryScope.GLOBAL -> listOf(SettingNamespace.GLOBAL)
+    }
 
     private fun gateway() = AndroidSamsungSettingGateway(this, shizuku, AndroidUserId.fromUid(Process.myUid()))
 
     private fun discoverSettings() {
         if (!::discoveredContainer.isInitialized) return
-        val ns = selectedNamespace()
+        val scope = selectedScope()
+        val namespaces = discoveryNamespaces(scope)
         val generation = ++discoveryGeneration
-        renderDiscoveryMessage("Discovering ${ns.name.lowercase()} settings…")
+        val scopeLabel = if (scope == DiscoveryScope.ALL) "ALL namespaces" else scope.name.lowercase()
+        renderDiscoveryMessage("Discovering $scopeLabel settings…")
         Thread {
-            val rows = gateway().list(ns)
+            val settingGateway = gateway()
+            val rows = namespaces.flatMap { ns ->
+                settingGateway.list(ns).map { (name, currentValue) ->
+                    DiscoveredSettingRow(ns, name, currentValue)
+                }
+            }.sortedWith(compareBy<DiscoveredSettingRow>({ it.namespace.name }, { it.name.lowercase() }))
             runOnUiThread {
                 if (isFinishing || isDestroyed || generation != discoveryGeneration) return@runOnUiThread
-                rows.forEach { (name, currentValue) -> rememberBaseline(ns, name, currentValue) }
+                rows.forEach { row -> rememberBaseline(row.namespace, row.name, row.currentValue) }
                 discoveredSettings = rows
                 renderDiscoveredSettings()
-                status.text = "Discovered ${rows.size} ${ns.name.lowercase()} settings"
+                status.text = "Discovered ${rows.size} $scopeLabel settings"
             }
         }.start()
     }
@@ -187,9 +215,11 @@ class SamsungSettingsEditorActivity : Activity() {
     private fun renderDiscoveredSettings() {
         if (!::discoveredContainer.isInitialized) return
         val filter = if (::discoveryFilter.isInitialized) discoveryFilter.text.toString().trim().lowercase() else ""
-        val ns = selectedNamespace()
-        val rows = discoveredSettings.filter { (name, currentValue) ->
-            filter.isBlank() || name.lowercase().contains(filter) || currentValue.orEmpty().lowercase().contains(filter)
+        val rows = discoveredSettings.filter { row ->
+            filter.isBlank() ||
+                row.namespace.name.lowercase().contains(filter) ||
+                row.name.lowercase().contains(filter) ||
+                row.currentValue.orEmpty().lowercase().contains(filter)
         }
 
         discoveredContainer.removeAllViews()
@@ -198,21 +228,24 @@ class SamsungSettingsEditorActivity : Activity() {
             return
         }
 
-        rows.forEach { (name, currentValue) ->
-            val type = detectValueType(currentValue)
-            val baseline = baselineFor(ns, name)
+        rows.forEach { row ->
+            val type = detectValueType(row.currentValue)
+            val baseline = baselineFor(row.namespace, row.name)
             val tile = ModernUi.compactCard(this).apply {
                 isClickable = true
                 isFocusable = true
-                addView(ModernUi.title(this@SamsungSettingsEditorActivity, name))
+                addView(ModernUi.title(this@SamsungSettingsEditorActivity, row.name))
+                addView(ModernUi.chip(this@SamsungSettingsEditorActivity, row.namespace.name))
                 addView(
                     ModernUi.body(
                         this@SamsungSettingsEditorActivity,
-                        "Current: ${currentValue ?: "<null>"}\nDefault / baseline: ${baseline ?: "<null>"}\nTap to edit",
+                        "Current: ${row.currentValue ?: "<null>"}\nDefault / baseline: ${baseline ?: "<null>"}\nTap to edit",
                     )
                 )
                 addView(ModernUi.chip(this@SamsungSettingsEditorActivity, type.name))
-                setOnClickListener { showDiscoveredSettingEditor(ns, name, currentValue, baseline, type) }
+                setOnClickListener {
+                    showDiscoveredSettingEditor(row.namespace, row.name, row.currentValue, baseline, type)
+                }
             }
             discoveredContainer.addView(tile)
         }
@@ -282,7 +315,12 @@ class SamsungSettingsEditorActivity : Activity() {
 
     private fun readValue() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
-        status.text = gateway().read(selectedNamespace(), k) ?: "<null/unavailable>"
+        val ns = selectedNamespaceOrNull()
+        if (ns == null) {
+            status.text = "Select SYSTEM, SECURE or GLOBAL for manual Read"
+            return
+        }
+        status.text = gateway().read(ns, k) ?: "<null/unavailable>"
     }
 
     private fun cancelStabilityCleanup() {
@@ -294,7 +332,12 @@ class SamsungSettingsEditorActivity : Activity() {
 
     private fun writeValue() {
         val k = key.text.toString().trim(); if (k.isBlank()) return
-        writeSetting(selectedNamespace(), k, value.text.toString())
+        val ns = selectedNamespaceOrNull()
+        if (ns == null) {
+            status.text = "Select SYSTEM, SECURE or GLOBAL for manual Write"
+            return
+        }
+        writeSetting(ns, k, value.text.toString())
     }
 
     private fun writeSetting(ns: SettingNamespace, k: String, v: String) {
@@ -342,9 +385,10 @@ class SamsungSettingsEditorActivity : Activity() {
                         return@runOnUiThread
                     }
                     status.text = "manufacturer=${Build.MANUFACTURER}\nstatus=${result.status}\nroute=${result.verifiedRoute}\nbefore=${result.before}\nafter=${result.after}\nattempts=${result.attempts}"
-                    if (selectedNamespace() == ns) {
-                        discoveredSettings = discoveredSettings.map { (name, currentValue) ->
-                            if (name == k) name to result.after else name to currentValue
+                    val scope = selectedScope()
+                    if (scope == DiscoveryScope.ALL || selectedNamespaceOrNull() == ns) {
+                        discoveredSettings = discoveredSettings.map { row ->
+                            if (row.namespace == ns && row.name == k) row.copy(currentValue = result.after) else row
                         }
                         renderDiscoveredSettings()
                     }
