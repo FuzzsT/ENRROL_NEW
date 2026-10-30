@@ -41,20 +41,14 @@ jobs:
           if actual_before != expected_before:
               raise SystemExit(f'Unexpected input blob: {actual_before} != {expected_before}')
 
-          anchor = '''    private fun updateAgeLabel(filter: UpdateAgeFilter): String = when (filter) {
-              UpdateAgeFilter.ALL -> "ALL"
-              UpdateAgeFilter.HOURS_24 -> "24H"
-              UpdateAgeFilter.DAYS_7 -> "7D"
-              UpdateAgeFilter.DAYS_30 -> "30D"
-          }
-          '''
-          replacement = anchor + '''
-              private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =
-                  timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs
+          anchor = '    private fun renderDateAgeBar() {'
+          helper = '''    private fun isTimestampWithinAge(timestamp: Long, now: Long, maxAgeMs: Long): Boolean =
+              timestamp > 0L && timestamp <= now && now - timestamp <= maxAgeMs
+
           '''
           if source.count(anchor) != 1:
-              raise SystemExit(f'Expected exactly one helper anchor, got {source.count(anchor)}')
-          source = source.replace(anchor, replacement, 1)
+              raise SystemExit(f'Expected exactly one renderDateAgeBar anchor, got {source.count(anchor)}')
+          source = source.replace(anchor, helper + anchor, 1)
 
           replacements = {
               'InstallAgeFilter.HOURS_24 -> sourceFiltered.filter { it.firstInstallTime > 0 && now - it.firstInstallTime <= INSTALL_AGE_24H_MS }':
