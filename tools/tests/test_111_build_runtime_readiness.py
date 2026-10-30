@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import importlib.util
 import re
+import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 errors=[]
 app=(ROOT/'apps/dpc/app/build.gradle.kts').read_text()
@@ -22,6 +24,23 @@ else:
     for marker in ['compileSdk','gradleWrapper','androidSdk','buildTools','ndk','cmake','signing']:
         if marker not in text: errors.append(f'preflight missing evidence key {marker}')
     if 'BUILD_READY' not in text or 'BUILD_BLOCKED' not in text: errors.append('preflight must expose stable readiness states')
+    try:
+        spec=importlib.util.spec_from_file_location('android_build_preflight_contract', preflight)
+        if not spec or not spec.loader:
+            raise RuntimeError('could not import android_build_preflight.py')
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk=Path(tmp)
+            minor=sdk/'platforms'/'android-37.2'
+            minor.mkdir(parents=True)
+            expected=minor/'android.jar'
+            expected.write_bytes(b'contract')
+            observed=module.resolve_compile_sdk_jar(sdk, '37')
+            if observed != expected:
+                errors.append(f'preflight must resolve canonical minor compileSdk path; got {observed!r}')
+    except Exception as exc:
+        errors.append(f'preflight minor compileSdk resolution failed: {exc}')
 if 'android_build_preflight.py --require-signing' not in workflow: errors.append('workflow must execute build preflight before Gradle build')
 if 'build-environment.json' not in workflow: errors.append('workflow must preserve build environment evidence')
 if errors:

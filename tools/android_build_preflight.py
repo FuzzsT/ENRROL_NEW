@@ -50,6 +50,33 @@ def latest_version_dir(parent: Path) -> Path | None:
         return sorted(dirs, key=lambda p: p.name)[-1] if dirs else None
 
 
+def resolve_compile_sdk_jar(sdk: Path, compile_sdk: str) -> Path | None:
+    platforms = sdk / "platforms"
+    exact = platforms / f"android-{compile_sdk}" / "android.jar"
+    if exact.is_file():
+        return exact
+    if not platforms.is_dir():
+        return None
+
+    prefix = f"android-{compile_sdk}."
+    candidates = [
+        p / "android.jar"
+        for p in platforms.iterdir()
+        if p.is_dir() and p.name.startswith(prefix) and (p / "android.jar").is_file()
+    ]
+    if not candidates:
+        return None
+
+    def key(jar: Path):
+        suffix = jar.parent.name[len(prefix):]
+        return tuple(int(x) if x.isdigit() else x for x in suffix.split("."))
+
+    try:
+        return sorted(candidates, key=key)[-1]
+    except TypeError:
+        return sorted(candidates, key=lambda p: p.parent.name)[-1]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--require-signing", action="store_true")
@@ -64,7 +91,7 @@ def main() -> int:
     sdk_env = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
     sdk = Path(sdk_env).expanduser() if sdk_env else None
 
-    platform = sdk / "platforms" / f"android-{compile_sdk}" / "android.jar" if sdk and compile_sdk else None
+    platform = resolve_compile_sdk_jar(sdk, compile_sdk) if sdk and compile_sdk else None
     build_tools_dir = latest_version_dir(sdk / "build-tools") if sdk else None
     apksigner = build_tools_dir / ("apksigner.bat" if os.name == "nt" else "apksigner") if build_tools_dir else None
     ndk = sdk / "ndk" / str(ndk_ver) if sdk and ndk_ver else None
