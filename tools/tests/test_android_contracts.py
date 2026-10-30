@@ -107,7 +107,8 @@ def main():
     store_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateStore.kt"
     verifier_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateVerifier.kt"
     installer_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateInstaller.kt"
-    for path in [build_file, manifest_file, client_file, store_file, verifier_file, installer_file]:
+    coordinator_file = self_update_root / "src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateOperationCoordinator.kt"
+    for path in [build_file, manifest_file, client_file, store_file, verifier_file, installer_file, coordinator_file]:
         assert_true(path.is_file(), f"Self Update Android file missing: {path.relative_to(ROOT)}")
 
     build_text = build_file.read_text(encoding="utf-8")
@@ -135,7 +136,19 @@ def main():
     assert_true("catch (error: Exception)" in installer, "Self Update installer must catch staging exceptions")
     assert_true("runCatching { adapter.abandon(sessionId) }" in installer, "Self Update installer must abandon the session after a staging exception")
 
-    combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file])
+    coordinator = coordinator_file.read_text(encoding="utf-8")
+    for token in [
+        "object SelfUpdateOperationCoordinator",
+        "AtomicBoolean",
+        "tryStartDownload",
+        "finishDownload",
+        "tryStartInstall",
+        "finishInstall",
+        "isBusy",
+    ]:
+        assert_true(token in coordinator, f"Self Update operation coordinator missing: {token}")
+
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in [client_file, store_file, verifier_file, installer_file, coordinator_file])
     for forbidden in ["ProcessBuilder", "Runtime.getRuntime", "Shizuku", "su -c", "pm install"]:
         assert_true(forbidden not in combined, f"Self Update must not use install bypass path: {forbidden}")
 
@@ -153,18 +166,21 @@ def main():
         "Release notes",
         "SILENT_IF_ALLOWED",
         "AUTO_SILENT",
+        "SelfUpdateOperationCoordinator",
     ]:
         assert_true(token in self_update_activity, f"Self Update UI missing: {token}")
 
     download_body = self_update_activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
-    assert_true("compareAndSet(false, true)" in download_body, "Self Update download must reject a second in-flight worker")
-    assert_true("set(false)" in download_body, "Self Update download guard must be released after completion")
+    assert_true("operations.tryStartDownload()" in download_body, "Self Update download must use the lifecycle-independent operation gate")
+    assert_true("operations.finishDownload()" in download_body, "Self Update download gate must be released after completion")
     assert_true(self_update_activity.count("store.clearCandidate()") >= 2, "changing Self Update channel must invalidate the cached candidate")
     submit_body = self_update_activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
     assert_true("planner.evaluate" in submit_body and "selectedChannel" in submit_body, "Self Update install must revalidate cached candidate against the selected channel")
-    assert_true("installInFlight.compareAndSet(false, true)" in submit_body, "Self Update install staging must be single-flight")
-    assert_true("installInFlight.set(false)" in submit_body, "Self Update install guard must be released after staging")
-    assert_true("downloadInFlight.get() || installInFlight.get()" in self_update_activity, "candidate-mutating controls must stay disabled during install staging")
+    assert_true("operations.tryStartInstall()" in submit_body, "Self Update install staging must use the lifecycle-independent operation gate")
+    assert_true("operations.finishInstall()" in submit_body, "Self Update install gate must be released after staging")
+    assert_true("operations.isBusy()" in self_update_activity, "candidate-mutating controls must read lifecycle-independent busy state")
+    assert_true("private val downloadInFlight = AtomicBoolean(false)" not in self_update_activity, "download guard must not be Activity-instance state")
+    assert_true("private val installInFlight = AtomicBoolean(false)" not in self_update_activity, "install guard must not be Activity-instance state")
 
     status_receiver_path = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateStatusReceiver.kt"
     assert_true(status_receiver_path.is_file(), "SelfUpdateStatusReceiver.kt missing")
