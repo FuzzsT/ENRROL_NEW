@@ -44,7 +44,7 @@ class ControlCenterActivity : Activity() {
         super.onStart()
         if (shizukuObserver == null) {
             shizukuObserver = shizukuRuntime.observe { state ->
-                if (state.binderAlive && state.permissionGranted) {
+                if (state.binderAlive && state.permissionGranted && !shizuku.isConnected()) {
                     shizuku.bind()
                 }
                 if (::content.isInitialized && currentTab == ControlTab.SHIZUKU) {
@@ -56,6 +56,8 @@ class ControlCenterActivity : Activity() {
                         append(if (state.binderAlive) "binder online" else "binder offline")
                         append(" • backend=")
                         append(state.backend)
+                        append(" • service=")
+                        append(if (shizuku.isConnected()) "connected" else "disconnected")
                         append(" • permission=")
                         append(if (state.permissionGranted) "granted" else "missing")
                         append(" • identity=")
@@ -214,6 +216,7 @@ class ControlCenterActivity : Activity() {
 
     private fun renderShizuku() {
         val state = shizukuRuntime.probe()
+        val serviceConnected = shizuku.isConnected()
         val serviceIdentity = shizuku.identity()
         content.addView(ModernUi.section(this, "Shizuku Control"))
 
@@ -231,6 +234,7 @@ class ControlCenterActivity : Activity() {
         }
         metric(if (state.binderAlive) "ON" else "OFF", "BINDER", if (state.binderAlive) ModernUi.Tone.SUCCESS else ModernUi.Tone.DANGER)
         metric(state.backend.uppercase(), "BACKEND", if (state.binderAlive) ModernUi.Tone.SUCCESS else ModernUi.Tone.NEUTRAL)
+        metric(if (serviceConnected) "ON" else "OFF", "SERVICE", if (serviceConnected) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING)
         metric(if (state.permissionGranted) "YES" else "NO", "PERMISSION", if (state.permissionGranted) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING)
         metric(state.identity.uppercase(), "IDENTITY", ModernUi.Tone.NEUTRAL)
         metric(state.apiVersion?.toString() ?: "—", "API", ModernUi.Tone.NEUTRAL)
@@ -243,7 +247,7 @@ class ControlCenterActivity : Activity() {
 
         content.addView(ModernUi.section(this, "UserService"))
         content.addView(
-            ModernUi.compactCard(this, if (serviceIdentity != null) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING).apply {
+            ModernUi.compactCard(this, if (serviceConnected) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING).apply {
                 addView(ModernUi.title(this@ControlCenterActivity, serviceIdentity ?: "Not bound yet"))
                 addView(ModernUi.body(this@ControlCenterActivity, "Backend=${state.backend} • Server UID=${state.serverUid ?: "unknown"} • route=${state.identity}"))
                 addView(ModernUi.spacer(this@ControlCenterActivity, 9))
