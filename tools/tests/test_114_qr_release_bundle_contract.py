@@ -62,6 +62,17 @@ for forbidden in [
 ]:
     if forbidden in workflow: errors.append(f'unified workflow contains forbidden/stale marker {forbidden}')
 
+# GitHub-hosted runners have moved artifact actions to the Node 24 generation.
+# Keep immutable SHAs pinned so runtime deprecation fixes do not regress silently.
+ARTIFACT_ACTION_PINS = {
+    'actions/upload-artifact': 'cf430e030ddbb5b0abf93d22962f4752f3646cd9',  # v7.0.2
+    'actions/download-artifact': '9000827ccba6bdab643e8b6fd33ac0654aef8333',  # v8.0.2
+}
+for action, sha in ARTIFACT_ACTION_PINS.items():
+    marker=f'{action}@{sha}'
+    if marker not in workflow:
+        errors.append(f'unified workflow must pin {action} to current Node 24 release SHA {sha}')
+
 # Both PR CI and release CI must keep Android minor releases at the canonical sdkmanager path.
 # Aliasing android-37.2 as android-37 makes CMake/AGP emit CXX5304 package-location warnings.
 def require_canonical_sdk_path(name, text):
