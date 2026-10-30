@@ -15,6 +15,8 @@ def must(path: Path, token: str):
 
 def main():
     runtime = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AndroidShizukuRuntime.kt"
+    bootstrap = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuEarlyBootstrap.kt"
+    application = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/DpcAioApplication.kt"
     service = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt"
     client = ROOT / "apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt"
     aidl = ROOT / "apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioShizukuUserService.aidl"
@@ -42,6 +44,33 @@ def main():
             raise AssertionError(f"runtime retry schedule missing {delay}")
     if 'val backend:' not in runtime_text:
         raise AssertionError("runtime state must expose detected Shizuku/Sui backend")
+    if "Sui.init(" in runtime_text:
+        raise AssertionError("runtime probe must not repeat the one-shot Sui initialization")
+
+    bootstrap_text = must(bootstrap, "object ShizukuEarlyBootstrap")
+    for token in [
+        "ShizukuProvider.disableAutomaticSuiInitialization()",
+        "Sui.init(packageName)",
+        "@Synchronized",
+        "private var initialized = false",
+        "if (initialized) return suiAvailable",
+        "initialized = true",
+    ]:
+        if token not in bootstrap_text:
+            raise AssertionError(f"early Sui bootstrap missing {token}")
+    if bootstrap_text.index("ShizukuProvider.disableAutomaticSuiInitialization()") > bootstrap_text.index("Sui.init(packageName)"):
+        raise AssertionError("automatic provider Sui initialization must be disabled before the explicit one-shot init")
+
+    application_text = must(application, "class DpcAioApplication : Application()")
+    for token in [
+        "import io.dpcaio.shizuku.ShizukuEarlyBootstrap",
+        "companion object",
+        "ShizukuEarlyBootstrap.initialize(BuildConfig.APPLICATION_ID)",
+    ]:
+        if token not in application_text:
+            raise AssertionError(f"application early Shizuku bootstrap missing {token}")
+    if application_text.index("ShizukuEarlyBootstrap.initialize(BuildConfig.APPLICATION_ID)") > application_text.index("override fun onCreate()"):
+        raise AssertionError("Sui bootstrap must run from class initialization before Application.onCreate")
 
     aidl_text = must(aidl, 'String getAppOp(String packageName, String op, int userId);')
     for token in [
