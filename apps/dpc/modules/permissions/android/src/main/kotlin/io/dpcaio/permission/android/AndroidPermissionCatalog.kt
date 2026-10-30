@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
+import androidx.core.content.pm.PermissionInfoCompat
 import io.dpcaio.permission.PermissionCatalogEntry
 import io.dpcaio.permission.PermissionCatalogSnapshot
 import io.dpcaio.permission.PermissionGroupCatalogEntry
@@ -59,8 +60,8 @@ class AndroidPermissionCatalog(context: Context) {
 
     private fun protectionOf(info: PermissionInfo): PermissionProtection {
         if (info.name in SPECIAL_ACCESS) return PermissionProtection.SPECIAL_ACCESS
-        val base = info.protectionLevel and PermissionInfo.PROTECTION_MASK_BASE
-        val flags = info.protectionLevel and PermissionInfo.PROTECTION_MASK_FLAGS
+        val base = PermissionInfoCompat.getProtection(info)
+        val flags = PermissionInfoCompat.getProtectionFlags(info)
         val privileged = flags and PermissionInfo.PROTECTION_FLAG_PRIVILEGED != 0
         val appOp = flags and PermissionInfo.PROTECTION_FLAG_APPOP != 0
         if (base == PermissionInfo.PROTECTION_SIGNATURE && privileged) return PermissionProtection.SIGNATURE_PRIVILEGED
