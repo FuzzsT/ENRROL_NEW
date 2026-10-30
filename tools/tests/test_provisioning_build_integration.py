@@ -51,7 +51,9 @@ def main():
     for token in [
         'actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95',
         'android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd',
-        '--list --channel=3',
+        'ANDROID_CLI="$(command -v android)"',
+        '"$ANDROID_CLI" sdk list --all --canary',
+        '"$ANDROID_CLI" sdk install --canary',
         'platforms;android-37',
         'build-tools;36.0.0',
         'ndk;28.2.13676358',
@@ -93,6 +95,10 @@ def main():
     ]:
         if token not in workflow:
             raise AssertionError(f'workflow missing {token}')
+
+    install_step = workflow[workflow.index('- name: Install Android 17 SDK + native toolchain'):workflow.index('- name: Set up Python QR dependencies')]
+    if 'SDKMANAGER=' in install_step or '--channel=3' in install_step:
+        raise AssertionError('release Android 17 install step must use Android SDK CLI instead of sdkmanager channel flags')
 
     if not (
         'cmp -s' in workflow
