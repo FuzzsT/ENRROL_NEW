@@ -62,8 +62,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var sortBar: LinearLayout
     private lateinit var stateBar: LinearLayout
     private lateinit var installSourceBar: LinearLayout
-    private lateinit var installAgeBar: LinearLayout
-    private lateinit var updateAgeBar: LinearLayout
+    private lateinit var dateAgeBar: LinearLayout
     private lateinit var targetSdkBar: LinearLayout
     private lateinit var debuggableBar: LinearLayout
     private lateinit var filterSummary: TextView
@@ -134,8 +133,7 @@ class ActivityLauncherHubActivity : Activity() {
             renderSortBar()
             renderStateBar()
             renderInstallSourceBar()
-            renderInstallAgeBar()
-            renderUpdateAgeBar()
+            renderDateAgeBar()
             renderTargetSdkBar()
             renderDebuggableBar()
             renderFilterSummary()
@@ -206,14 +204,9 @@ class ActivityLauncherHubActivity : Activity() {
                 renderInstallSourceBar()
 
                 addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
-                installAgeBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
-                addView(installAgeBar)
-                renderInstallAgeBar()
-
-                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
-                updateAgeBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
-                addView(updateAgeBar)
-                renderUpdateAgeBar()
+                dateAgeBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
+                addView(dateAgeBar)
+                renderDateAgeBar()
 
                 addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
                 targetSdkBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
@@ -302,8 +295,7 @@ class ActivityLauncherHubActivity : Activity() {
         }
         renderStateBar()
         renderInstallSourceBar()
-        renderInstallAgeBar()
-        renderUpdateAgeBar()
+        renderDateAgeBar()
         renderTargetSdkBar()
         renderDebuggableBar()
         renderFilterSummary()
@@ -497,9 +489,9 @@ class ActivityLauncherHubActivity : Activity() {
         )
     }
 
-    private fun renderInstallAgeBar() {
-        if (!::installAgeBar.isInitialized) return
-        installAgeBar.removeAllViews()
+    private fun renderDateAgeBar() {
+        if (!::dateAgeBar.isInitialized) return
+        dateAgeBar.removeAllViews()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -509,9 +501,9 @@ class ActivityLauncherHubActivity : Activity() {
                 InstallAgeFilter.ALL -> ModernUi.Tone.NEUTRAL
                 InstallAgeFilter.HOURS_24, InstallAgeFilter.DAYS_7, InstallAgeFilter.DAYS_30 -> ModernUi.Tone.SUCCESS
             }
-            val pill = ModernUi.pill(this, "AGE ${filter.name}", filter == currentInstallAgeFilter, tone) {
+            val pill = ModernUi.pill(this, "INST ${filter.name}", filter == currentInstallAgeFilter, tone) {
                 currentInstallAgeFilter = filter
-                renderInstallAgeBar()
+                renderDateAgeBar()
                 renderApps()
             }
             pill.layoutParams = LinearLayout.LayoutParams(
@@ -519,30 +511,15 @@ class ActivityLauncherHubActivity : Activity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
             row.addView(pill)
-        }
-        installAgeBar.addView(
-            HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-                addView(row)
-            }
-        )
-    }
-
-    private fun renderUpdateAgeBar() {
-        if (!::updateAgeBar.isInitialized) return
-        updateAgeBar.removeAllViews()
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
         }
         UpdateAgeFilter.entries.forEach { filter ->
             val tone = when (filter) {
                 UpdateAgeFilter.ALL -> ModernUi.Tone.NEUTRAL
                 UpdateAgeFilter.HOURS_24, UpdateAgeFilter.DAYS_7, UpdateAgeFilter.DAYS_30 -> ModernUi.Tone.SUCCESS
             }
-            val pill = ModernUi.pill(this, "UPDATE AGE ${filter.name}", filter == currentUpdateAgeFilter, tone) {
+            val pill = ModernUi.pill(this, "UPD ${filter.name}", filter == currentUpdateAgeFilter, tone) {
                 currentUpdateAgeFilter = filter
-                renderUpdateAgeBar()
+                renderDateAgeBar()
                 renderApps()
             }
             pill.layoutParams = LinearLayout.LayoutParams(
@@ -551,7 +528,7 @@ class ActivityLauncherHubActivity : Activity() {
             ).apply { marginEnd = ModernUi.dp(this@ActivityLauncherHubActivity, 8) }
             row.addView(pill)
         }
-        updateAgeBar.addView(
+        dateAgeBar.addView(
             HorizontalScrollView(this).apply {
                 isHorizontalScrollBarEnabled = false
                 addView(row)
@@ -677,8 +654,7 @@ class ActivityLauncherHubActivity : Activity() {
                 renderSortBar()
                 renderStateBar()
                 renderInstallSourceBar()
-                renderInstallAgeBar()
-                renderUpdateAgeBar()
+                renderDateAgeBar()
                 renderTargetSdkBar()
                 renderDebuggableBar()
                 renderFilterSummary()
