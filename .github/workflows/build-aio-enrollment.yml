@@ -459,6 +459,19 @@ jobs:
           rm -f "$DPC_AIO_SIGNING_ENV"
           test ! -e "$DPC_AIO_SIGNING_ENV"
 
+      - name: Align cmdline-tools latest for emulator runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmdline_tools_current="$ANDROID_SDK_ROOT/cmdline-tools/22.0"
+          cmdline_tools_latest="$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          test -x "$cmdline_tools_current/bin/sdkmanager"
+          grep -q '^Pkg.Revision=22.0$' "$cmdline_tools_current/source.properties"
+          rm -rf "$cmdline_tools_latest"
+          ln -s "$cmdline_tools_current" "$cmdline_tools_latest"
+          test -x "$cmdline_tools_latest/bin/sdkmanager"
+          grep -q '^Pkg.Revision=22.0$' "$cmdline_tools_latest/source.properties"
+
       - name: Enable KVM group perms
         shell: bash
         run: |
