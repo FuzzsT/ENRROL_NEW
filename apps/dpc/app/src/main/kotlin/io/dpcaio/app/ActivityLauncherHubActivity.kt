@@ -795,15 +795,27 @@ class ActivityLauncherHubActivity : Activity() {
         }
     }
 
+    private fun dateSortComparator(
+        timestamp: (AppEntry) -> Long,
+    ): Comparator<AppEntry> {
+        val timestampComparator = if (currentSortDirection == SortDirection.DESCENDING) {
+            compareByDescending<AppEntry> { timestamp(it) }
+        } else {
+            compareBy<AppEntry> { timestamp(it) }
+        }
+        return timestampComparator
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.packageName }
+    }
+
     private fun sortByTimestampUnknownLast(
         apps: List<AppEntry>,
         timestamp: (AppEntry) -> Long,
     ): List<AppEntry> {
         val now = System.currentTimeMillis()
         val (valid, unknown) = apps.partition { isValidTimestamp(timestamp(it), now) }
-        val sortedValid = valid.sortedBy(timestamp)
-        val directed = if (currentSortDirection == SortDirection.DESCENDING) sortedValid.reversed() else sortedValid
-        return directed + unknown
+        val sortedValid = valid.sortedWith(dateSortComparator(timestamp))
+        return sortedValid + unknown
     }
 
     private fun filteredApps(): List<AppEntry> {
