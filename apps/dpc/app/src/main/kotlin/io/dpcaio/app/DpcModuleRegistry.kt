@@ -15,6 +15,7 @@ import io.dpcaio.core.model.VisibilityClass
 import io.dpcaio.delegation.DelegationAuthorizer
 import io.dpcaio.delegation.dhizuku.DhizukuCompatRuntime
 import io.dpcaio.execution.ExecutionPlanner
+import io.dpcaio.filemanager.android.SafFileManager
 import io.dpcaio.protection.ProtectionPlanner
 import io.dpcaio.installer.InstallPlanner
 import io.dpcaio.installer.android.AndroidPackageInstallerAdapter
@@ -96,6 +97,7 @@ object DpcModuleRegistry {
         DpcModuleDescriptor(":delegation-core", "Delegation broker", DpcModuleGroup.CORE, DelegationAuthorizer::class.java),
         DpcModuleDescriptor(":dhizuku-compat", "Dhizuku compatibility", DpcModuleGroup.INTEGRATION, DhizukuCompatRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
         DpcModuleDescriptor(":shizuku-adapter", "Shizuku adapter", DpcModuleGroup.INTEGRATION, AndroidShizukuRuntime::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced")),
+        DpcModuleDescriptor(":file-manager-android", "File Manager Android", DpcModuleGroup.ANDROID, SafFileManager::class.java, FileManagerActivity::class.java, tags = setOf("files", "storage")),
         DpcModuleDescriptor(":dual-app-workspaces", "Dual app workspaces", DpcModuleGroup.INTEGRATION, AndroidShizukuRuntime::class.java, DualAppWorkspaceActivity::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced", "multi_instance", "diagnostics")),
         DpcModuleDescriptor(":native-diagnostics", "Native diagnostics", DpcModuleGroup.INTEGRATION, NativeTraceBridge::class.java, requirements = CapabilityRequirements(visibility = VisibilityClass.HIDDEN), tags = setOf("advanced", "diagnostics")),
         DpcModuleDescriptor(":network-control", "Network policy core", DpcModuleGroup.CORE, DnsRule::class.java, NetworkControlActivity::class.java),
