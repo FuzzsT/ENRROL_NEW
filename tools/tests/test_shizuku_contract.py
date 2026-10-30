@@ -84,10 +84,11 @@ def main():
         "isBinderAlive",
         "fun isConnected(): Boolean",
         "clearRemote(",
+        "fun connectedRemote(): IAioShizukuUserService?",
         'fun getAppOp(packageName: String, op: String, userId: Int): String?',
-        'remote?.getAppOp(packageName, op, userId)',
+        'connectedRemote()?.getAppOp(packageName, op, userId)',
         'fun resolveAppOp(op: String): String?',
-        'remote?.resolveAppOp(op)',
+        'connectedRemote()?.resolveAppOp(op)',
     ]:
         if token not in client_text:
             raise AssertionError(f"client missing {token}")
