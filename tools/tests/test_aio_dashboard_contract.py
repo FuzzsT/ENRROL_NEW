@@ -65,3 +65,5 @@ for token in [
     'RippleDrawable','GradientDrawable','isFillViewport = true'
 ]:
     assert token in design, token
+
+__import__('runpy').run_path(str(root/'tools/tests/test_engineering_intent_center_contract.py'), run_name='__main__')
