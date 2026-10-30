@@ -61,6 +61,7 @@ class ActivityLauncherHubActivity : Activity() {
     private lateinit var installSourceBar: LinearLayout
     private lateinit var targetSdkBar: LinearLayout
     private lateinit var debuggableBar: LinearLayout
+    private lateinit var filterSummary: TextView
     private lateinit var selectionBar: LinearLayout
     private lateinit var stats: LinearLayout
     private lateinit var appList: LinearLayout
@@ -126,6 +127,7 @@ class ActivityLauncherHubActivity : Activity() {
             renderInstallSourceBar()
             renderTargetSdkBar()
             renderDebuggableBar()
+            renderFilterSummary()
             renderSelectionBar()
             renderApps(resetLimit = false)
         }
@@ -199,6 +201,12 @@ class ActivityLauncherHubActivity : Activity() {
                 debuggableBar = LinearLayout(this@ActivityLauncherHubActivity).apply { orientation = LinearLayout.VERTICAL }
                 addView(debuggableBar)
                 renderDebuggableBar()
+
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 8))
+                filterSummary = ModernUi.body(this@ActivityLauncherHubActivity, filterSummaryText())
+                addView(filterSummary)
+                addView(ModernUi.spacer(this@ActivityLauncherHubActivity, 6))
+                addView(ModernUi.action(this@ActivityLauncherHubActivity, "Reset filters") { resetFilters() })
             }
         )
 
@@ -220,6 +228,27 @@ class ActivityLauncherHubActivity : Activity() {
         body.addView(status)
 
         setContentView(ModernUi.scrollPage(this, body))
+    }
+
+    private fun filterSummaryText(): String =
+        "FILTERS: state=${currentStateFilter.name} • source=${currentInstallSourceFilter.name} • target=${currentTargetSdkFilter.name} • debug=${currentDebuggableFilter.name}"
+
+    private fun renderFilterSummary() {
+        if (::filterSummary.isInitialized) filterSummary.text = filterSummaryText()
+    }
+
+    private fun resetFilters() {
+        currentStateFilter = StateFilter.ALL
+        currentInstallSourceFilter = InstallSourceFilter.ALL
+        currentTargetSdkFilter = TargetSdkFilter.ALL
+        currentDebuggableFilter = DebuggableFilter.ALL
+        if (::search.isInitialized) search.setText("")
+        renderStateBar()
+        renderInstallSourceBar()
+        renderTargetSdkBar()
+        renderDebuggableBar()
+        renderFilterSummary()
+        renderApps()
     }
 
     private fun installedPackageNames(): Set<String> = installedApps.asSequence().map { it.packageName }.toSet()
@@ -518,6 +547,7 @@ class ActivityLauncherHubActivity : Activity() {
                 renderInstallSourceBar()
                 renderTargetSdkBar()
                 renderDebuggableBar()
+                renderFilterSummary()
                 renderSelectionBar()
                 renderApps(resetLimit = resetLimit)
             }
@@ -652,6 +682,7 @@ class ActivityLauncherHubActivity : Activity() {
     private fun renderApps(resetLimit: Boolean = true) {
         if (!::appList.isInitialized || isFinishing || isDestroyed) return
         if (resetLimit) visibleAppLimit = INITIAL_RENDER_LIMIT
+        renderFilterSummary()
         val generation = ++renderGeneration
         val shown = filteredApps()
         appList.removeAllViews()
