@@ -183,7 +183,7 @@ class ActivityLauncherHubActivity : Activity() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_RUNNING_LOW) iconCache.evictAll()
+        if (level >= TRIM_MEMORY_RUNNING_LOW_COMPAT) iconCache.evictAll()
     }
 
     override fun onDestroy() {
@@ -1196,6 +1196,7 @@ class ActivityLauncherHubActivity : Activity() {
         private const val INITIAL_RENDER_LIMIT = 40
         private const val RENDER_PAGE_SIZE = 40
         private const val LOAD_MORE_TAG = "activity_launcher_load_more"
+        private const val TRIM_MEMORY_RUNNING_LOW_COMPAT = 10
         private const val INSTALL_AGE_24H_MS = 24L * 60L * 60L * 1000L
         private const val INSTALL_AGE_7D_MS = 7L * INSTALL_AGE_24H_MS
         private const val INSTALL_AGE_30D_MS = 30L * INSTALL_AGE_24H_MS
