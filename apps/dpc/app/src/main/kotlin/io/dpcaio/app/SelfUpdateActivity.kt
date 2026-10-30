@@ -331,6 +331,7 @@ class SelfUpdateActivity : Activity() {
         setState(SelfUpdateState.DOWNLOADING, "Downloading verified candidate…")
         Thread {
             val temp = store.newDownloadFile()
+            var autoSilentAfterDownload = false
             try {
                 client.downloadApk(manifest.apkUrl, temp) { downloaded, total ->
                     val percent = total?.takeIf { it > 0L }?.let { ((downloaded * 100L) / it).toInt().coerceIn(0, 100) }
@@ -353,15 +354,15 @@ class SelfUpdateActivity : Activity() {
                 }
                 store.promoteDownload(temp)
                 store.saveCandidate(manifest, verified = true)
+                val autoSilentEnabled = preferences.getBoolean(KEY_AUTO_SILENT, false)
+                val silentAvailable = autoSilentEnabled && silentInstallLikelyAvailable()
+                autoSilentAfterDownload = silentAvailable
                 runOnUiThread {
                     progressPercent = null
-                    setState(SelfUpdateState.VERIFIED, "Verified ${manifest.versionName} (${manifest.versionCode})")
-                    if (preferences.getBoolean(KEY_AUTO_SILENT, false)) {
-                        if (silentInstallLikelyAvailable()) {
-                            submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT)
-                        } else {
-                            setState(SelfUpdateState.VERIFIED, "Verified; auto-silent skipped because Device Owner capability is not available")
-                        }
+                    if (autoSilentEnabled && !silentAvailable) {
+                        setState(SelfUpdateState.VERIFIED, "Verified; auto-silent skipped because Device Owner capability is not available")
+                    } else {
+                        setState(SelfUpdateState.VERIFIED, "Verified ${manifest.versionName} (${manifest.versionCode})")
                     }
                 }
             } catch (error: Exception) {
@@ -373,7 +374,11 @@ class SelfUpdateActivity : Activity() {
             } finally {
                 operations.finishDownload()
                 notifyStateChanged()
-                runOnUiThread { render() }
+                if (autoSilentAfterDownload) {
+                    runOnUiThread { submitInstall(SelfUpdateInstallPolicy.AUTO_SILENT) }
+                } else {
+                    runOnUiThread { render() }
+                }
             }
         }.start()
     }
