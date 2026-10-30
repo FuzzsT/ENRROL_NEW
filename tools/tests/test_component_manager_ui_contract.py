@@ -7,6 +7,8 @@ s=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ComponentStateSnapshotStore.k
 d=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt'
 c=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt'
 p=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt'
+autostart=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AutostartManagerActivity.kt'
+manifest=ROOT/'apps/dpc/app/src/main/AndroidManifest.xml'
 assert s.is_file(),s
 t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text()
 for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor']:
@@ -78,4 +80,23 @@ for n in [
     assert n in pt, f'Permission Manager AppOps navigation missing: {n}'
 assert 'createDeviceProtectedStorageContext' in st
 assert 'previousOverrideState' in st
+
+assert autostart.is_file(), 'AutostartManagerActivity.kt missing'
+aut=autostart.read_text(encoding='utf-8')
+for n in [
+    'Autostart Manager',
+    'Intent.ACTION_BOOT_COMPLETED',
+    'Intent.ACTION_LOCKED_BOOT_COMPLETED',
+    'PackageManager.MATCH_DISABLED_COMPONENTS',
+    'queryBroadcastReceivers',
+    'AndroidComponentStateGateway',
+    'ShizukuComponentStateExecutor',
+    'ComponentOverrideState.ENABLED',
+    'ComponentOverrideState.DISABLED',
+    'Target user ID',
+]:
+    assert n in aut,f'Autostart Manager missing {n}'
+mt=manifest.read_text(encoding='utf-8')
+assert '.AutostartManagerActivity' in mt,'Autostart Manager manifest entry missing'
+assert '"Autostart Manager"' in dt and 'AutostartManagerActivity::class.java' in dt,'Dashboard must expose Autostart Manager'
 print('COMPONENT_MANAGER_UI_CONTRACT: PASS')

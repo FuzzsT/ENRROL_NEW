@@ -51,4 +51,23 @@ for marker in ['Integrated', 'UI', 'Core', 'Integration', 'Lab']:
 for token in ['ModernUi.page','ModernUi.hero','ModernUi.section','ModernUi.card','ModernUi.chip','ModernUi.action']:
     assert token in center, token
 
+# FileManager is a first-class app module, not an app-only helper screen.
+assert '":file-manager-android"' in settings, 'FileManager Gradle module missing'
+assert 'project(":file-manager-android").projectDir = file("apps/dpc/modules/file-manager/android")' in settings
+assert 'implementation(project(":file-manager-android"))' in app_gradle
+assert 'DpcModuleDescriptor(":file-manager-android"' in registry
+assert 'FileManagerActivity::class.java' in registry
+assert '.FileManagerActivity' in manifest
+assert '"File Manager"' in dashboard and 'FileManagerActivity::class.java' in dashboard
+file_manager = ROOT / 'apps/dpc/modules/file-manager/android/src/main/kotlin/io/dpcaio/filemanager/android/SafFileManager.kt'
+file_ui = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/FileManagerActivity.kt'
+assert file_manager.is_file(), 'SafFileManager.kt missing'
+assert file_ui.is_file(), 'FileManagerActivity.kt missing'
+fm = file_manager.read_text(encoding='utf-8')
+fu = file_ui.read_text(encoding='utf-8')
+for token in ['DocumentsContract.buildChildDocumentsUriUsingTree','DocumentsContract.createDocument','DocumentsContract.deleteDocument','DocumentsContract.renameDocument','contentResolver.query(']:
+    assert token in fm, f'FileManager backend missing {token}'
+for token in ['Intent.ACTION_OPEN_DOCUMENT_TREE','takePersistableUriPermission','SafFileManager','Create folder','Delete selected','Rename selected']:
+    assert token in fu, f'FileManager UI missing {token}'
+
 print(f'MODULE_CENTER: PASS ({len(module_ids)} modules represented; {len(project_ids)} Gradle projects reachable)')

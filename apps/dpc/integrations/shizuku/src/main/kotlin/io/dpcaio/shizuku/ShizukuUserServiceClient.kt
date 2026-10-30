@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
 import rikka.shizuku.Shizuku
 
 class ShizukuUserServiceClient(context: Context) {
@@ -67,6 +69,25 @@ class ShizukuUserServiceClient(context: Context) {
         autoRebindEnabled = true
         startReadinessListeners()
         return retryBindIfReady()
+    }
+
+    /**
+     * Wait briefly for the typed UserService only from a worker thread.
+     * Main-thread callers never block; they only arm the normal async bind/rebind path.
+     */
+    fun awaitConnected(timeoutMs: Long = 1500L): Boolean {
+        bind()
+        if (isConnected()) return true
+        if (Looper.myLooper() == Looper.getMainLooper()) return false
+
+        val boundedTimeout = timeoutMs.coerceIn(0L, 5000L)
+        val deadline = SystemClock.elapsedRealtime() + boundedTimeout
+        while (!isConnected()) {
+            val remaining = deadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) break
+            Thread.sleep(minOf(50L, remaining))
+        }
+        return isConnected()
     }
 
     fun unbind(): Boolean {
