@@ -33,6 +33,23 @@ for token in [
     'DecelerateInterpolator',
 ]:
     assert token in ui, token
+
+# Android 15+ owns system-bar transparency under enforced edge-to-edge. Keep the
+# old color setters only in an explicitly legacy, locally suppressed path.
+assert 'Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM' in ui, 'system-bar color setters must be gated below API 35'
+assert 'private fun configureLegacySystemBarColors(activity: Activity)' in ui, 'legacy system-bar color helper missing'
+assert '@Suppress("DEPRECATION")\n    private fun configureLegacySystemBarColors' in ui, 'legacy bar-color deprecations must be locally suppressed'
+configure_start=ui.index('private fun configureSystemBars')
+configure_end=ui.index('private fun configureLegacySystemBarColors', configure_start)
+configure_body=ui[configure_start:configure_end]
+assert 'statusBarColor' not in configure_body, 'modern configureSystemBars path must not call deprecated statusBarColor'
+assert 'navigationBarColor' not in configure_body, 'modern configureSystemBars path must not call deprecated navigationBarColor'
+legacy_start=configure_end
+legacy_end=ui.index('private fun installSafeAreaInsets', legacy_start)
+legacy_body=ui[legacy_start:legacy_end]
+assert 'window.statusBarColor = Color.TRANSPARENT' in legacy_body, 'legacy status-bar transparency must be preserved'
+assert 'window.navigationBarColor = Color.TRANSPARENT' in legacy_body, 'legacy navigation-bar transparency must be preserved'
+
 for token in [
     'addSection(body, "Setup & enrollment")',
     'addSection(body, "Management")',
