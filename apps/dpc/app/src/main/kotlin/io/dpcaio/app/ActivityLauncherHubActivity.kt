@@ -831,7 +831,7 @@ class ActivityLauncherHubActivity : Activity() {
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, app.packageName))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, "v${app.versionName} • SDK ${app.targetSdk} • Installed ${formatInstallDate(app.firstInstallTime)}"))
                         addView(ModernUi.body(this@ActivityLauncherHubActivity, "Updated ${formatInstallDate(app.lastUpdateTime)} • UID ${app.uid}"))
-                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Installer: ${app.installerPackage ?: "unknown / preloaded"}"))
+                        addView(ModernUi.body(this@ActivityLauncherHubActivity, "Installer: ${app.installerPackage ?: "unknown"}"))
                     },
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
                 )
