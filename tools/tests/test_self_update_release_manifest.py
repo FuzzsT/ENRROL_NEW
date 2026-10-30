@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/release/build_self_update_manifest.py"
 WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 CLIENT = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateClient.kt"
+STORE = ROOT / "apps/dpc/modules/self-update/android/src/main/kotlin/io/dpcaio/selfupdate/android/SelfUpdateStore.kt"
+ACTIVITY = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 
 
 def invoke(apk: Path, out: Path, apk_url: str):
@@ -100,6 +102,20 @@ def main():
         "downloaded + count > maxBytes",
     ]:
         assert token in client, f"self-update network payload limit missing: {token}"
+
+    store = STORE.read_text(encoding="utf-8")
+    for token in [
+        "checked-manifest.json",
+        "saveCheckedManifest",
+        "loadCheckedManifest",
+    ]:
+        assert token in store, f"checked Self Update manifest persistence missing: {token}"
+
+    activity = ACTIVITY.read_text(encoding="utf-8")
+    assert "store.saveCheckedManifest(manifest)" in activity, "successful update check must persist the checked manifest"
+    assert activity.count("store.loadCheckedManifest()") >= 2, (
+        "Self Update must restore the checked manifest across Activity recreation/resume"
+    )
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 
