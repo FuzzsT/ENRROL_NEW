@@ -39,15 +39,26 @@ jobs:
           chmod +x tools/run_host_tests.sh
           ./tools/run_host_tests.sh
 
-      - name: Run app security contracts
+      - name: Run PIN and app lock contracts
         shell: bash
         run: |
           set -euo pipefail
           python3 tools/tests/test_pin_guard_contract.py
           python3 tools/tests/test_app_lock_pin_contract.py
           python3 tools/tests/test_install_pin_guard_contract.py
+
+      - name: Run package export contracts
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 tools/tests/test_package_export_contract.py
           python3 tools/tests/test_package_export_ui_contract.py
+
+      - name: Run workflow organization contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_workflow_organization_contract.py
 
   apk-build:
     name: Enterprise debug APK

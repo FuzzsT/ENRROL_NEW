@@ -36,7 +36,6 @@ def main():
     assert auth.count('invalidatePendingRequest()') >= 2, 'cancel/dismiss paths must invalidate an in-flight PIN request'
     assert 'requestGeneration.get() != requestId' in auth or 'requestGeneration.get() == requestId' in auth, 'async verification must confirm the request is still current before granting authorization'
 
-    # Dialog verification must not call authorize(), because authorize grants immediately.
     executor_start = auth.index('executor.execute')
     callback_start = auth.index('activity.runOnUiThread', executor_start)
     executor_body = auth[executor_start:callback_start]
@@ -52,7 +51,6 @@ def main():
         'store.updateItem(updated)',
     ])
 
-    # Authorization must happen before a queued item is moved into PREFLIGHT.
     start = queue.index('fun startOrResume(')
     mark_installing = queue.index('fun markInstalling(', start)
     start_body = queue[start:mark_installing]
@@ -68,7 +66,6 @@ def main():
         'createSession(',
     ])
 
-    # Existing package/signer validation must remain before PackageInstaller session creation.
     single_start = activity.index('private fun installSingleApk(')
     apks_start = activity.index('private fun installApksArchive(', single_start)
     single_body = activity[single_start:apks_start]
@@ -79,7 +76,7 @@ def main():
     assert 'su ' not in activity
 
     workflow = need(WORKFLOW, [
-        'Run app security contracts',
+        'Run PIN and app lock contracts',
         'python3 tools/tests/test_install_pin_guard_contract.py',
     ])
     assert workflow.count('test_install_pin_guard_contract.py') == 1
