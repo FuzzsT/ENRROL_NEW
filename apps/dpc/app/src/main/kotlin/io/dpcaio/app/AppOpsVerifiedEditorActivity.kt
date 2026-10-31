@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AppOpsVerifiedEditorActivity : Activity() {
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
+        const val EXTRA_TARGET_USER_ID = "target_user_id"
         private const val AUTO_DISCOVERY_DELAY_MS = 450L
         private val mutationInProgress = AtomicBoolean(false)
         private val allowedModes = listOf("allow", "ignore", "deny", "default", "foreground")
@@ -78,7 +79,9 @@ class AppOpsVerifiedEditorActivity : Activity() {
                     setText(intent.getStringExtra(EXTRA_TARGET_PACKAGE).orEmpty())
                 }
                 userIdField = ModernUi.field(this@AppOpsVerifiedEditorActivity, "User ID", InputType.TYPE_CLASS_NUMBER).apply {
-                    setText(AndroidUserId.fromUid(Process.myUid()).toString())
+                    val current = AndroidUserId.fromUid(Process.myUid())
+                    val requested = intent.getIntExtra(EXTRA_TARGET_USER_ID, current).takeIf { it >= 0 } ?: current
+                    setText(requested.toString())
                 }
                 opField = ModernUi.field(this@AppOpsVerifiedEditorActivity, "AppOp name, e.g. CAMERA")
                 modeSpinner = Spinner(this@AppOpsVerifiedEditorActivity).apply {
@@ -91,6 +94,34 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 }
                 addView(packageNameField)
                 addView(userIdField)
+                addView(
+                    ModernUi.actionRow(
+                        this@AppOpsVerifiedEditorActivity,
+                        ModernUi.action(this@AppOpsVerifiedEditorActivity, "Choose package") {
+                            RuntimeTargetPicker.showPackagePicker(
+                                this@AppOpsVerifiedEditorActivity,
+                                shizuku,
+                                targetUserIdOrNull() ?: AndroidUserId.fromUid(Process.myUid()),
+                                packageNameField.text.toString().trim(),
+                            ) { selected ->
+                                packageNameField.setText(selected)
+                                readCurrent()
+                            }
+                        },
+                        ModernUi.action(this@AppOpsVerifiedEditorActivity, "Choose user") {
+                            val current = AndroidUserId.fromUid(Process.myUid())
+                            RuntimeTargetPicker.showUserPicker(
+                                this@AppOpsVerifiedEditorActivity,
+                                shizuku,
+                                current,
+                                targetUserIdOrNull() ?: current,
+                            ) { selected ->
+                                userIdField.setText(selected.toString())
+                                if (packageNameField.text.isNotBlank()) readCurrent()
+                            }
+                        },
+                    )
+                )
                 addView(opField)
                 addView(ModernUi.body(this@AppOpsVerifiedEditorActivity, "AppOp mode"))
                 addView(modeSpinner)

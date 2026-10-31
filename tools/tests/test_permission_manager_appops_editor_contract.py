@@ -19,6 +19,8 @@ required = [
     'after=',
     'verified=',
     'EXTRA_TARGET_PACKAGE',
+    'EXTRA_TARGET_USER_ID',
+    'intent.getIntExtra(EXTRA_TARGET_USER_ID',
     'Discovered AppOps',
     'Filter AppOps',
     'Tap to edit',
@@ -36,6 +38,10 @@ required = [
     'targetUserIdOrNull()',
     'takeIf { it >= 0 }',
     'User ID must be a non-negative integer',
+    'Choose package',
+    'Choose user',
+    'RuntimeTargetPicker.showPackagePicker',
+    'RuntimeTargetPicker.showUserPicker',
 ]
 
 missing = [needle for needle in required if needle not in activity]

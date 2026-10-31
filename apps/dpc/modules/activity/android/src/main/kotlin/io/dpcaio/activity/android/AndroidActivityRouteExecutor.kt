@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.net.Uri
+import android.os.Process
 import android.os.UserHandle
 import io.dpcaio.activity.ActivityAccessInput
 import io.dpcaio.activity.ActivityRoute
@@ -18,6 +19,7 @@ class AndroidActivityRouteExecutor(
 ) : ActivityRouteExecutor {
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
+    private val currentUser = UserHandle.getUserHandleForUid(Process.myUid())
 
     override fun execute(route: ActivityRoute, input: ActivityAccessInput): ActivityRouteResult {
         return try {
@@ -28,6 +30,7 @@ class AndroidActivityRouteExecutor(
                     ActivityRouteResult(route, true)
                 }
                 ActivityRoute.FRAMEWORK_EXPLICIT, ActivityRoute.SAME_UID -> {
+                    rejectCrossUserCurrentUserRoute(route)?.let { return it }
                     val intent = Intent().apply {
                         component = ComponentName(input.packageName, normalizeClassName(input.packageName, input.className))
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -36,6 +39,7 @@ class AndroidActivityRouteExecutor(
                     ActivityRouteResult(route, true)
                 }
                 ActivityRoute.DEEP_LINK -> {
+                    rejectCrossUserCurrentUserRoute(route)?.let { return it }
                     val uri = deepLinkResolver(input)
                         ?: return ActivityRouteResult(route, false, "No deep-link URI registered")
                     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
@@ -53,6 +57,13 @@ class AndroidActivityRouteExecutor(
             ActivityRouteResult(route, false, "${e.javaClass.simpleName}: ${e.message ?: "failed"}")
         }
     }
+
+    private fun rejectCrossUserCurrentUserRoute(route: ActivityRoute): ActivityRouteResult? =
+        if (user != currentUser) {
+            ActivityRouteResult(route, false, "Cross-user route requires LauncherApps or a privileged executor")
+        } else {
+            null
+        }
 
     private fun normalizeClassName(packageName: String, className: String): String = when {
         className.startsWith('.') -> packageName + className

@@ -72,6 +72,32 @@ class PermissionManagerActivity : Activity() {
         query = ModernUi.field(this, "Permission / group / filter", InputType.TYPE_CLASS_TEXT)
         targetCard.addView(targetPackage)
         targetCard.addView(targetUser)
+        targetCard.addView(ModernUi.spacer(this, 7))
+        targetCard.addView(row(
+            action("Choose package") {
+                RuntimeTargetPicker.showPackagePicker(
+                    this,
+                    shizuku,
+                    targetUserId(),
+                    targetPackage.text.toString().trim(),
+                ) { selected ->
+                    targetPackage.setText(selected)
+                    scanAppPermissions(false)
+                }
+            },
+            action("Choose user") {
+                val current = AndroidUserId.fromUid(Process.myUid())
+                RuntimeTargetPicker.showUserPicker(
+                    this,
+                    shizuku,
+                    current,
+                    targetUserId(),
+                ) { selected ->
+                    targetUser.setText(selected.toString())
+                    if (targetPackage.text.isNotBlank()) scanAppPermissions(false)
+                }
+            },
+        ))
         targetCard.addView(query)
         targetCard.addView(row(
             action("Scan app permissions") { scanAppPermissions(false) },
@@ -144,10 +170,12 @@ class PermissionManagerActivity : Activity() {
 
     private fun openVerifiedAppOps() {
         val packageName = targetPackage.text.toString().trim()
+        val userId = targetUserId()
         startActivity(Intent(this, AppOpsVerifiedEditorActivity::class.java).apply {
             if (packageName.isNotBlank()) {
                 putExtra(AppOpsVerifiedEditorActivity.EXTRA_TARGET_PACKAGE, packageName)
             }
+            putExtra(AppOpsVerifiedEditorActivity.EXTRA_TARGET_USER_ID, userId)
         })
     }
 
@@ -158,7 +186,8 @@ class PermissionManagerActivity : Activity() {
         }
     }
 
-    private fun targetUserId(): Int = targetUser.text.toString().trim().toIntOrNull() ?: AndroidUserId.fromUid(Process.myUid())
+    private fun targetUserId(): Int = targetUser.text.toString().trim().toIntOrNull()?.takeIf { it >= 0 }
+        ?: AndroidUserId.fromUid(Process.myUid())
 
     @Suppress("DEPRECATION")
     private fun requestedPermissions(packageName: String): List<String> = runCatching {
