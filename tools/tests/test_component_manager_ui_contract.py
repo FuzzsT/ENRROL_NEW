@@ -116,8 +116,17 @@ for n in [
     'CURRENT_USER_READBACK',
     'TARGET_USER_SUBMITTED',
     'Restore default',
+    'queryLocalBootReceivers()',
+    'queryCrossUserBootReceivers(selectedUser)',
+    'shizuku.queryBroadcastReceivers(action, userId)',
+    'LOCAL_PACKAGE_MANAGER',
+    'CROSS_USER_SHIZUKU',
+    'TARGET_USER_INVENTORY',
+    'Cross-user inventory unavailable',
+    'manifestEnabled = null',
 ]:
     assert n in aut,f'Autostart Manager missing {n}'
+assert 'else queryLocalBootReceivers()' not in aut, 'cross-user scan must not silently fall back to current-user inventory'
 mt=manifest.read_text(encoding='utf-8')
 assert '.AutostartManagerActivity' in mt,'Autostart Manager manifest entry missing'
 assert '"Autostart Manager"' in dt and 'AutostartManagerActivity::class.java' in dt,'Dashboard must expose Autostart Manager'
