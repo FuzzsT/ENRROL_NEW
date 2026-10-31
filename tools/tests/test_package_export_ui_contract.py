@@ -44,7 +44,7 @@ def main():
     assert 'if (requestCode == REQ_EXPORT)' in activity or 'requestCode == REQ_EXPORT' in activity
 
     workflow = need(WORKFLOW, [
-        'Run app security contracts',
+        'Run package export contracts',
         'python3 tools/tests/test_package_export_ui_contract.py',
     ])
     assert workflow.count('test_package_export_ui_contract.py') == 1
