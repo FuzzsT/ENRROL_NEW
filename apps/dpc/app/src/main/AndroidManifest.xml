@@ -60,6 +60,7 @@
         <activity android:name=".DeviceLifecycleActivity" android:exported="false" />
         <activity android:name=".WorkProfileCopeActivity" android:exported="false" />
         <activity android:name=".KnoxEnterpriseCenterActivity" android:exported="false" />
+        <activity android:name=".PinGuardActivity" android:exported="false" />
         <activity android:name=".DpcDiagnosticsActivity" android:exported="false" />
         <activity android:name=".EnrollmentStatusActivity" android:exported="false" />
         <activity android:name=".EnrollmentManualActivity" android:exported="false" />
