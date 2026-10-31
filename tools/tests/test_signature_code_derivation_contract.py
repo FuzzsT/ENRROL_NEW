@@ -8,6 +8,7 @@ CORE_ROOT = ROOT / 'apps/dpc/modules/engineering/core'
 CORE = CORE_ROOT / 'src/main/kotlin/io/dpcaio/engineering'
 RECIPE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
 ENGINE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeDerivationEngineTest.kt'
+ENDIAN_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeEndianTest.kt'
 
 
 def need(path: Path, needles):
@@ -37,6 +38,7 @@ recipe = need(CORE / 'SignatureCodeRecipe.kt', [
     'INVALID_MODULUS',
     'SLICE_OUT_OF_RANGE',
     'TYPE_MISMATCH',
+    'OUTPUT_KIND_MISMATCH',
     'Sha256',
     'Sha1',
     'Crc8',
@@ -78,7 +80,7 @@ catalog = need(CORE / 'AutoSignatureCodeCatalog.kt', [
     'sha256',
     'crc32',
 ])
-need(RECIPE_TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii'])
+need(RECIPE_TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii', 'OUTPUT_KIND_MISMATCH'])
 need(ENGINE_TEST, [
     'SignatureCodeDerivationEngineTest: PASS',
     '799182',
@@ -86,6 +88,13 @@ need(ENGINE_TEST, [
     '47457659',
     'LUHN_INVALID',
     'NUMERIC_OVERFLOW',
+])
+need(ENDIAN_TEST, [
+    'SignatureCodeEndianTest: PASS',
+    '19088743',
+    '1732584193',
+    'SignatureCodeStep.UIntBe',
+    'SignatureCodeStep.UIntLe',
 ])
 
 combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog
@@ -115,6 +124,7 @@ with tempfile.TemporaryDirectory(prefix='signature-code-contract-') as tmp:
     for main, marker in [
         ('io.dpcaio.engineering.SignatureCodeRecipeTestKt', 'SignatureCodeRecipeTest: PASS'),
         ('io.dpcaio.engineering.SignatureCodeDerivationEngineTestKt', 'SignatureCodeDerivationEngineTest: PASS'),
+        ('io.dpcaio.engineering.SignatureCodeEndianTestKt', 'SignatureCodeEndianTest: PASS'),
     ]:
         result = subprocess.run(
             ['kotlin', '-classpath', str(classes), main],
