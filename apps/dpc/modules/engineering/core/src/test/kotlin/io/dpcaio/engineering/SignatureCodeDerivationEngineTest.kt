@@ -55,6 +55,20 @@ fun main() {
     check(first.stages == second.stages) { "stage list must be deterministic" }
     check(first.stages.isNotEmpty()) { "stage provenance must be present" }
 
+    val vendorCandidate = expectCandidate(
+        engine.derive(
+            identity = identity,
+            recipe = sixDigit,
+            signer = signer,
+            source = SignatureCodeSource.VENDOR_PROFILE,
+        ),
+        "799182",
+        "vendor source provenance",
+    )
+    check(vendorCandidate.source == SignatureCodeSource.VENDOR_PROFILE) {
+        "derive must preserve caller-selected provenance source"
+    }
+
     val sha1Hex = recipe(
         "sha1-hex",
         kind = DerivedCodeKind.HEX,
