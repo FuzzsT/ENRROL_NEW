@@ -20,6 +20,8 @@ autostart = read("apps/dpc/app/src/main/kotlin/io/dpcaio/app/AutostartManagerAct
 signature_lab = read("apps/dpc/app/src/main/kotlin/io/dpcaio/app/SignatureCodeLabActivity.kt")
 service = read("apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt")
 shizuku_executor = read("apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt")
+planner = read("apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ActivityAccessPlanner.kt")
+planner_test = read("apps/dpc/modules/activity/core/src/test/kotlin/io/dpcaio/activity/ActivityAccessPlannerTest.kt")
 
 require(
     picker,
@@ -47,6 +49,7 @@ require(
         "RuntimeTargetPicker.showUserPicker",
         "launch(activity",
         "result.attempts",
+        "Thread {",
     ],
     "ActivityExplorerActivity",
 )
@@ -60,6 +63,7 @@ require(
         "ShizukuComponentStateExecutor",
         "CURRENT_USER_READBACK",
         "TARGET_USER_SUBMITTED",
+        '"Restore default"',
     ],
     "AutostartManagerActivity",
 )
@@ -77,7 +81,10 @@ require(
     service,
     [
         '"/system/bin/am", "start", "-W"',
-        '"/system/bin/cmd", "activity", "start-activity", "-W"',
+        '"/system/bin/cmd"',
+        '"activity"',
+        '"start-activity"',
+        '"-W"',
         "if (primary == 0) return primary",
         "override fun listPackagesForUser(userId: Int): String",
         "if (userId < 0)",
@@ -88,10 +95,31 @@ require(
 require(
     shizuku_executor,
     [
+        "awaitConnected(1800L)",
         "Shizuku shell launch exit=",
         "success = result == 0",
     ],
     "ShizukuActivityRouteExecutor",
+)
+
+require(
+    planner,
+    [
+        "val packagePrepared =",
+        "val frameworkPrepared =",
+        "packagePrepared && input.shizukuAccessible",
+    ],
+    "ActivityAccessPlanner",
+)
+require(
+    planner_test,
+    [
+        "crossUserShizuku",
+        "userAccessible = false",
+        "shizukuAccessible = true",
+        "ActivityRoute.SHIZUKU",
+    ],
+    "ActivityAccessPlannerTest",
 )
 
 print("ACTIVITY_AUTOSTART_TARGET_PICKER_CONTRACT: PASS")
