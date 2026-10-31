@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / 'apps/dpc/modules/engineering/core'
 SRC = CORE / 'src/main/kotlin/io/dpcaio/engineering'
 TEST = CORE / 'src/test/kotlin/io/dpcaio/engineering'
+APP_ENG = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/engineering'
 
 
 def need(path: Path, needles):
@@ -51,7 +52,51 @@ extractor = need(SRC / 'SecretCodeManifestExtractor.kt', [
     'maxCandidates',
 ])
 
-for text in (models, reader, extractor):
+scanner = need(APP_ENG / 'InstalledPackageSecretCodeScanner.kt', [
+    'class InstalledPackageSecretCodeScanner',
+    'getInstalledApplications',
+    'sourceDir',
+    'splitSourceDirs',
+    'SecretCodeManifestExtractor.extract',
+    'cancelled()',
+    'SecretCodeScanProgress',
+    'SecretCodeScanEvent',
+])
+
+verifier = need(APP_ENG / 'SecretCodeRuntimeVerifier.kt', [
+    'enum class SecretCodeVerification',
+    'VERIFIED',
+    'DECLARED_ONLY',
+    'DISABLED',
+    'PERMISSION_GATED',
+    'NOT_EXPORTED',
+    'NOT_VISIBLE',
+    'PATTERN_ONLY',
+    'PACKAGE_GONE',
+    'ERROR',
+    'class SecretCodeRuntimeVerifier',
+    'queryBroadcastReceivers',
+    'TelephonyManager.ACTION_SECRET_CODE',
+    'android.provider.Telephony.SECRET_CODE',
+    'MATCH_DISABLED_COMPONENTS',
+])
+
+repository = need(APP_ENG / 'SecretCodeInventoryRepository.kt', [
+    'data class SecretCodeInventoryItem',
+    'data class SecretCodeScanProgress',
+    'sealed interface SecretCodeScanEvent',
+    'class SecretCodeInventoryRepository',
+    'fun scan(',
+    'fun invalidate()',
+    'distinctBy',
+])
+
+discovery = need(APP_ENG / 'SamsungSecretCodeDiscovery.kt', [
+    'SamsungSecretCodeCatalog.normalize',
+    'SecretCodeRuntimeVerifier',
+])
+
+for text in (models, reader, extractor, scanner, verifier, repository, discovery):
     for forbidden in [
         'Runtime.getRuntime',
         'ProcessBuilder(',
@@ -60,8 +105,20 @@ for text in (models, reader, extractor):
         'Shizuku.newProcess',
         'su -c',
         'am broadcast',
+        'sendBroadcast(',
+        'startService(',
+        'startForegroundService(',
     ]:
         assert forbidden not in text, f'forbidden execution API: {forbidden}'
+
+for needle in [
+    'packageName',
+    'receiverClassName',
+    'normalizedCode',
+    'actions',
+    'sourceKind',
+]:
+    assert needle in repository, f'SecretCodeInventoryRepository.kt: dedupe key missing {needle}'
 
 need(TEST / 'BinaryAndroidManifestReaderTest.kt', [
     'fun main()',
@@ -82,11 +139,11 @@ for fixture in [
     assert fixture.exists(), f'missing {fixture.relative_to(ROOT)}'
 
 settings = need(ROOT / 'settings.gradle.kts', [
-    '":engineering-core"',
+    '\":engineering-core\"',
     'apps/dpc/modules/engineering/core',
 ])
 app_build = need(ROOT / 'apps/dpc/app/build.gradle.kts', [
-    'implementation(project(":engineering-core"))',
+    'implementation(project(\":engineering-core\"))',
 ])
 host = need(ROOT / 'tools/run_host_tests.sh', [
     'apps/dpc/modules/engineering/core/src/main/kotlin',
