@@ -113,7 +113,14 @@
         <receiver android:name=".AppInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".OfflineInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".SelfUpdateStatusReceiver" android:exported="false" />
-        <receiver android:name=".AppLockAlarmReceiver" android:exported="false" />
+        <receiver
+            android:name=".AppLockAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".OfflineRecoveryReceiver"
