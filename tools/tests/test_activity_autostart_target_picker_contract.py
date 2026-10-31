@@ -22,6 +22,7 @@ service = read("apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/
 shizuku_executor = read("apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuActivityRouteExecutor.kt")
 planner = read("apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ActivityAccessPlanner.kt")
 planner_test = read("apps/dpc/modules/activity/core/src/test/kotlin/io/dpcaio/activity/ActivityAccessPlannerTest.kt")
+verification = read("apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ComponentMutationVerification.kt")
 
 require(
     picker,
@@ -50,9 +51,15 @@ require(
         "launch(activity",
         "result.attempts",
         "Thread {",
+        "ComponentMutationVerification.statusLine",
+        "ComponentMutationVerification.canLaunchAfterEnable",
+        "result.observedState",
+        "result.verified",
     ],
     "ActivityExplorerActivity",
 )
+assert "SUBMITTED, cross-user readback not claimed" not in explorer
+assert "readback via rescan" not in explorer
 
 require(
     autostart,
@@ -62,10 +69,26 @@ require(
         "target user",
         "ShizukuComponentStateExecutor",
         "CURRENT_USER_READBACK",
-        "TARGET_USER_SUBMITTED",
+        "TARGET_USER_VERIFIED",
+        "ComponentMutationVerification.statusLine",
+        "result.observedState",
+        "result.verified",
         '"Restore default"',
     ],
     "AutostartManagerActivity",
+)
+
+require(
+    verification,
+    [
+        "object ComponentMutationVerification",
+        "fun statusLine(",
+        "observed?.name ?: \"UNKNOWN\"",
+        "fun canLaunchAfterEnable(",
+        "observed == ComponentOverrideState.ENABLED",
+        "verified",
+    ],
+    "ComponentMutationVerification",
 )
 
 require(

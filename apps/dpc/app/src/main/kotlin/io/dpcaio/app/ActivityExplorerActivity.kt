@@ -25,6 +25,7 @@ import io.dpcaio.activity.ComponentControlRequest
 import io.dpcaio.activity.ComponentControlRoute
 import io.dpcaio.activity.ComponentControlRouter
 import io.dpcaio.activity.ComponentControlStatus
+import io.dpcaio.activity.ComponentMutationVerification
 import io.dpcaio.activity.ComponentOverrideState
 import io.dpcaio.activity.DiscoveredActivity
 import io.dpcaio.activity.android.AndroidActivityInventory
@@ -506,6 +507,7 @@ class ActivityExplorerActivity : Activity() {
             )
         )
         Thread {
+            var shizukuVerifiedForLaunch = false
             val detail = when (decision.route) {
                 ComponentControlRoute.OWN_UID -> {
                     val result = stateGateway.setState(
@@ -522,7 +524,19 @@ class ActivityExplorerActivity : Activity() {
                         operationUserId,
                         desired,
                     )
-                    "route=SHIZUKU requested=$desired ${result.detail}; SUBMITTED, cross-user readback not claimed"
+                    shizukuVerifiedForLaunch = ComponentMutationVerification.canLaunchAfterEnable(
+                        requested = desired,
+                        observed = result.observedState,
+                        verified = result.verified,
+                    )
+                    ComponentMutationVerification.statusLine(
+                        route = "SHIZUKU",
+                        userId = operationUserId,
+                        requested = desired,
+                        observed = result.observedState,
+                        verified = result.verified,
+                        detail = result.detail,
+                    )
                 }
                 ComponentControlRoute.SYSTEM_PRIVILEGED -> "SYSTEM_COMPONENT_CONTROL route not active in this runtime"
                 ComponentControlRoute.UNAVAILABLE -> decision.detail
@@ -532,7 +546,7 @@ class ActivityExplorerActivity : Activity() {
                 status.text = detail
                 if (launchAfter && desired == ComponentOverrideState.ENABLED &&
                     ((decision.route == ComponentControlRoute.OWN_UID && detail.contains("VERIFIED")) ||
-                        (decision.route == ComponentControlRoute.SHIZUKU && detail.contains("SUBMITTED")))
+                        (decision.route == ComponentControlRoute.SHIZUKU && shizukuVerifiedForLaunch))
                 ) {
                     launch(activity.copy(enabled = true, effectiveEnabled = true), operationUserId)
                 } else {
@@ -621,7 +635,14 @@ class ActivityExplorerActivity : Activity() {
                                 operationUserId,
                                 desired,
                             )
-                            "${activity.className}: route=SHIZUKU requested=$desired ${result.detail}; readback via rescan"
+                            "${activity.className}: ${ComponentMutationVerification.statusLine(
+                                route = "SHIZUKU",
+                                userId = operationUserId,
+                                requested = desired,
+                                observed = result.observedState,
+                                verified = result.verified,
+                                detail = result.detail,
+                            )}"
                         }
                         ComponentControlRoute.SYSTEM_PRIVILEGED -> "${activity.className}: SYSTEM_COMPONENT_CONTROL route not active in this runtime"
                         ComponentControlRoute.UNAVAILABLE -> "${activity.className}: ${decision.detail}"
@@ -663,12 +684,22 @@ class ActivityExplorerActivity : Activity() {
                             activity.manifestEnabled,
                             snapshot.previousOverrideState,
                         )
-                        ComponentControlRoute.SHIZUKU -> ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
-                            activity.packageName,
-                            activity.className,
-                            targetUserId(),
-                            snapshot.previousOverrideState,
-                        )
+                        ComponentControlRoute.SHIZUKU -> {
+                            val result = ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
+                                activity.packageName,
+                                activity.className,
+                                targetUserId(),
+                                snapshot.previousOverrideState,
+                            )
+                            results += "${snapshot.className}: ${ComponentMutationVerification.statusLine(
+                                route = "SHIZUKU",
+                                userId = targetUserId(),
+                                requested = snapshot.previousOverrideState,
+                                observed = result.observedState,
+                                verified = result.verified,
+                                detail = result.detail,
+                            )}"
+                        }
                         else -> Unit
                     }
                 }

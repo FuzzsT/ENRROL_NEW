@@ -12,6 +12,7 @@ import android.text.InputType
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.dpcaio.activity.ComponentMutationVerification
 import io.dpcaio.activity.ComponentOverrideState
 import io.dpcaio.activity.android.AndroidComponentStateGateway
 import io.dpcaio.platform.AndroidUserId
@@ -206,7 +207,7 @@ class AutostartManagerActivity : Activity() {
                 val stateText = if (selectedUser == currentUser) {
                     "CURRENT_USER_READBACK user=$selectedUser • source=${row.inventorySource} • Manifest=${row.manifestEnabled ?: "unknown"} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}"
                 } else {
-                    "TARGET_USER_INVENTORY user=$selectedUser • source=${row.inventorySource} • requested=${submitted?.name ?: "none"} • Manifest=unknown • readback=not available"
+                    "TARGET_USER_INVENTORY user=$selectedUser • source=${row.inventorySource} • lastVerified=${submitted?.name ?: "none"} • Manifest=unknown • liveReadback=mutation-only"
                 }
                 addView(ModernUi.body(
                     this@AutostartManagerActivity,
@@ -258,16 +259,24 @@ class AutostartManagerActivity : Activity() {
                         userId,
                         state,
                     )
-                    if (result.submitted) {
-                        "TARGET_USER_SUBMITTED user=$userId requested=$state exit=${result.exitCode} ${result.detail}"
+                    val verification = ComponentMutationVerification.statusLine(
+                        route = "SHIZUKU",
+                        userId = userId,
+                        requested = state,
+                        observed = result.observedState,
+                        verified = result.verified,
+                        detail = result.detail,
+                    )
+                    if (result.verified) {
+                        "TARGET_USER_VERIFIED $verification"
                     } else {
-                        "TARGET_USER_FAILED user=$userId requested=$state exit=${result.exitCode} ${result.detail}"
+                        "TARGET_USER_FAILED $verification"
                     }
                 }
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (detail.startsWith("TARGET_USER_SUBMITTED")) {
+                if (detail.startsWith("TARGET_USER_VERIFIED")) {
                     submittedTargetStates[stateKey(userId, row.component)] = state
                 }
                 output.text = detail
