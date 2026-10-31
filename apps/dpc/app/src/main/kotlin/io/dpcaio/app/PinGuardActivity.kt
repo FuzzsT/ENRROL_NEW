@@ -4,17 +4,22 @@ import android.app.Activity
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
+import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import io.dpcaio.appmanager.PinGuardResult
 import io.dpcaio.appmanager.android.PinGuardVerifier
+import java.util.concurrent.Executors
 
 class PinGuardActivity : Activity() {
     private lateinit var currentPin: EditText
     private lateinit var newPin: EditText
     private lateinit var confirmPin: EditText
     private lateinit var status: TextView
+    private val actionButtons = mutableListOf<Button>()
+    private val executor = Executors.newSingleThreadExecutor()
     private val verifier by lazy { PinGuardVerifier(this) }
+    private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,17 +49,25 @@ class PinGuardActivity : Activity() {
                 addView(newPin)
                 addView(confirmPin)
 
-                addView(ModernUi.action(this@PinGuardActivity, "Set / Change PIN", primary = true) {
+                val setButton = ModernUi.action(this@PinGuardActivity, "Set / Change PIN", primary = true) {
                     setOrChangePin()
-                })
+                }
+                actionButtons += setButton
+                addView(setButton)
+
                 addView(ModernUi.spacer(this@PinGuardActivity, 8))
-                addView(ModernUi.action(this@PinGuardActivity, "Verify PIN") {
+                val verifyButton = ModernUi.action(this@PinGuardActivity, "Verify PIN") {
                     verifyCurrentPin()
-                })
+                }
+                actionButtons += verifyButton
+                addView(verifyButton)
+
                 addView(ModernUi.spacer(this@PinGuardActivity, 8))
-                addView(ModernUi.action(this@PinGuardActivity, "Disable PIN", destructive = true) {
+                val disableButton = ModernUi.action(this@PinGuardActivity, "Disable PIN", destructive = true) {
                     disablePin()
-                })
+                }
+                actionButtons += disableButton
+                addView(disableButton)
             }
         )
 
@@ -74,6 +87,11 @@ class PinGuardActivity : Activity() {
         renderState()
     }
 
+    override fun onDestroy() {
+        executor.shutdownNow()
+        super.onDestroy()
+    }
+
     private fun pinField(hint: String): EditText = ModernUi.field(
         this,
         hint,
@@ -83,6 +101,7 @@ class PinGuardActivity : Activity() {
     }
 
     private fun setOrChangePin() {
+        if (busy) return
         val next = newPin.text?.toString().orEmpty()
         val confirmation = confirmPin.text?.toString().orEmpty()
         if (!PIN_PATTERN.matches(next)) {
@@ -96,49 +115,82 @@ class PinGuardActivity : Activity() {
             return
         }
 
-        if (verifier.isConfigured()) {
-            val current = currentPin.text?.toString().orEmpty().toCharArray()
-            val verified = verifier.verify(current)
-            if (verified != PinGuardResult.SUCCESS) {
-                showResult("Current PIN verification", verified)
-                clearSensitiveFields()
-                return
+        val configured = verifier.isConfigured()
+        val current = currentPin.text?.toString().orEmpty().toCharArray()
+        val nextChars = next.toCharArray()
+        runPinWork {
+            try {
+                if (configured) {
+                    val verified = verifier.verify(current)
+                    if (verified != PinGuardResult.SUCCESS) {
+                        return@runPinWork "Current PIN verification" to verified
+                    }
+                } else {
+                    current.fill('\u0000')
+                }
+                "Set / Change PIN" to verifier.configure(nextChars)
+            } finally {
+                current.fill('\u0000')
+                nextChars.fill('\u0000')
             }
         }
-
-        val result = verifier.configure(next.toCharArray())
-        showResult("Set / Change PIN", result)
-        clearSensitiveFields()
-        renderState(result)
     }
 
     private fun verifyCurrentPin() {
+        if (busy) return
         if (!verifier.isConfigured()) {
             showStatus("PIN Guard is not configured.")
             clearSensitiveFields()
             return
         }
-        val result = verifier.verify(currentPin.text?.toString().orEmpty().toCharArray())
-        showResult("Verify PIN", result)
-        clearSensitiveFields()
+        val current = currentPin.text?.toString().orEmpty().toCharArray()
+        runPinWork {
+            "Verify PIN" to verifier.verify(current)
+        }
     }
 
     private fun disablePin() {
+        if (busy) return
         if (!verifier.isConfigured()) {
             showStatus("PIN Guard is not configured.")
             clearSensitiveFields()
             return
         }
-        val verified = verifier.verify(currentPin.text?.toString().orEmpty().toCharArray())
-        if (verified != PinGuardResult.SUCCESS) {
-            showResult("Disable PIN", verified)
-            clearSensitiveFields()
-            return
+        val current = currentPin.text?.toString().orEmpty().toCharArray()
+        runPinWork {
+            val verified = verifier.verify(current)
+            if (verified != PinGuardResult.SUCCESS) {
+                "Disable PIN" to verified
+            } else {
+                "Disable PIN" to verifier.clear()
+            }
         }
-        val result = verifier.clear()
-        showResult("Disable PIN", result)
-        clearSensitiveFields()
-        renderState(result)
+    }
+
+    private fun runPinWork(operation: () -> Pair<String, PinGuardResult>) {
+        if (busy) return
+        setBusy(true)
+        executor.execute {
+            val outcome = runCatching(operation).getOrElse {
+                "PIN Guard" to PinGuardResult.STORE_ERROR
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                showResult(outcome.first, outcome.second)
+                clearSensitiveFields()
+                renderState(outcome.second)
+                setBusy(false)
+            }
+        }
+    }
+
+    private fun setBusy(value: Boolean) {
+        busy = value
+        actionButtons.forEach { it.isEnabled = !busy }
+        currentPin.isEnabled = !busy
+        newPin.isEnabled = !busy
+        confirmPin.isEnabled = !busy
+        if (busy) status.text = "PIN Guard: working…"
     }
 
     private fun renderState(lastResult: PinGuardResult? = null) {
