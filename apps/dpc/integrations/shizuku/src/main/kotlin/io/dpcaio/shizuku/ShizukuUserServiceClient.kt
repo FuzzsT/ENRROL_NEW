@@ -63,7 +63,7 @@ class ShizukuUserServiceClient(context: Context) {
         .daemon(false)
         .processNameSuffix("aio")
         .debuggable(false)
-        .version(2)
+        .version(3)
 
     fun bind(): Boolean {
         autoRebindEnabled = true
@@ -200,6 +200,9 @@ class ShizukuUserServiceClient(context: Context) {
 
     fun sendBroadcast(action: String, packageName: String, userId: Int): Int? =
         runCatching { connectedRemote()?.sendBroadcast(action, packageName, userId) }.getOrNull()
+
+    fun queryBroadcastReceivers(action: String, userId: Int): String? =
+        runCatching { connectedRemote()?.queryBroadcastReceivers(action, userId) }.getOrNull()
 
     fun listPermissions(): String? = runCatching { connectedRemote()?.listPermissions() }.getOrNull()
 
