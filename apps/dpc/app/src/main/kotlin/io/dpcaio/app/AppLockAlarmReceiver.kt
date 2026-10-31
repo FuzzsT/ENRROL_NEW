@@ -6,11 +6,15 @@ import android.content.Intent
 
 class AppLockAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        val packageName = intent?.getStringExtra(EXTRA_TARGET_PACKAGE)
         val pending = goAsync()
         Thread {
             try {
-                AppLockCoordinator(context).reconcileExpiredUnlocks()
+                val coordinator = AppLockCoordinator(context)
+                when (intent?.action) {
+                    Intent.ACTION_BOOT_COMPLETED,
+                    Intent.ACTION_MY_PACKAGE_REPLACED -> coordinator.restorePendingRelocks()
+                    else -> coordinator.reconcileExpiredUnlocks()
+                }
             } finally {
                 pending.finish()
             }
@@ -18,6 +22,7 @@ class AppLockAlarmReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val ACTION_RELOCK = "io.dpcaio.app.action.APP_LOCK_RELOCK"
         const val EXTRA_TARGET_PACKAGE = "app_lock_target_package"
     }
 }
