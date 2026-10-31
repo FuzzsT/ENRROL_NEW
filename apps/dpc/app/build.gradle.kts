@@ -128,6 +128,7 @@ dependencies {
     implementation(project(":scenario-core"))
     implementation(project(":offline-core"))
     implementation(project(":offline-android"))
+    implementation(project(":engineering-core"))
 }
 
 // Build-time Android Enterprise enrollment QR, modeled after Google TestDPC provisioning.
