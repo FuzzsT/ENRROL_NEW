@@ -15,7 +15,7 @@ assert s.is_file(),s
 assert picker.is_file(),picker
 assert route_executor.is_file(),route_executor
 t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8'); route=route_executor.read_text(encoding='utf-8')
-for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker']:
+for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker','intent.getIntExtra("userId", current)','takeIf { it >= 0 }']:
     assert n in t,n
 for n in [
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
