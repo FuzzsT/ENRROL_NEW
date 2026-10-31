@@ -48,9 +48,13 @@ def main():
         'Uri.encode(packageName)',
         '.setData(',
         'rollbackSuspension(',
+        'canScheduleExactAlarms()',
+        'setExactAndAllowWhileIdle(',
+        'setExact(',
     ])
     assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
     assert coordinator.count('synchronized(transitionLock)') >= 4, 'lock/unlock/reconcile/restore transitions must share synchronization'
+    assert 'setAndAllowWhileIdle(' not in coordinator, 'bounded App Lock unlocks must not rely on inexact alarms'
     assert 'Accessibility' not in coordinator
     assert 'overlay' not in coordinator.lower()
 
@@ -85,6 +89,7 @@ def main():
     ])
 
     need(MANIFEST, [
+        '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />',
         '<activity android:name=".AppLockActivity" android:exported="false" />',
         'android:name=".AppLockAlarmReceiver"',
         '<action android:name="android.intent.action.BOOT_COMPLETED" />',
