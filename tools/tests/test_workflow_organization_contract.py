@@ -15,11 +15,17 @@ def main():
     assert 'cancel-in-progress: true' in text
     assert 'name: Run PIN and app lock contracts' in text
     assert 'name: Run package export contracts' in text
+    assert 'name: Run secret code inventory contracts' in text
     assert text.count('test_pin_guard_contract.py') == 1
     assert text.count('test_app_lock_pin_contract.py') == 1
     assert text.count('test_install_pin_guard_contract.py') == 1
     assert text.count('test_package_export_contract.py') == 1
     assert text.count('test_package_export_ui_contract.py') == 1
+    assert text.count('test_secret_code_inventory_contract.py') == 1
+    assert text.count('test_secret_code_inventory_runtime_contract.py') == 1
+    assert text.count('test_signature_code_derivation_contract.py') == 1
+    assert text.count('test_signature_code_android_contract.py') == 1
+    assert text.count('test_signature_code_lab_ui_contract.py') == 1
     assert 'name: Run app security contracts' not in text
 
     release = RELEASE.read_text(encoding='utf-8')
