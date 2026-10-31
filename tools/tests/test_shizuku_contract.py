@@ -77,9 +77,10 @@ def main():
         'String getAppOps(String packageName, int userId);',
         'String resolveAppOp(String op);',
         'String queryBroadcastReceivers(String action, int userId);',
+        'String setComponentEnabledStateVerified(String packageName, String className, String state, int userId);',
     ]:
         if token not in aidl_text:
-            raise AssertionError(f"typed AppOps/inventory contract missing {token}")
+            raise AssertionError(f"typed AppOps/inventory/component-state contract missing {token}")
 
     service_text = must(service, 'ProcessBuilder(args)')
     for token in ['"/system/bin/am", "start"', '"/system/bin/am", "broadcast"']:
@@ -97,6 +98,7 @@ def main():
         'getDeclaredMethod("strDebugOpToOp"',
         'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
         'override fun queryBroadcastReceivers(action: String, userId: Int): String',
+        'override fun setComponentEnabledStateVerified(',
         '"/system/bin/pm"',
         '"query-receivers"',
         '"--brief"',
@@ -106,7 +108,7 @@ def main():
         '"0x00000200"',
     ]:
         if token not in service_text:
-            raise AssertionError(f"checked AppOps/cross-user inventory missing {token}")
+            raise AssertionError(f"checked AppOps/cross-user inventory/component-state missing {token}")
     for forbidden in ["Runtime.getRuntime().exec", "newProcess(", "HiddenApiBypass", "setHiddenApiExemptions"]:
         if forbidden in service_text:
             raise AssertionError(f"unsafe Shizuku service token: {forbidden}")
@@ -115,7 +117,7 @@ def main():
     for token in [
         "Shizuku.bindUserService",
         ".processNameSuffix(",
-        ".version(3)",
+        ".version(4)",
         "IBinder.DeathRecipient",
         "linkToDeath",
         "unlinkToDeath",
@@ -137,6 +139,8 @@ def main():
         'connectedRemote()?.resolveAppOp(op)',
         'fun queryBroadcastReceivers(action: String, userId: Int): String?',
         'connectedRemote()?.queryBroadcastReceivers(action, userId)',
+        'fun setComponentEnabledStateVerified(packageName: String, className: String, state: String, userId: Int): String?',
+        'connectedRemote()?.setComponentEnabledStateVerified(packageName, className, state, userId)',
     ]:
         if token not in client_text:
             raise AssertionError(f"client missing {token}")
