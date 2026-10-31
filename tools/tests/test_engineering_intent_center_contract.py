@@ -77,6 +77,10 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'Intent.CATEGORY_APP_CALCULATOR',
     'Signature Code Lab',
     'SignatureCodeLabActivity::class.java',
+    'Choose target package',
+    'RuntimeTargetPicker.showPackagePicker',
+    'SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
+    'putExtra(SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
 ])
 assert 'Runtime.getRuntime' not in center
 assert 'Shizuku.newProcess' not in center
