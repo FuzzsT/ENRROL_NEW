@@ -44,6 +44,22 @@ fun main() {
         "approved typed pipeline must validate",
     )
 
+    val textRecipe = SignatureCodeRecipe(
+        id = "package-prefix",
+        displayName = "Package prefix",
+        input = SignatureCodeInputKind.PACKAGE_NAME_UTF8,
+        steps = listOf(
+            SignatureCodeStep.Ascii,
+            SignatureCodeStep.PrefixChars(3),
+        ),
+        outputKind = DerivedCodeKind.TEXT,
+    )
+    assertEquals(
+        SignatureCodeRecipeValidation.Valid,
+        SignatureCodeRecipeValidator.validate(textRecipe),
+        "UTF-8 package bytes must require an explicit ASCII/text conversion before char slicing",
+    )
+
     val tooLong = validRecipe.copy(
         steps = List(17) { SignatureCodeStep.Sha256 },
     )
