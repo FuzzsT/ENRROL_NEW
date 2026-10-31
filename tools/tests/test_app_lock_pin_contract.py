@@ -77,6 +77,13 @@ def main():
     # All rollback paths must verify resuspension before clearing pending recovery state.
     assert coordinator.count('rollbackVerified') >= 3, 'rollback result must be checked on every post-unsuspend failure path'
 
+    # The one-shot expiry alarm must arrange another recovery attempt if automatic relock
+    # cannot be verified. Otherwise an expired app can remain accessible indefinitely.
+    reconcile_start = coordinator.index('fun reconcileExpiredUnlocks(')
+    restore_start = coordinator.index('fun restorePendingRelocks(', reconcile_start)
+    reconcile_body = coordinator[reconcile_start:restore_start]
+    assert 'keepPendingRecovery(record.copy(pendingUnlock = true))' in reconcile_body, 'failed expiry relock must persist recovery state and schedule a retry'
+
     receiver = need(RECEIVER, [
         'class AppLockAlarmReceiver',
         'BroadcastReceiver',
