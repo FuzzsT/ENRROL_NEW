@@ -19,16 +19,18 @@ def need(path: Path, tokens):
 
 
 def main():
-    need(STORE, [
+    store = need(STORE, [
         'data class AppLockRecord',
         'packageName',
         'locked',
         'unlockedUntilMillis',
+        'pendingUnlock',
         'fun read(',
         'fun write(',
         'fun remove(',
         'fun all()',
     ])
+    assert 'putBoolean(key(record.packageName, "pendingUnlock"), record.pendingUnlock)' in store
 
     coordinator = need(COORDINATOR, [
         'AppPolicyCoordinator',
@@ -51,8 +53,12 @@ def main():
         'canScheduleExactAlarms()',
         'setExactAndAllowWhileIdle(',
         'setExact(',
+        'pendingUnlock = true',
+        'pendingUnlock = false',
+        'it.pendingUnlock',
     ])
     assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
+    assert coordinator.index('pendingUnlock = true') < coordinator.index('setSuspended(packageName, false)'), 'recoverable pending unlock must be persisted before unsuspending'
     assert coordinator.count('synchronized(transitionLock)') >= 4, 'lock/unlock/reconcile/restore transitions must share synchronization'
     assert 'setAndAllowWhileIdle(' not in coordinator, 'bounded App Lock unlocks must not rely on inexact alarms'
     assert 'Accessibility' not in coordinator
