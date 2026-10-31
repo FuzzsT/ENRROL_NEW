@@ -4,10 +4,12 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.os.Bundle
+import android.os.Process
 import android.widget.EditText
 import android.widget.LinearLayout
 import io.dpcaio.core.model.CapabilityResolution
 import io.dpcaio.core.model.CapabilityResolver
+import io.dpcaio.platform.AndroidUserId
 import io.dpcaio.policy.AppFunctionsPolicy
 import io.dpcaio.policy.DeviceRestriction
 import io.dpcaio.policy.ManagedPermissionState
@@ -166,6 +168,15 @@ class EnterprisePolicyHubActivity : Activity() {
     private fun addLocalNetworkControls(box: LinearLayout) {
         val packageNameInput: EditText = ModernUi.field(this, "Target package (e.g. com.example.app)")
         box.addView(packageNameInput)
+        box.addView(
+            ModernUi.action(this, "Choose package") {
+                RuntimeTargetPicker.showPackagePicker(
+                    this,
+                    userId = AndroidUserId.fromUid(Process.myUid()),
+                    currentPackage = packageNameInput.text.toString().trim(),
+                ) { selected -> packageNameInput.setText(selected) }
+            }
+        )
         val permission = "android.permission.ACCESS_LOCAL_NETWORK"
         val buttons = listOf(
             "DEFAULT" to ManagedPermissionState.DEFAULT,
