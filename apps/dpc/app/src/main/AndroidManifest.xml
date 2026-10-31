@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -61,6 +62,7 @@
         <activity android:name=".WorkProfileCopeActivity" android:exported="false" />
         <activity android:name=".KnoxEnterpriseCenterActivity" android:exported="false" />
         <activity android:name=".PinGuardActivity" android:exported="false" />
+        <activity android:name=".AppLockActivity" android:exported="false" />
         <activity android:name=".DpcDiagnosticsActivity" android:exported="false" />
         <activity android:name=".EnrollmentStatusActivity" android:exported="false" />
         <activity android:name=".EnrollmentManualActivity" android:exported="false" />
@@ -112,6 +114,14 @@
         <receiver android:name=".AppInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".OfflineInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".SelfUpdateStatusReceiver" android:exported="false" />
+        <receiver
+            android:name=".AppLockAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".OfflineRecoveryReceiver"

@@ -1,0 +1,59 @@
+package io.dpcaio.app
+
+import android.content.Context
+
+data class AppLockRecord(
+    val packageName: String,
+    val locked: Boolean,
+    val unlockedUntilMillis: Long,
+    val pendingUnlock: Boolean = false,
+    val pendingLock: Boolean = false,
+)
+
+class AppLockStore(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun read(packageName: String): AppLockRecord? {
+        if (packageName !in packageNames()) return null
+        return AppLockRecord(
+            packageName = packageName,
+            locked = prefs.getBoolean(key(packageName, "locked"), false),
+            unlockedUntilMillis = prefs.getLong(key(packageName, "unlockedUntilMillis"), 0L),
+            pendingUnlock = prefs.getBoolean(key(packageName, "pendingUnlock"), false),
+            pendingLock = prefs.getBoolean(key(packageName, "pendingLock"), false),
+        )
+    }
+
+    fun write(record: AppLockRecord): Boolean {
+        val packages = packageNames().toMutableSet().apply { add(record.packageName) }
+        return prefs.edit()
+            .putStringSet(KEY_PACKAGES, packages)
+            .putBoolean(key(record.packageName, "locked"), record.locked)
+            .putLong(key(record.packageName, "unlockedUntilMillis"), record.unlockedUntilMillis)
+            .putBoolean(key(record.packageName, "pendingUnlock"), record.pendingUnlock)
+            .putBoolean(key(record.packageName, "pendingLock"), record.pendingLock)
+            .commit()
+    }
+
+    fun remove(packageName: String): Boolean {
+        val packages = packageNames().toMutableSet().apply { remove(packageName) }
+        return prefs.edit()
+            .putStringSet(KEY_PACKAGES, packages)
+            .remove(key(packageName, "locked"))
+            .remove(key(packageName, "unlockedUntilMillis"))
+            .remove(key(packageName, "pendingUnlock"))
+            .remove(key(packageName, "pendingLock"))
+            .commit()
+    }
+
+    fun all(): List<AppLockRecord> = packageNames().mapNotNull(::read)
+
+    private fun packageNames(): Set<String> = prefs.getStringSet(KEY_PACKAGES, emptySet())?.toSet() ?: emptySet()
+
+    private fun key(packageName: String, field: String): String = "$packageName::$field"
+
+    companion object {
+        private const val PREFS_NAME = "app_lock_state"
+        private const val KEY_PACKAGES = "packages"
+    }
+}
