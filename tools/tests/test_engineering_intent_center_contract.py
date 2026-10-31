@@ -99,6 +99,10 @@ developer = need(APP / 'DeveloperActivitiesActivity.kt', [
     'exported=',
     'permission=',
     'ActivityExplorerActivity::class.java',
+    'Choose package',
+    'Choose user',
+    'RuntimeTargetPicker.showPackagePicker',
+    'RuntimeTargetPicker.showUserPicker',
 ])
 
 manifest = need(ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml', [
