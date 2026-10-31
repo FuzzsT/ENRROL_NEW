@@ -39,6 +39,9 @@ jobs:
           chmod +x tools/run_host_tests.sh
           ./tools/run_host_tests.sh
 
+      - name: Run PIN guard contract
+        run: python3 tools/tests/test_pin_guard_contract.py
+
   apk-build:
     name: Enterprise debug APK
     runs-on: ubuntu-24.04
