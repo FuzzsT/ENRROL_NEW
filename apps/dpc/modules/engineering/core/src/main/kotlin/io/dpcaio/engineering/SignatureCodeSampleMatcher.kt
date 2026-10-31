@@ -115,20 +115,21 @@ object SignatureCodeSampleMatcher {
         val outputs = ArrayList<String?>(samples.size)
         var exact = 0
         for (sample in samples) {
-            val signer = sample.identity.currentSigners.firstOrNull()
-            if (signer == null) {
-                outputs += null
-                continue
-            }
-            val result = engine.derive(
-                identity = sample.identity,
-                recipe = recipe,
-                signer = signer,
-                source = SignatureCodeSource.SAMPLE_MATCH,
-            )
-            val output = (result as? SignatureCodeDerivationResult.Success)?.candidate?.candidate
-            outputs += output
-            if (output == sample.expectedCode) exact++
+            val signerOutputs = sample.identity.currentSigners
+                .mapNotNull { signer ->
+                    val result = engine.derive(
+                        identity = sample.identity,
+                        recipe = recipe,
+                        signer = signer,
+                        source = SignatureCodeSource.SAMPLE_MATCH,
+                    )
+                    (result as? SignatureCodeDerivationResult.Success)?.candidate?.candidate
+                }
+                .distinct()
+                .sorted()
+
+            outputs += signerOutputs.takeIf { it.isNotEmpty() }?.joinToString("\u001F")
+            if (sample.expectedCode in signerOutputs) exact++
         }
         if (exact == 0) return null
         return ScoredRecipe(recipe, exact, outputs)
