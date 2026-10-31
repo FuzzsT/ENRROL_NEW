@@ -81,6 +81,21 @@ fun main() {
     )
     assertEquals(null, blocked.selected, "private component without a valid route should remain blocked")
 
+    val crossUserShizuku = planner.plan(
+        ActivityAccessInput(
+            packageName = "com.example.crossuser",
+            className = ".PrivateActivity",
+            enabled = true,
+            exported = false,
+            launcherVisible = false,
+            sameUid = false,
+            userAccessible = false,
+            shizukuAccessible = true
+        )
+    )
+    assertEquals(ActivityRoute.SHIZUKU, crossUserShizuku.selected, "Shizuku shell route should remain available when LauncherApps cannot access the target user")
+    assertTrue("USER_NOT_ACCESSIBLE" in crossUserShizuku.blockers, "planner should still report the normal-framework user blocker")
+
     val labHook = planner.plan(
         ActivityAccessInput(
             packageName = "io.dpcaio.test",
