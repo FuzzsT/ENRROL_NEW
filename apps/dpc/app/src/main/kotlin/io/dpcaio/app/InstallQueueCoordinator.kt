@@ -4,6 +4,7 @@ import android.content.pm.PackageInstaller
 
 class InstallQueueCoordinator(
     private val store: InstallQueueStore,
+    private val authorization: InstallAuthorizationCoordinator = InstallAuthorizationCoordinator(store.hostContext),
 ) {
     fun enqueue(items: List<InstallQueueItem>): List<InstallQueueItem> {
         val merged = store.loadQueue() + items
@@ -13,6 +14,10 @@ class InstallQueueCoordinator(
 
     fun startOrResume(): InstallQueueItem? {
         val next = store.loadQueue().firstOrNull { it.state == InstallQueueState.QUEUED } ?: return null
+        if (!authorization.consumeAuthorization()) {
+            authorization.requestInstallAuthorization(store.hostContext)
+            return null
+        }
         val updated = next.copy(state = InstallQueueState.PREFLIGHT, updatedAt = System.currentTimeMillis())
         store.updateItem(updated)
         return updated
