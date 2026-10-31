@@ -46,6 +46,7 @@ recipe = need(CORE / 'SignatureCodeRecipe.kt', [
     'Sum16',
     'HexUpper',
     'HexLower',
+    'Ascii',
     'UIntBe',
     'UIntLe',
     'PrefixBytes',
@@ -60,7 +61,7 @@ recipe = need(CORE / 'SignatureCodeRecipe.kt', [
     'LuhnAppend',
     'LuhnValidate',
 ])
-need(TEST, ['SignatureCodeRecipeTest: PASS'])
+need(TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii'])
 
 combined = models + '\n' + recipe
 for forbidden in [
