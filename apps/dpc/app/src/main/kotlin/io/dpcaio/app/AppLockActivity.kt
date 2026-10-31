@@ -10,12 +10,12 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 
 class AppLockActivity : Activity() {
+    private lateinit var packageNameField: EditText
     private lateinit var pin: EditText
     private lateinit var status: TextView
     private val actionButtons = mutableListOf<Button>()
     private val executor = Executors.newSingleThreadExecutor()
     private val coordinator by lazy { AppLockCoordinator(this) }
-    private val targetPackage: String by lazy { intent.getStringExtra(EXTRA_TARGET_PACKAGE).orEmpty() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +32,15 @@ class AppLockActivity : Activity() {
         )
 
         body.addView(ModernUi.section(this, "Target"))
-        status = ModernUi.outputCard(this, if (targetPackage.isBlank()) "No target package" else "Target: $targetPackage")
+        body.addView(
+            ModernUi.card(this).apply {
+                packageNameField = ModernUi.field(this@AppLockActivity, "Package name").apply {
+                    setText(intent.getStringExtra(EXTRA_TARGET_PACKAGE).orEmpty())
+                }
+                addView(packageNameField)
+            }
+        )
+        status = ModernUi.outputCard(this, "App Lock ready")
         body.addView(status)
 
         body.addView(ModernUi.section(this, "Authorization"))
@@ -65,7 +73,12 @@ class AppLockActivity : Activity() {
         )
 
         setContentView(ModernUi.scrollPage(this, body))
-        refreshState()
+        reconcileAndRefresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::status.isInitialized) reconcileAndRefresh()
     }
 
     private fun android.widget.LinearLayout.addAction(
@@ -79,19 +92,23 @@ class AppLockActivity : Activity() {
         addView(button)
     }
 
+    private fun targetPackage(): String = packageNameField.text?.toString().orEmpty().trim()
+
     private fun runLock() {
-        if (targetPackage.isBlank()) return showStatus("No target package")
-        runBusy("Locking $targetPackage…") { coordinator.lock(targetPackage) }
+        val target = targetPackage()
+        if (target.isBlank()) return showStatus("Enter package name")
+        runBusy("Locking $target…", target) { coordinator.lock(target) }
     }
 
     private fun runUnlock(durationMillis: Long?) {
-        if (targetPackage.isBlank()) return showStatus("No target package")
+        val target = targetPackage()
+        if (target.isBlank()) return showStatus("Enter package name")
         val entered = pin.text?.toString().orEmpty().toCharArray()
         if (entered.isEmpty()) return showStatus("Enter PIN Guard PIN")
-        runBusy("Authorizing unlock…") { coordinator.unlock(targetPackage, entered, durationMillis) }
+        runBusy("Authorizing unlock…", target) { coordinator.unlock(target, entered, durationMillis) }
     }
 
-    private fun runBusy(message: String, operation: () -> AppLockResult) {
+    private fun runBusy(message: String, target: String, operation: () -> AppLockResult) {
         setBusy(true)
         showStatus(message)
         executor.execute {
@@ -100,22 +117,36 @@ class AppLockActivity : Activity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 pin.text?.clear()
                 setBusy(false)
-                showStatus("${targetPackage.ifBlank { "target" }}: ${result.name}")
-                refreshState()
+                showStatus("$target: ${result.name}")
+                refreshState(target)
             }
         }
     }
 
-    private fun refreshState() {
-        if (targetPackage.isBlank()) return
-        val record = coordinator.state(targetPackage)
+    private fun reconcileAndRefresh() {
+        val target = targetPackage()
+        executor.execute {
+            coordinator.reconcileExpiredUnlocks()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (target.isNotBlank()) refreshState(target)
+            }
+        }
+    }
+
+    private fun refreshState(target: String = targetPackage()) {
+        if (target.isBlank()) {
+            showStatus("Enter package name")
+            return
+        }
+        val record = coordinator.state(target)
         val detail = when {
             record == null -> "not managed by App Lock"
             record.unlockedUntilMillis > System.currentTimeMillis() -> "temporarily unlocked until ${record.unlockedUntilMillis}"
             record.locked -> "locked"
             else -> "unlocked"
         }
-        showStatus("Target: $targetPackage • $detail")
+        showStatus("Target: $target • $detail")
     }
 
     private fun setBusy(busy: Boolean) {
@@ -123,6 +154,7 @@ class AppLockActivity : Activity() {
             it.isEnabled = !busy
             it.alpha = if (busy) 0.55f else 1f
         }
+        if (::packageNameField.isInitialized) packageNameField.isEnabled = !busy
     }
 
     private fun showStatus(message: String) {
