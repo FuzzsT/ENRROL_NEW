@@ -202,12 +202,20 @@ class EngineeringIntentCenterActivity : Activity() {
         }
     }
 
+    private fun validateBroadcastTargetConsistency(packageName: String?, component: ComponentName?) {
+        if (packageName != null && component != null && component.packageName != packageName) {
+            error("Target component package must match target package")
+        }
+    }
+
     private fun buildBroadcast(): Intent {
+        val packageName = broadcastPackage.text.toString().trim().ifEmpty { null }
         val componentText = broadcastComponent.text.toString().trim()
         val component = componentText.takeIf { it.isNotEmpty() }?.let(ComponentName::unflattenFromString)
         if (componentText.isNotEmpty() && component == null) {
             error("Component must use pkg/.Class or pkg/full.Class format")
         }
+        validateBroadcastTargetConsistency(packageName, component)
         val extras = buildList {
             val key = extraKey.text.toString().trim()
             if (key.isNotEmpty()) {
@@ -223,7 +231,7 @@ class EngineeringIntentCenterActivity : Activity() {
         return BroadcastIntentBuilder.build(
             BroadcastRequest(
                 action = broadcastAction.text.toString().trim(),
-                packageName = broadcastPackage.text.toString().trim().ifEmpty { null },
+                packageName = packageName,
                 component = component,
                 data = broadcastData.text.toString().trim().takeIf { it.isNotEmpty() }?.let(Uri::parse),
                 extras = extras,
