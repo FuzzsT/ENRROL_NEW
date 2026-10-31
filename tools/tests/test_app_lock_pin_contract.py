@@ -25,12 +25,14 @@ def main():
         'locked',
         'unlockedUntilMillis',
         'pendingUnlock',
+        'pendingLock',
         'fun read(',
         'fun write(',
         'fun remove(',
         'fun all()',
     ])
     assert 'putBoolean(key(record.packageName, "pendingUnlock"), record.pendingUnlock)' in store
+    assert 'putBoolean(key(record.packageName, "pendingLock"), record.pendingLock)' in store
 
     coordinator = need(COORDINATOR, [
         'AppPolicyCoordinator',
@@ -55,34 +57,39 @@ def main():
         'setExact(',
         'pendingUnlock = true',
         'pendingUnlock = false',
+        'pendingLock = true',
+        'pendingLock = false',
         'it.pendingUnlock',
+        'it.pendingLock',
         'private fun rollbackSuspension(packageName: String): Boolean',
         'rollbackVerified',
         'keepPendingRecovery(',
     ])
     assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
     assert coordinator.index('pendingUnlock = true') < coordinator.index('setSuspended(packageName, false)'), 'recoverable pending unlock must be persisted before unsuspending'
+    lock_start = coordinator.index('fun lock(')
+    lock_suspend = coordinator.index('policy.setSuspended(packageName, true)', lock_start)
+    pending_lock_write = coordinator.index('pendingLock = true', lock_start)
+    assert pending_lock_write < lock_suspend, 'recoverable lock ownership must be persisted before suspending a new package'
     assert coordinator.count('synchronized(transitionLock)') >= 4, 'lock/unlock/reconcile/restore transitions must share synchronization'
     assert 'setAndAllowWhileIdle(' not in coordinator, 'bounded App Lock unlocks must not rely on inexact alarms'
     assert 'Accessibility' not in coordinator
     assert 'overlay' not in coordinator.lower()
 
-    # A non-VERIFIED unsuspend may still have changed platform state. Recovery must remain
-    # pending until a verified resuspension succeeds.
     unsuspend_index = coordinator.index('val outcome = policy.setSuspended(packageName, false)')
     non_verified_index = coordinator.index('if (outcome.verification != AppPolicyVerification.VERIFIED)', unsuspend_index)
     recovery_index = coordinator.index('keepPendingRecovery(', non_verified_index)
     assert recovery_index > non_verified_index, 'failed unsuspend verification must preserve fail-closed recovery state'
 
-    # All rollback paths must verify resuspension before clearing pending recovery state.
     assert coordinator.count('rollbackVerified') >= 3, 'rollback result must be checked on every post-unsuspend failure path'
 
-    # The one-shot expiry alarm must arrange another recovery attempt if automatic relock
-    # cannot be verified. Otherwise an expired app can remain accessible indefinitely.
     reconcile_start = coordinator.index('fun reconcileExpiredUnlocks(')
     restore_start = coordinator.index('fun restorePendingRelocks(', reconcile_start)
     reconcile_body = coordinator[reconcile_start:restore_start]
     assert 'keepPendingRecovery(record.copy(pendingUnlock = true))' in reconcile_body, 'failed expiry relock must persist recovery state and schedule a retry'
+
+    restore_body = coordinator[restore_start:coordinator.index('fun state(', restore_start)]
+    assert 'record.pendingLock' in restore_body, 'boot/update recovery must process incomplete lock ownership transitions'
 
     receiver = need(RECEIVER, [
         'class AppLockAlarmReceiver',
