@@ -19,6 +19,7 @@ dependencies {
     implementation(project(":platform-compat"))
     implementation(project(":delegation-core"))
     implementation(project(":activity-launcher"))
+    implementation(project(":permission-manager"))
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 }
