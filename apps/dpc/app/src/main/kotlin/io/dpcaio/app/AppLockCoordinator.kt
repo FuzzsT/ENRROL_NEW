@@ -140,8 +140,8 @@ class AppLockCoordinator(
                     store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                     cancelRelock(record.packageName)
                     relocked++
-                } else if (record.pendingUnlock) {
-                    keepPendingRecovery(record)
+                } else {
+                    keepPendingRecovery(record.copy(pendingUnlock = true))
                 }
             }
         relocked
