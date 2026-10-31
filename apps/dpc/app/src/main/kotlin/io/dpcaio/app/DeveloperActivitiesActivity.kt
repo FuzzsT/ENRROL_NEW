@@ -13,12 +13,14 @@ import io.dpcaio.activity.DeveloperActivityClassifier
 import io.dpcaio.activity.DiscoveredActivity
 import io.dpcaio.activity.android.AndroidActivityInventory
 import io.dpcaio.platform.AndroidUserId
+import io.dpcaio.shizuku.ShizukuUserServiceClient
 
 class DeveloperActivitiesActivity : Activity() {
     private lateinit var packageInput: EditText
     private lateinit var userInput: EditText
     private lateinit var listRoot: LinearLayout
     private lateinit var status: TextView
+    private val shizuku by lazy { ShizukuUserServiceClient(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +51,35 @@ class DeveloperActivitiesActivity : Activity() {
                 addView(userInput)
                 addView(ModernUi.spacer(this@DeveloperActivitiesActivity, 8))
                 addView(
+                    ModernUi.actionRow(
+                        this@DeveloperActivitiesActivity,
+                        ModernUi.action(this@DeveloperActivitiesActivity, "Choose package") {
+                            RuntimeTargetPicker.showPackagePicker(
+                                this@DeveloperActivitiesActivity,
+                                shizuku,
+                                targetUserId(),
+                                packageInput.text.toString().trim(),
+                            ) { selected ->
+                                packageInput.setText(selected)
+                                scan()
+                            }
+                        },
+                        ModernUi.action(this@DeveloperActivitiesActivity, "Choose user") {
+                            val current = AndroidUserId.fromUid(Process.myUid())
+                            RuntimeTargetPicker.showUserPicker(
+                                this@DeveloperActivitiesActivity,
+                                shizuku,
+                                current,
+                                targetUserId(),
+                            ) { selected ->
+                                userInput.setText(selected.toString())
+                                if (packageInput.text.isNotBlank()) scan()
+                            }
+                        },
+                    )
+                )
+                addView(ModernUi.spacer(this@DeveloperActivitiesActivity, 8))
+                addView(
                     ModernUi.action(this@DeveloperActivitiesActivity, "Scan developer activities", primary = true) {
                         scan()
                     }
@@ -61,13 +92,14 @@ class DeveloperActivitiesActivity : Activity() {
         body.addView(listRoot)
 
         body.addView(ModernUi.section(this, "Status"))
-        status = TextView(this).apply { text = "Enter a package and scan." }
+        status = TextView(this).apply { text = "Choose a package or enter one manually, then scan." }
         body.addView(ModernUi.outputCard(this, status))
 
         setContentView(ModernUi.scrollPage(this, body))
+        shizuku.bind()
     }
 
-    private fun targetUserId(): Int = userInput.text.toString().trim().toIntOrNull()
+    private fun targetUserId(): Int = userInput.text.toString().trim().toIntOrNull()?.takeIf { it >= 0 }
         ?: AndroidUserId.fromUid(Process.myUid())
 
     private fun scan() {
@@ -87,13 +119,13 @@ class DeveloperActivitiesActivity : Activity() {
             }.getOrElse { emptyList() }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                renderRows(rows)
+                renderRows(rows, userId)
                 status.text = "Found ${rows.size} developer-like activities in $packageName for user $userId."
             }
         }.start()
     }
 
-    private fun renderRows(rows: List<DiscoveredActivity>) {
+    private fun renderRows(rows: List<DiscoveredActivity>, userId: Int) {
         listRoot.removeAllViews()
         if (rows.isEmpty()) {
             listRoot.addView(
@@ -119,6 +151,7 @@ class DeveloperActivitiesActivity : Activity() {
                             startActivity(
                                 Intent(this@DeveloperActivitiesActivity, ActivityExplorerActivity::class.java)
                                     .putExtra("package", activity.packageName)
+                                    .putExtra("userId", userId)
                             )
                         }
                     )
