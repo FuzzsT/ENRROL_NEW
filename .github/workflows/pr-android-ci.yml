@@ -48,6 +48,7 @@ jobs:
           python3 tools/tests/test_install_pin_guard_contract.py
           python3 tools/tests/test_package_export_contract.py
           python3 tools/tests/test_package_export_ui_contract.py
+          python3 tools/tests/test_workflow_organization_contract.py
 
   apk-build:
     name: Enterprise debug APK
