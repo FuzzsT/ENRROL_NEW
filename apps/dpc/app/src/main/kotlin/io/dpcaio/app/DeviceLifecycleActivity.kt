@@ -5,9 +5,11 @@ import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.os.Bundle
+import android.os.Process
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import io.dpcaio.platform.AndroidUserId
 import io.dpcaio.policy.DeviceSecurityPolicySpec
 import io.dpcaio.policy.FrpPolicySpec
 import io.dpcaio.policy.LockTaskPolicySpec
@@ -110,6 +112,15 @@ class DeviceLifecycleActivity : Activity() {
         root.addView(
             ModernUi.card(this).apply {
                 addView(pkg)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Choose package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@DeviceLifecycleActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = pkg.text.toString().trim(),
+                        ) { selected -> pkg.setText(selected) }
+                    }
+                )
                 addView(
                     ModernUi.actionRow(
                         this@DeviceLifecycleActivity,

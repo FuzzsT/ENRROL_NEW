@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Process
 import android.text.InputType
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -14,6 +15,7 @@ import io.dpcaio.core.model.CapabilityRequirements
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.OwnershipRequirement
 import io.dpcaio.core.model.RiskClass
+import io.dpcaio.platform.AndroidUserId
 import io.dpcaio.policy.android.AndroidDevicePolicyGateway
 import java.security.KeyStore
 import java.security.PrivateKey
@@ -93,6 +95,15 @@ class CredentialCenterActivity : Activity() {
                 addView(alias)
                 addView(pkg)
                 addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Choose grant package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@CredentialCenterActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = pkg.text.toString().trim(),
+                        ) { selected -> pkg.setText(selected) }
+                    }
+                )
+                addView(
                     ModernUi.action(this@CredentialCenterActivity, "Key-pair grant inventory") {
                         show(gateway.getManagedKeyPairGrants(alias.text.toString()).toString())
                     }.apply { isEnabled = cap.executable }
@@ -111,6 +122,15 @@ class CredentialCenterActivity : Activity() {
         root.addView(
             ModernUi.card(this).apply {
                 addView(delegate)
+                addView(
+                    ModernUi.action(this@CredentialCenterActivity, "Choose delegate package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@CredentialCenterActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = delegate.text.toString().trim(),
+                        ) { selected -> delegate.setText(selected) }
+                    }
+                )
                 addView(
                     ModernUi.action(this@CredentialCenterActivity, "Set certificate delegation") {
                         val scopes = setOf(DevicePolicyManager.DELEGATION_CERT_INSTALL, DevicePolicyManager.DELEGATION_CERT_SELECTION)
