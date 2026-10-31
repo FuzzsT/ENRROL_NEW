@@ -1,0 +1,94 @@
+package io.dpcaio.engineering
+
+import java.security.MessageDigest
+
+private fun sampleSigner(seed: Int, emptyDer: Boolean = false): SigningCertificateIdentity {
+    val der = if (emptyDer) ByteArray(0) else ByteArray(24) { index -> ((seed * 37 + index * 11) and 0xFF).toByte() }
+    fun digest(algorithm: String): String = MessageDigest.getInstance(algorithm)
+        .digest(der)
+        .joinToString("") { "%02X".format(it) }
+    return SigningCertificateIdentity(
+        derBytes = der,
+        sha256Hex = digest("SHA-256"),
+        sha1Hex = digest("SHA-1"),
+    )
+}
+
+private fun sampleIdentity(seed: Int, emptyDer: Boolean = false): AppSigningIdentity = AppSigningIdentity(
+    packageName = "com.example.sample$seed",
+    versionCode = seed.toLong(),
+    currentSigners = listOf(sampleSigner(seed, emptyDer)),
+)
+
+private fun deriveExpected(identity: AppSigningIdentity, recipe: SignatureCodeRecipe): String {
+    val result = SignatureCodeDerivationEngine().derive(identity, recipe, identity.currentSigners.single())
+    check(result is SignatureCodeDerivationResult.Success)
+    return result.candidate.candidate
+}
+
+private fun bestExact(result: SignatureCodeSampleMatcherResult.Success): SignatureCodeSampleMatch =
+    result.matches.maxWith(compareBy<SignatureCodeSampleMatch> { it.exactMatches }.thenByDescending { -it.recipe.steps.size })
+
+fun main() {
+    val target = AutoSignatureCodeCatalog.recipes().first { it.id == "sha256-cert-first4-six" }
+    val threeSamples = (1..3).map { seed ->
+        val identity = sampleIdentity(seed)
+        SignatureCodeSample(
+            identity = identity,
+            expectedCode = deriveExpected(identity, target),
+            outputKind = DerivedCodeKind.NUMERIC,
+        )
+    }
+
+    val highResult = SignatureCodeSampleMatcher.match(threeSamples)
+    check(highResult is SignatureCodeSampleMatcherResult.Success)
+    val exactHigh = highResult.matches.filter { it.exactMatches == 3 }
+    check(exactHigh.isNotEmpty())
+    check(exactHigh.any { it.confidence == SampleMatchConfidence.HIGH }) {
+        "three exact samples with a low-ambiguity rule should allow HIGH confidence"
+    }
+    check(highResult.evaluatedRecipes in 1..5_000)
+
+    val twoResult = SignatureCodeSampleMatcher.match(threeSamples.take(2))
+    check(twoResult is SignatureCodeSampleMatcherResult.Success)
+    check(twoResult.matches.filter { it.exactMatches == 2 }.all { it.confidence != SampleMatchConfidence.HIGH }) {
+        "two samples must never produce HIGH confidence"
+    }
+
+    val oneResult = SignatureCodeSampleMatcher.match(threeSamples.take(1))
+    check(oneResult is SignatureCodeSampleMatcherResult.Success)
+    check(oneResult.matches.filter { it.exactMatches == 1 }.all { it.confidence == SampleMatchConfidence.UNVERIFIED }) {
+        "single-sample matches must remain UNVERIFIED"
+    }
+
+    val ambiguousSamples = (10..12).map { seed ->
+        SignatureCodeSample(
+            identity = sampleIdentity(seed, emptyDer = true),
+            expectedCode = "0000",
+            outputKind = DerivedCodeKind.NUMERIC,
+        )
+    }
+    val ambiguousResult = SignatureCodeSampleMatcher.match(ambiguousSamples)
+    check(ambiguousResult is SignatureCodeSampleMatcherResult.Success)
+    val ambiguousExact = ambiguousResult.matches.filter { it.exactMatches == ambiguousSamples.size }
+    check(ambiguousExact.size > 1) { "empty-byte fixtures should produce multiple equivalent zero-valued rules" }
+    check(ambiguousExact.all { it.ambiguityCount > 1 })
+    check(ambiguousExact.all { it.confidence != SampleMatchConfidence.HIGH }) {
+        "ambiguous exact matches must not be HIGH confidence"
+    }
+
+    val tooManySamples = List(33) { index -> threeSamples[index % threeSamples.size] }
+    val sampleLimit = SignatureCodeSampleMatcher.match(tooManySamples)
+    check(sampleLimit is SignatureCodeSampleMatcherResult.Failure)
+    check(sampleLimit.error == SignatureCodeSampleMatcherError.SAMPLE_LIMIT_EXCEEDED)
+
+    val searchLimit = SignatureCodeSampleMatcher.match(
+        samples = threeSamples,
+        limits = SampleMatcherLimits(maxRecipesEvaluated = 1),
+    )
+    check(searchLimit is SignatureCodeSampleMatcherResult.SearchLimitReached)
+    check(searchLimit.evaluatedRecipes == 1)
+    check(searchLimit.matches.size <= 1)
+
+    println("SignatureCodeSampleMatcherTest: PASS")
+}
