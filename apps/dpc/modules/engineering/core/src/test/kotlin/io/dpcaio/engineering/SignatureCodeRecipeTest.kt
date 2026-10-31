@@ -100,6 +100,20 @@ fun main() {
         "text -> UIntBe without an explicit bytes conversion must be rejected",
     )
 
+    val outputMismatch = SignatureCodeRecipe(
+        id = "bytes-claimed-numeric",
+        displayName = "Bytes incorrectly claimed numeric",
+        input = SignatureCodeInputKind.CERT_DER,
+        steps = listOf(SignatureCodeStep.Sha256),
+        outputKind = DerivedCodeKind.NUMERIC,
+    )
+    val outputMismatchResult = SignatureCodeRecipeValidator.validate(outputMismatch)
+    assertTrue(
+        outputMismatchResult is SignatureCodeRecipeValidation.Invalid &&
+            outputMismatchResult.error == SignatureCodeRecipeError.OUTPUT_KIND_MISMATCH,
+        "raw byte output must not be labelled NUMERIC",
+    )
+
     val candidate = DerivedCodeCandidate(
         packageName = identity.packageName,
         signerFingerprintSha256 = signer.sha256Hex,

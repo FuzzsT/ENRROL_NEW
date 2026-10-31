@@ -6,7 +6,9 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 CORE_ROOT = ROOT / 'apps/dpc/modules/engineering/core'
 CORE = CORE_ROOT / 'src/main/kotlin/io/dpcaio/engineering'
-TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
+RECIPE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
+ENGINE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeDerivationEngineTest.kt'
+ENDIAN_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeEndianTest.kt'
 
 
 def need(path: Path, needles):
@@ -36,6 +38,7 @@ recipe = need(CORE / 'SignatureCodeRecipe.kt', [
     'INVALID_MODULUS',
     'SLICE_OUT_OF_RANGE',
     'TYPE_MISMATCH',
+    'OUTPUT_KIND_MISMATCH',
     'Sha256',
     'Sha1',
     'Crc8',
@@ -61,9 +64,40 @@ recipe = need(CORE / 'SignatureCodeRecipe.kt', [
     'LuhnAppend',
     'LuhnValidate',
 ])
-need(TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii'])
+engine = need(CORE / 'SignatureCodeDerivationEngine.kt', [
+    'class SignatureCodeDerivationEngine',
+    'sealed interface SignatureCodeDerivationResult',
+    'enum class SignatureCodeDerivationError',
+    'INPUT_TOO_LARGE',
+    'NUMERIC_OVERFLOW',
+    'LUHN_INVALID',
+    'MessageDigest',
+    'CRC32',
+])
+catalog = need(CORE / 'AutoSignatureCodeCatalog.kt', [
+    'object AutoSignatureCodeCatalog',
+    'fun recipes()',
+    'sha256',
+    'crc32',
+])
+need(RECIPE_TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii', 'OUTPUT_KIND_MISMATCH'])
+need(ENGINE_TEST, [
+    'SignatureCodeDerivationEngineTest: PASS',
+    '799182',
+    '49918566',
+    '47457659',
+    'LUHN_INVALID',
+    'NUMERIC_OVERFLOW',
+])
+need(ENDIAN_TEST, [
+    'SignatureCodeEndianTest: PASS',
+    '19088743',
+    '1732584193',
+    'SignatureCodeStep.UIntBe',
+    'SignatureCodeStep.UIntLe',
+])
 
-combined = models + '\n' + recipe
+combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog
 for forbidden in [
     'ScriptEngine',
     'Runtime.getRuntime',
@@ -73,6 +107,7 @@ for forbidden in [
     'bruteForce',
     'masterCode',
     'unlockCodeGenerator',
+    'wordlist',
 ]:
     if forbidden in combined:
         raise AssertionError(f'forbidden execution/search primitive present: {forbidden}')
@@ -86,14 +121,19 @@ with tempfile.TemporaryDirectory(prefix='signature-code-contract-') as tmp:
     classes = Path(tmp) / 'classes'
     classes.mkdir()
     subprocess.run(['kotlinc', *sources, '-d', str(classes)], cwd=ROOT, check=True)
-    result = subprocess.run(
-        ['kotlin', '-classpath', str(classes), 'io.dpcaio.engineering.SignatureCodeRecipeTestKt'],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    if 'SignatureCodeRecipeTest: PASS' not in result.stdout:
-        raise AssertionError(f'unexpected Kotlin test output: {result.stdout!r} {result.stderr!r}')
+    for main, marker in [
+        ('io.dpcaio.engineering.SignatureCodeRecipeTestKt', 'SignatureCodeRecipeTest: PASS'),
+        ('io.dpcaio.engineering.SignatureCodeDerivationEngineTestKt', 'SignatureCodeDerivationEngineTest: PASS'),
+        ('io.dpcaio.engineering.SignatureCodeEndianTestKt', 'SignatureCodeEndianTest: PASS'),
+    ]:
+        result = subprocess.run(
+            ['kotlin', '-classpath', str(classes), main],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        if marker not in result.stdout:
+            raise AssertionError(f'{main}: unexpected output: {result.stdout!r} {result.stderr!r}')
 
 print('test_signature_code_derivation_contract: PASS')

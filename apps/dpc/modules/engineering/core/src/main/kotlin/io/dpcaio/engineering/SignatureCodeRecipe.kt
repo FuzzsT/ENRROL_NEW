@@ -53,6 +53,7 @@ enum class SignatureCodeRecipeError {
     INVALID_MODULUS,
     SLICE_OUT_OF_RANGE,
     TYPE_MISMATCH,
+    OUTPUT_KIND_MISMATCH,
     INVALID_ARGUMENT,
 }
 
@@ -92,12 +93,25 @@ object SignatureCodeRecipeValidator {
                 )
             type = next
         }
+
+        if (!outputCompatible(type, recipe.outputKind)) {
+            return SignatureCodeRecipeValidation.Invalid(
+                SignatureCodeRecipeError.OUTPUT_KIND_MISMATCH,
+                "Final value type $type is not compatible with ${recipe.outputKind}",
+            )
+        }
         return SignatureCodeRecipeValidation.Valid
     }
 
     private fun initialType(input: SignatureCodeInputKind): SignatureValueType {
         input.name
         return SignatureValueType.BYTES
+    }
+
+    private fun outputCompatible(type: SignatureValueType, outputKind: DerivedCodeKind): Boolean = when (outputKind) {
+        DerivedCodeKind.NUMERIC -> type == SignatureValueType.UNSIGNED_NUMBER || type == SignatureValueType.TEXT
+        DerivedCodeKind.HEX -> type == SignatureValueType.BYTES || type == SignatureValueType.TEXT
+        DerivedCodeKind.TEXT -> type == SignatureValueType.TEXT
     }
 
     private fun validateArguments(step: SignatureCodeStep): SignatureCodeRecipeValidation.Invalid? = when (step) {
