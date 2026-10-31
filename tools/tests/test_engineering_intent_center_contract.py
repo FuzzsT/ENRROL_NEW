@@ -91,6 +91,9 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'Choose target receiver',
     'chooseBroadcastReceiver()',
     'RuntimeTargetPicker.showReceiverPicker',
+    'validateBroadcastTargetConsistency(',
+    'component.packageName != packageName',
+    'Target component package must match target package',
     'SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
     'putExtra(SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
 ])
