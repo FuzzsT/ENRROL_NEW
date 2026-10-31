@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import json
 import subprocess
 import tempfile
 
@@ -9,6 +10,8 @@ CORE = CORE_ROOT / 'src/main/kotlin/io/dpcaio/engineering'
 RECIPE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
 ENGINE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeDerivationEngineTest.kt'
 ENDIAN_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeEndianTest.kt'
+VENDOR_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeVendorProfileMatcherTest.kt'
+VENDOR_ASSET = ROOT / 'apps/dpc/app/src/main/assets/signature_code_vendor_profiles.json'
 
 
 def need(path: Path, needles):
@@ -80,6 +83,21 @@ catalog = need(CORE / 'AutoSignatureCodeCatalog.kt', [
     'sha256',
     'crc32',
 ])
+vendor_models = need(CORE / 'SignatureCodeVendorProfile.kt', [
+    'data class SignatureCodeVendorProfile',
+    'enum class VendorProfileConfidence',
+    'enum class VendorProfileMatchReason',
+    'data class VendorProfileMatch',
+])
+vendor_matcher = need(CORE / 'SignatureCodeVendorProfileMatcher.kt', [
+    'object SignatureCodeVendorProfileMatcher',
+    'fun match(',
+    'EXACT_PACKAGE_EXACT_CERT',
+    'PACKAGE_PREFIX_EXACT_CERT',
+    'EXACT_PACKAGE',
+    'PACKAGE_PREFIX',
+    'SignatureCodeRecipeValidator.validate',
+])
 need(RECIPE_TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii', 'OUTPUT_KIND_MISMATCH'])
 need(ENGINE_TEST, [
     'SignatureCodeDerivationEngineTest: PASS',
@@ -96,8 +114,31 @@ need(ENDIAN_TEST, [
     'SignatureCodeStep.UIntBe',
     'SignatureCodeStep.UIntLe',
 ])
+need(VENDOR_TEST, [
+    'SignatureCodeVendorProfileMatcherTest: PASS',
+    'subject-only',
+    'cert-only',
+    'invalid-recipe',
+    'disabled-profile',
+])
 
-combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog
+if not VENDOR_ASSET.exists():
+    raise AssertionError(f'missing {VENDOR_ASSET.relative_to(ROOT)}')
+asset = json.loads(VENDOR_ASSET.read_text(encoding='utf-8'))
+if asset.get('schemaVersion') != 1:
+    raise AssertionError('signature_code_vendor_profiles.json: schemaVersion must be 1')
+profiles = asset.get('profiles')
+if not isinstance(profiles, list):
+    raise AssertionError('signature_code_vendor_profiles.json: profiles must be a list')
+for index, profile in enumerate(profiles):
+    if not isinstance(profile, dict):
+        raise AssertionError(f'vendor profile #{index}: must be an object')
+    if profile.get('enabled', True) and profile.get('verified') is not True:
+        raise AssertionError(f'vendor profile #{index}: enabled production profile must be verified')
+    if profile.get('enabled', True) and not str(profile.get('provenance', '')).strip():
+        raise AssertionError(f'vendor profile #{index}: enabled production profile requires provenance')
+
+combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog + '\n' + vendor_models + '\n' + vendor_matcher
 for forbidden in [
     'ScriptEngine',
     'Runtime.getRuntime',
@@ -125,6 +166,7 @@ with tempfile.TemporaryDirectory(prefix='signature-code-contract-') as tmp:
         ('io.dpcaio.engineering.SignatureCodeRecipeTestKt', 'SignatureCodeRecipeTest: PASS'),
         ('io.dpcaio.engineering.SignatureCodeDerivationEngineTestKt', 'SignatureCodeDerivationEngineTest: PASS'),
         ('io.dpcaio.engineering.SignatureCodeEndianTestKt', 'SignatureCodeEndianTest: PASS'),
+        ('io.dpcaio.engineering.SignatureCodeVendorProfileMatcherTestKt', 'SignatureCodeVendorProfileMatcherTest: PASS'),
     ]:
         result = subprocess.run(
             ['kotlin', '-classpath', str(classes), main],
