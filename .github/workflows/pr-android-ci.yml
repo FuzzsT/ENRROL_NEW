@@ -61,6 +61,7 @@ jobs:
           python3 tools/tests/test_secret_code_inventory_contract.py
           python3 tools/tests/test_secret_code_inventory_runtime_contract.py
           python3 tools/tests/test_signature_code_derivation_contract.py
+          python3 tools/tests/test_signature_code_android_contract.py
 
       - name: Run workflow organization contract
         shell: bash
