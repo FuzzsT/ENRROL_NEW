@@ -23,7 +23,14 @@ class AutostartManagerActivity : Activity() {
         val component: ComponentName,
         val label: String,
         val action: String,
-        val manifestEnabled: Boolean,
+        val manifestEnabled: Boolean?,
+        val inventorySource: String,
+    )
+
+    private data class ReceiverInventory(
+        val rows: List<BootReceiver>,
+        val source: String,
+        val error: String? = null,
     )
 
     private lateinit var targetUser: EditText
@@ -95,32 +102,82 @@ class AutostartManagerActivity : Activity() {
 
     private fun scan() {
         val selectedUser = targetUserId()
+        val currentUser = AndroidUserId.fromUid(Process.myUid())
         output.text = "Scanning boot receivers for target user $selectedUser..."
         Thread {
-            val actions = listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED)
-            val rows = actions.flatMap { action ->
-                queryBroadcastReceivers(Intent(action)).mapNotNull { resolve ->
-                    val info = resolve.activityInfo ?: return@mapNotNull null
-                    BootReceiver(
-                        component = ComponentName(info.packageName, info.name),
-                        label = runCatching { info.loadLabel(packageManager).toString() }.getOrDefault(info.name),
-                        action = action,
-                        manifestEnabled = info.enabled,
-                    )
-                }
-            }.distinctBy { it.component.flattenToString() }
-                .sortedWith(Comparator<BootReceiver> { left, right ->
-                    val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
-                    if (byLabel != 0) byLabel else left.component.flattenToString().compareTo(right.component.flattenToString())
-                })
+            val inventory = if (selectedUser == currentUser) {
+                ReceiverInventory(queryLocalBootReceivers(), LOCAL_PACKAGE_MANAGER)
+            } else {
+                queryCrossUserBootReceivers(selectedUser)
+            }
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                renderRows(rows, selectedUser)
-                output.text = "Found ${rows.size} boot receivers • target user $selectedUser"
+                renderRows(inventory.rows, selectedUser)
+                output.text = if (inventory.error != null) {
+                    "Cross-user inventory unavailable for user $selectedUser: ${inventory.error}"
+                } else {
+                    "Found ${inventory.rows.size} boot receivers • target user $selectedUser • source=${inventory.source}"
+                }
             }
         }.start()
     }
+
+    private fun queryLocalBootReceivers(): List<BootReceiver> = sortRows(
+        BOOT_ACTIONS.flatMap { action ->
+            queryBroadcastReceivers(Intent(action)).mapNotNull { resolve ->
+                val info = resolve.activityInfo ?: return@mapNotNull null
+                BootReceiver(
+                    component = ComponentName(info.packageName, info.name),
+                    label = runCatching { info.loadLabel(packageManager).toString() }.getOrDefault(info.name),
+                    action = action,
+                    manifestEnabled = info.enabled,
+                    inventorySource = LOCAL_PACKAGE_MANAGER,
+                )
+            }
+        }
+    )
+
+    private fun queryCrossUserBootReceivers(userId: Int): ReceiverInventory {
+        if (!shizuku.awaitConnected(1800L)) {
+            return ReceiverInventory(emptyList(), CROSS_USER_SHIZUKU, "Shizuku user service not connected")
+        }
+
+        val rows = mutableListOf<BootReceiver>()
+        for (action in BOOT_ACTIONS) {
+            val raw = shizuku.queryBroadcastReceivers(action, userId)
+                ?: return ReceiverInventory(emptyList(), CROSS_USER_SHIZUKU, "Shizuku receiver query unavailable")
+            val normalized = raw.trim()
+            if (normalized in QUERY_FAILURE_MARKERS) {
+                return ReceiverInventory(emptyList(), CROSS_USER_SHIZUKU, "receiver query failed: $normalized")
+            }
+            rows += parseCrossUserReceiverComponents(raw, action)
+        }
+        return ReceiverInventory(sortRows(rows), CROSS_USER_SHIZUKU)
+    }
+
+    private fun parseCrossUserReceiverComponents(raw: String, action: String): List<BootReceiver> =
+        raw.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .mapNotNull(ComponentName::unflattenFromString)
+            .map { component ->
+                BootReceiver(
+                    component = component,
+                    label = component.className.substringAfterLast('.'),
+                    action = action,
+                    manifestEnabled = null,
+                    inventorySource = CROSS_USER_SHIZUKU,
+                )
+            }
+            .toList()
+
+    private fun sortRows(rows: List<BootReceiver>): List<BootReceiver> =
+        rows.distinctBy { it.component.flattenToString() }
+            .sortedWith(Comparator { left, right ->
+                val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
+                if (byLabel != 0) byLabel else left.component.flattenToString().compareTo(right.component.flattenToString())
+            })
 
     @Suppress("DEPRECATION")
     private fun queryBroadcastReceivers(intent: Intent): List<ResolveInfo> =
@@ -137,7 +194,7 @@ class AutostartManagerActivity : Activity() {
         listRoot.removeAllViews()
         val currentUser = AndroidUserId.fromUid(Process.myUid())
         rows.forEach { row ->
-            val readback = if (selectedUser == currentUser) {
+            val readback = if (selectedUser == currentUser && row.manifestEnabled != null) {
                 runCatching { localGateway.readback(row.component, row.manifestEnabled) }.getOrNull()
             } else {
                 null
@@ -147,9 +204,9 @@ class AutostartManagerActivity : Activity() {
             listRoot.addView(ModernUi.card(this, emphasized = readback?.effectiveEnabled == true || submitted == ComponentOverrideState.ENABLED).apply {
                 addView(ModernUi.title(this@AutostartManagerActivity, row.label))
                 val stateText = if (selectedUser == currentUser) {
-                    "CURRENT_USER_READBACK user=$selectedUser • Manifest=${row.manifestEnabled} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}"
+                    "CURRENT_USER_READBACK user=$selectedUser • source=${row.inventorySource} • Manifest=${row.manifestEnabled ?: "unknown"} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}"
                 } else {
-                    "TARGET_USER_SUBMITTED user=$selectedUser • requested=${submitted?.name ?: "none"} • manifest metadata=${row.manifestEnabled} • local readback intentionally not reused"
+                    "TARGET_USER_INVENTORY user=$selectedUser • source=${row.inventorySource} • requested=${submitted?.name ?: "none"} • Manifest=unknown • readback=not available"
                 }
                 addView(ModernUi.body(
                     this@AutostartManagerActivity,
@@ -183,8 +240,13 @@ class AutostartManagerActivity : Activity() {
         Thread {
             val samePackage = row.component.packageName == packageName
             val detail = if (samePackage && userId == currentUser) {
-                val result = localGateway.setState(row.component, row.manifestEnabled, state, dontKillApp = true)
-                "CURRENT_USER_READBACK accepted=${result.accepted} requested=$state observed=${result.observedState} effective=${result.effectiveEnabled} ${result.detail}"
+                val manifestEnabled = row.manifestEnabled
+                if (manifestEnabled == null) {
+                    "LOCAL_MANIFEST_STATE_UNAVAILABLE"
+                } else {
+                    val result = localGateway.setState(row.component, manifestEnabled, state, dontKillApp = true)
+                    "CURRENT_USER_READBACK accepted=${result.accepted} requested=$state observed=${result.observedState} effective=${result.effectiveEnabled} ${result.detail}"
+                }
             } else {
                 val ready = shizuku.awaitConnected(1800L)
                 if (!ready) {
@@ -212,5 +274,12 @@ class AutostartManagerActivity : Activity() {
                 scan()
             }
         }.start()
+    }
+
+    companion object {
+        private const val LOCAL_PACKAGE_MANAGER = "LOCAL_PACKAGE_MANAGER"
+        private const val CROSS_USER_SHIZUKU = "CROSS_USER_SHIZUKU"
+        private val BOOT_ACTIONS = listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED)
+        private val QUERY_FAILURE_MARKERS = setOf("INVALID_ARGUMENT", "EXECUTION_ERROR", "TIMEOUT")
     }
 }
