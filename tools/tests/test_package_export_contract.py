@@ -60,6 +60,8 @@ def main():
     assert 'FileOutputStream(' not in exporter, 'destination must be written through SAF/ContentResolver Uri'
     assert 'ZipEntry(' in exporter, 'APKS/XAPK export must create ZIP entries'
     assert 'obbIncluded' in exporter, 'XAPK metadata must record whether OBB files were included'
+    assert exporter.count('openOutputStream(destinationUri, "wt")') == 2, 'APK and archive exports must request write+truncate SAF mode'
+    assert 'openOutputStream(destinationUri, "w")' not in exporter, 'plain write mode may leave stale trailing bytes on some providers'
 
     workflow = need(WORKFLOW, [
         'Run app security contracts',
