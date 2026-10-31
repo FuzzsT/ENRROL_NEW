@@ -11,6 +11,7 @@ RECIPE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRe
 ENGINE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeDerivationEngineTest.kt'
 ENDIAN_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeEndianTest.kt'
 VENDOR_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeVendorProfileMatcherTest.kt'
+SAMPLE_TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeSampleMatcherTest.kt'
 VENDOR_ASSET = ROOT / 'apps/dpc/app/src/main/assets/signature_code_vendor_profiles.json'
 
 
@@ -98,6 +99,23 @@ vendor_matcher = need(CORE / 'SignatureCodeVendorProfileMatcher.kt', [
     'PACKAGE_PREFIX',
     'SignatureCodeRecipeValidator.validate',
 ])
+sample_matcher = need(CORE / 'SignatureCodeSampleMatcher.kt', [
+    'data class SignatureCodeSample',
+    'data class SignatureCodeSampleMatch',
+    'enum class SampleMatchConfidence',
+    'data class SampleMatcherLimits',
+    'enum class SignatureCodeSampleMatcherError',
+    'sealed interface SignatureCodeSampleMatcherResult',
+    'object SignatureCodeSampleMatcher',
+    'fun match(',
+    'SAMPLE_LIMIT_EXCEEDED',
+    'SEARCH_LIMIT_REACHED',
+    'maxSamples: Int = 32',
+    'maxRecipesEvaluated: Int = 5_000',
+    'setOf(2, 3, 4, 6, 8)',
+    'setOf(4, 5, 6, 7, 8)',
+    'SignatureCodeDerivationEngine',
+])
 need(RECIPE_TEST, ['SignatureCodeRecipeTest: PASS', 'SignatureCodeStep.Ascii', 'OUTPUT_KIND_MISMATCH'])
 need(ENGINE_TEST, [
     'SignatureCodeDerivationEngineTest: PASS',
@@ -121,6 +139,14 @@ need(VENDOR_TEST, [
     'invalid-recipe',
     'disabled-profile',
 ])
+need(SAMPLE_TEST, [
+    'SignatureCodeSampleMatcherTest: PASS',
+    'SampleMatchConfidence.HIGH',
+    'SampleMatchConfidence.UNVERIFIED',
+    'SAMPLE_LIMIT_EXCEEDED',
+    'SearchLimitReached',
+    'ambiguityCount',
+])
 
 if not VENDOR_ASSET.exists():
     raise AssertionError(f'missing {VENDOR_ASSET.relative_to(ROOT)}')
@@ -138,7 +164,7 @@ for index, profile in enumerate(profiles):
     if profile.get('enabled', True) and not str(profile.get('provenance', '')).strip():
         raise AssertionError(f'vendor profile #{index}: enabled production profile requires provenance')
 
-combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog + '\n' + vendor_models + '\n' + vendor_matcher
+combined = models + '\n' + recipe + '\n' + engine + '\n' + catalog + '\n' + vendor_models + '\n' + vendor_matcher + '\n' + sample_matcher
 for forbidden in [
     'ScriptEngine',
     'Runtime.getRuntime',
@@ -149,6 +175,8 @@ for forbidden in [
     'masterCode',
     'unlockCodeGenerator',
     'wordlist',
+    'dictionaryAttack',
+    'candidateKey',
 ]:
     if forbidden in combined:
         raise AssertionError(f'forbidden execution/search primitive present: {forbidden}')
@@ -167,6 +195,7 @@ with tempfile.TemporaryDirectory(prefix='signature-code-contract-') as tmp:
         ('io.dpcaio.engineering.SignatureCodeDerivationEngineTestKt', 'SignatureCodeDerivationEngineTest: PASS'),
         ('io.dpcaio.engineering.SignatureCodeEndianTestKt', 'SignatureCodeEndianTest: PASS'),
         ('io.dpcaio.engineering.SignatureCodeVendorProfileMatcherTestKt', 'SignatureCodeVendorProfileMatcherTest: PASS'),
+        ('io.dpcaio.engineering.SignatureCodeSampleMatcherTestKt', 'SignatureCodeSampleMatcherTest: PASS'),
     ]:
         result = subprocess.run(
             ['kotlin', '-classpath', str(classes), main],
