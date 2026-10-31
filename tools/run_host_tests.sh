@@ -28,6 +28,7 @@ mapfile -t SOURCES < <(
     "$ROOT/apps/dpc/modules/knox/zero-trust/core/src/main/kotlin" "$ROOT/apps/dpc/modules/knox/zero-trust/core/src/test/kotlin" \
     "$ROOT/apps/dpc/modules/scenario/core/src/main/kotlin" "$ROOT/apps/dpc/modules/scenario/core/src/test/kotlin" \
     "$ROOT/apps/dpc/modules/nfc-lab/core/src/main/kotlin" "$ROOT/apps/dpc/modules/nfc-lab/core/src/test/kotlin" \
+    "$ROOT/apps/dpc/modules/engineering/core/src/main/kotlin" "$ROOT/apps/dpc/modules/engineering/core/src/test/kotlin" \
     -type f -name '*.kt' ! -path '*/android/*' | sort
 )
 
@@ -96,6 +97,8 @@ KOTLIN_TEST_MAINS=(
   io.dpcaio.scenario.ScenarioRecorderReplayTestKt
   io.dpcaio.nfc.NfcReplayValidatorTestKt
   io.dpcaio.nfc.NfcTraceCodecTestKt
+  io.dpcaio.engineering.BinaryAndroidManifestReaderTestKt
+  io.dpcaio.engineering.SecretCodeManifestExtractorTestKt
 )
 
 KOTLIN_EXPR="listOf("
@@ -105,6 +108,7 @@ done
 KOTLIN_EXPR+=").forEach { Class.forName(it).getMethod(\"main\").invoke(null) }"
 kotlin -classpath "$TMP/classes" -e "$KOTLIN_EXPR"
 
+python3 "$ROOT/tools/tests/test_secret_code_inventory_contract.py"
 python3 "$ROOT/tools/tests/test_project_layout.py"
 python3 "$ROOT/tools/tests/test_gradle_source_completeness.py"
 python3 "$ROOT/tools/tests/test_android_contracts.py"
