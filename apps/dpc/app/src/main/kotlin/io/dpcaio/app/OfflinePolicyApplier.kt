@@ -7,6 +7,7 @@ import android.os.UserHandle
 import io.dpcaio.activity.ComponentControlRequest
 import io.dpcaio.activity.ComponentControlRoute
 import io.dpcaio.activity.ComponentControlRouter
+import io.dpcaio.activity.ComponentMutationVerification
 import io.dpcaio.activity.ComponentOverrideState
 import io.dpcaio.activity.android.AndroidActivityInventory
 import io.dpcaio.activity.android.AndroidComponentStateGateway
@@ -158,16 +159,49 @@ class OfflinePolicyApplier(private val context: Context) {
                     automated = true,
                 )
             )
-            val submitted = when (decision.route) {
-                ComponentControlRoute.OWN_UID -> componentGateway.setState(ComponentName(activity.packageName, activity.className), activity.manifestEnabled, desired).accepted
-                ComponentControlRoute.SHIZUKU -> ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(activity.packageName, activity.className, targetUserId, desired).submitted
-                else -> false
+            val (verified, observed, applyDetail) = when (decision.route) {
+                ComponentControlRoute.OWN_UID -> {
+                    val componentMutation = componentGateway.setState(
+                        ComponentName(activity.packageName, activity.className),
+                        activity.manifestEnabled,
+                        desired,
+                    )
+                    Triple(
+                        componentMutation.accepted && componentMutation.observedState == desired,
+                        componentMutation.observedState,
+                        componentMutation.detail,
+                    )
+                }
+                ComponentControlRoute.SHIZUKU -> {
+                    val componentMutation = ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
+                        activity.packageName,
+                        activity.className,
+                        targetUserId,
+                        desired,
+                    )
+                    Triple(
+                        componentMutation.verified && componentMutation.observedState == desired,
+                        componentMutation.observedState,
+                        componentMutation.detail,
+                    )
+                }
+                else -> Triple(false, null, decision.detail)
             }
-            val observed = if (submitted && targetUserId == currentUser) runCatching {
-                componentGateway.readback(ComponentName(activity.packageName, activity.className), activity.manifestEnabled).overrideState
-            }.getOrNull() else null
-            val verified = submitted && observed == desired
-            items += OfflinePolicyApplyItem("component", "${rule.packageName}:${rule.normalizedClassName}", rule.required, verified, if (verified) "VERIFIED" else "${decision.detail}; COMPONENT_STATE_MISMATCH")
+            val verificationDetail = ComponentMutationVerification.statusLine(
+                route = decision.route.name,
+                userId = targetUserId,
+                requested = desired,
+                observed = observed,
+                verified = verified,
+                detail = applyDetail,
+            )
+            items += OfflinePolicyApplyItem(
+                "component",
+                "${rule.packageName}:${rule.normalizedClassName}",
+                rule.required,
+                verified,
+                if (verified) "VERIFIED; $verificationDetail" else "$verificationDetail; COMPONENT_STATE_MISMATCH",
+            )
         }
         store.load()?.let { store.save(it.copy(stage = OfflineStage.COMPONENTS_APPLIED)) }
         store.load()?.let { store.save(it.copy(stage = OfflineStage.POLICIES_APPLIED)) }
