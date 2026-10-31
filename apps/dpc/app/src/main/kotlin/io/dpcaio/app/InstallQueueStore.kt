@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class InstallQueueStore(context: Context) {
+    internal val hostContext: Context = context
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun loadQueue(): List<InstallQueueItem> = decodeQueue(prefs.getString(KEY_QUEUE, null))
