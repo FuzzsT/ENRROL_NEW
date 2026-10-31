@@ -44,14 +44,24 @@ catalog = need(ENG / 'SamsungSecretCodeCatalog.kt', [
 ])
 
 discovery = need(ENG / 'SamsungSecretCodeDiscovery.kt', [
+    'SamsungSecretCodeCatalog.normalize',
+    'SecretCodeRuntimeVerifier',
+    'queryReceivers',
+    'requiredPermission',
+])
+verifier = need(ENG / 'SecretCodeRuntimeVerifier.kt', [
     'TelephonyManager.ACTION_SECRET_CODE',
     'android.provider.Telephony.SECRET_CODE',
     'android_secret_code://',
     'queryBroadcastReceivers',
+    'PackageManager.MATCH_DISABLED_COMPONENTS',
     'requiredPermission',
 ])
-assert 'Runtime.getRuntime' not in discovery
-assert 'Shizuku.newProcess' not in discovery
+for text in (discovery, verifier):
+    assert 'Runtime.getRuntime' not in text
+    assert 'Shizuku.newProcess' not in text
+    assert 'am broadcast' not in text
+    assert 'sendBroadcast(' not in text
 
 center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'Broadcast Lab',
