@@ -61,6 +61,7 @@ include(
     ":nfc-lab-android",
     ":oem-internals-core",
     ":oem-internals-android",
+    ":engineering-core",
     ":app-dpc",
     ":aio-test-target",
     ":lab-tools"
@@ -110,6 +111,7 @@ project(":nfc-lab-core").projectDir = file("apps/dpc/modules/nfc-lab/core")
 project(":nfc-lab-android").projectDir = file("apps/dpc/modules/nfc-lab/android")
 project(":oem-internals-core").projectDir = file("apps/dpc/modules/oem-internals/core")
 project(":oem-internals-android").projectDir = file("apps/dpc/modules/oem-internals/android")
+project(":engineering-core").projectDir = file("apps/dpc/modules/engineering/core")
 project(":offline-core").projectDir = file("apps/dpc/modules/offline/core")
 project(":offline-android").projectDir = file("apps/dpc/modules/offline/android")
 project(":aio-test-target").projectDir = file("apps/aio-test-target")
