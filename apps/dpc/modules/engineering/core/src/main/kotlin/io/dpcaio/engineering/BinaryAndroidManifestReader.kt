@@ -66,11 +66,17 @@ object BinaryAndroidManifestReader {
         var offset = rootHeaderSize
 
         while (offset < rootSize) {
-            if (offset + 8 > rootSize) return malformed("chunk header truncated at $offset")
+            if (offset.toLong() + 8L > rootSize.toLong()) return malformed("chunk header truncated at $offset")
             val type = u16(buffer, offset)
             val headerSize = u16(buffer, offset + 2)
             val chunkSize = u32(buffer, offset + 4)
-            if (headerSize < 8 || chunkSize < headerSize || offset + chunkSize > rootSize) {
+            val chunkEnd = offset.toLong() + chunkSize.toLong()
+            if (
+                headerSize < 8 ||
+                chunkSize < headerSize ||
+                chunkEnd > rootSize.toLong() ||
+                chunkEnd <= offset.toLong()
+            ) {
                 return malformed("invalid chunk size at $offset")
             }
 
@@ -103,7 +109,7 @@ object BinaryAndroidManifestReader {
                 RESOURCE_MAP, START_NAMESPACE, END_NAMESPACE, CDATA -> Unit
                 else -> Unit
             }
-            offset += chunkSize
+            offset = chunkEnd.toInt()
         }
 
         if (offset != rootSize) return malformed("chunk walk did not end at root size")
@@ -124,16 +130,19 @@ object BinaryAndroidManifestReader {
         val offsetsStart = chunkStart + headerSize
         val offsetsBytes = stringCount.toLong() * 4L
         if (offsetsStart.toLong() + offsetsBytes > chunkStart.toLong() + chunkSize.toLong()) return null
-        val dataStart = chunkStart + stringsStart
-        val chunkEnd = chunkStart + chunkSize
-        if (dataStart < chunkStart || dataStart > chunkEnd) return null
+        val dataStartLong = chunkStart.toLong() + stringsStart.toLong()
+        val chunkEndLong = chunkStart.toLong() + chunkSize.toLong()
+        if (dataStartLong < chunkStart.toLong() || dataStartLong > chunkEndLong || dataStartLong > Int.MAX_VALUE) return null
+        val dataStart = dataStartLong.toInt()
+        val chunkEnd = chunkEndLong.toInt()
 
         val utf8 = (flags and UTF8_FLAG) != 0
         val result = ArrayList<String>(stringCount)
         for (index in 0 until stringCount) {
             val rel = u32(buffer, offsetsStart + index * 4)
-            val start = dataStart + rel
-            if (start < dataStart || start >= chunkEnd) return null
+            val startLong = dataStart.toLong() + rel.toLong()
+            if (startLong < dataStart.toLong() || startLong >= chunkEnd.toLong() || startLong > Int.MAX_VALUE) return null
+            val start = startLong.toInt()
             val decoded = if (utf8) decodeUtf8(buffer, start, chunkEnd) else decodeUtf16(buffer, start, chunkEnd)
             result += decoded ?: return null
         }
