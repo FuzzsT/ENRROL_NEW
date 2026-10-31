@@ -11,16 +11,16 @@ object SecretCodeInventoryReducer {
                 DedupKey(
                     receiverClassName = canonicalClassName(packageName, declaration.receiverClassName),
                     codeKey = declaration.normalizedCode ?: declaration.rawHost,
-                    actions = declaration.actions.toSortedSet(),
                     scheme = declaration.scheme,
                     declarationKind = declaration.declarationKind,
                 )
             }
             .map { (key, grouped) ->
+                val combinedActions = grouped.flatMapTo(linkedSetOf()) { it.actions }
                 val matchingLive = liveReceivers.filter { live ->
                     live.packageName == packageName &&
                         canonicalClassName(packageName, live.className) == key.receiverClassName &&
-                        live.action in key.actions
+                        live.action in combinedActions
                 }
                 val manifestPermission = grouped.firstNotNullOfOrNull { it.requiredPermission?.takeIf(String::isNotBlank) }
                 val livePermission = matchingLive.firstNotNullOfOrNull { it.requiredPermission?.takeIf(String::isNotBlank) }
@@ -51,7 +51,7 @@ object SecretCodeInventoryReducer {
                     code = representative.normalizedCode,
                     rawHost = representative.rawHost,
                     receiverClassName = key.receiverClassName,
-                    actions = grouped.flatMapTo(linkedSetOf()) { it.actions },
+                    actions = combinedActions,
                     scheme = representative.scheme,
                     status = status,
                     enabled = enabled,
@@ -77,7 +77,6 @@ object SecretCodeInventoryReducer {
     private data class DedupKey(
         val receiverClassName: String,
         val codeKey: String?,
-        val actions: Set<String>,
         val scheme: String?,
         val declarationKind: SecretCodeDeclarationKind,
     )
