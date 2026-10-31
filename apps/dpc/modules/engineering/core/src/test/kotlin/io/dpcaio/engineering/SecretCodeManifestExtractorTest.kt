@@ -24,6 +24,9 @@ private fun apkWithManifest(bytes: ByteArray): Path {
     return apk
 }
 
+private fun attrs(vararg pairs: Pair<String, String?>): List<BinaryXmlAttribute> =
+    pairs.map { (name, value) -> BinaryXmlAttribute(name, value) }
+
 fun main() {
     val literalApk = apkWithManifest(fixtureBytes("secret-code-manifest.axml.b64"))
     val literal = SecretCodeManifestExtractor.extract(literalApk, SecretCodeSourceKind.BASE_APK)
@@ -46,6 +49,26 @@ fun main() {
     val patternDeclaration = pattern.declarations.single()
     check(patternDeclaration.declarationKind == SecretCodeDeclarationKind.PATTERN_ONLY)
     check(patternDeclaration.normalizedCode == null)
+
+    val multipleHosts = SecretCodeManifestExtractor.extractDeclarationsForTest(
+        events = listOf(
+            BinaryXmlEvent.StartElement("receiver", attrs("name" to ".MultiReceiver", "enabled" to "true", "exported" to "true")),
+            BinaryXmlEvent.StartElement("intent-filter", emptyList()),
+            BinaryXmlEvent.StartElement("action", attrs("name" to SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION)),
+            BinaryXmlEvent.EndElement("action"),
+            BinaryXmlEvent.StartElement("data", attrs("scheme" to SecretCodeManifestExtractor.SECRET_CODE_SCHEME, "host" to "4636")),
+            BinaryXmlEvent.EndElement("data"),
+            BinaryXmlEvent.StartElement("data", attrs("scheme" to SecretCodeManifestExtractor.SECRET_CODE_SCHEME, "host" to "8255")),
+            BinaryXmlEvent.EndElement("data"),
+            BinaryXmlEvent.EndElement("intent-filter"),
+            BinaryXmlEvent.EndElement("receiver"),
+        ),
+        sourceApkName = "multi.apk",
+        sourceKind = SecretCodeSourceKind.BASE_APK,
+        limits = SecretCodeExtractionLimits(),
+    )
+    check(multipleHosts is SecretCodeExtractionResult.Success)
+    check(multipleHosts.declarations.mapNotNull { it.normalizedCode }.toSet() == setOf("4636", "8255"))
 
     val candidateLimit = SecretCodeManifestExtractor.extract(
         literalApk,
