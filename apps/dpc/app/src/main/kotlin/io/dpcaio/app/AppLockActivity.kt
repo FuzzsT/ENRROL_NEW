@@ -2,11 +2,13 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Process
 import android.text.InputFilter
 import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import io.dpcaio.platform.AndroidUserId
 import java.util.concurrent.Executors
 
 class AppLockActivity : Activity() {
@@ -39,6 +41,20 @@ class AppLockActivity : Activity() {
                     setText(intent.getStringExtra(EXTRA_TARGET_PACKAGE).orEmpty())
                 }
                 addView(packageNameField)
+                addView(ModernUi.spacer(this@AppLockActivity, 8))
+                addView(
+                    ModernUi.action(this@AppLockActivity, "Choose package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@AppLockActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = targetPackage(),
+                        ) { selected ->
+                            packageNameField.setText(selected)
+                            operationResult = null
+                            reconcileAndRefresh()
+                        }
+                    }
+                )
             }
         )
         status = ModernUi.outputCard(this, "App Lock ready")
