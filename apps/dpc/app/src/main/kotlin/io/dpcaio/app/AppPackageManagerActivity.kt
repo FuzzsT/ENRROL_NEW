@@ -18,6 +18,10 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
+import io.dpcaio.appmanager.PackageExportFormat
+import io.dpcaio.appmanager.PackageExportPlan
+import io.dpcaio.appmanager.android.AndroidInstalledPackageReader
+import io.dpcaio.appmanager.android.AndroidPackageExporter
 import io.dpcaio.installer.PackageSource
 import io.dpcaio.installer.android.AndroidApkPlusStager
 import io.dpcaio.installer.android.AndroidInstallSourceReader
@@ -62,8 +66,12 @@ class AppPackageManagerActivity : Activity() {
     private lateinit var queueCoordinator: InstallQueueCoordinator
     private var installedApps: List<InstalledApp> = emptyList()
     private var receiverRegistered = false
+    private var pendingExportFormat: PackageExportFormat? = null
+    private var pendingExportPackage: String? = null
     private val operationHistoryStore by lazy { AppInstallHistoryStore(this) }
     private val installSourceReader by lazy { AndroidInstallSourceReader(this) }
+    private val installedPackageReader by lazy { AndroidInstalledPackageReader(this) }
+    private val packageExporter by lazy { AndroidPackageExporter(this) }
 
     private val mode: Mode by lazy {
         when (intent.getStringExtra(EXTRA_MODE)) {
@@ -86,6 +94,10 @@ class AppPackageManagerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingExportFormat = savedInstanceState?.getString(STATE_EXPORT_FORMAT)?.let { saved ->
+            runCatching { PackageExportFormat.valueOf(saved) }.getOrNull()
+        }
+        pendingExportPackage = savedInstanceState?.getString(STATE_EXPORT_PACKAGE)
         title = if (mode == Mode.UPDATER) "App Updater" else "APK/APKS Installer"
         queueStore = InstallQueueStore(this)
         queueCoordinator = InstallQueueCoordinator(queueStore)
@@ -128,6 +140,25 @@ class AppPackageManagerActivity : Activity() {
                     addView(installedSourceView)
                     addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
                     addView(ModernUi.action(this@AppPackageManagerActivity, "Refresh installed apps") { loadInstalledPackages() })
+                    addView(ModernUi.spacer(this@AppPackageManagerActivity, 12))
+                    addView(
+                        ModernUi.body(
+                            this@AppPackageManagerActivity,
+                            "Export the selected installed package through Android's document picker. APKS includes installed splits; XAPK also includes readable OBB files when available.",
+                        )
+                    )
+                    addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
+                    addView(ModernUi.action(this@AppPackageManagerActivity, "Export APK") {
+                        openExportDestination(PackageExportFormat.APK)
+                    })
+                    addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
+                    addView(ModernUi.action(this@AppPackageManagerActivity, "Export APKS") {
+                        openExportDestination(PackageExportFormat.APKS)
+                    })
+                    addView(ModernUi.spacer(this@AppPackageManagerActivity, 8))
+                    addView(ModernUi.action(this@AppPackageManagerActivity, "Export XAPK") {
+                        openExportDestination(PackageExportFormat.XAPK)
+                    })
                 }
             )
         }
@@ -231,6 +262,12 @@ class AppPackageManagerActivity : Activity() {
         renderOperationHistory()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        pendingExportFormat?.let { outState.putString(STATE_EXPORT_FORMAT, it.name) }
+        pendingExportPackage?.let { outState.putString(STATE_EXPORT_PACKAGE, it) }
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onResume() {
         super.onResume()
         if (::status.isInitialized) {
@@ -314,6 +351,61 @@ class AppPackageManagerActivity : Activity() {
         }
     }
 
+    private fun openExportDestination(format: PackageExportFormat) {
+        if (!::installedSpinner.isInitialized) return
+        val selected = installedApps.getOrNull(installedSpinner.selectedItemPosition)
+        if (selected == null) {
+            status.text = "Select an installed application first"
+            return
+        }
+        pendingExportFormat = format
+        pendingExportPackage = selected.packageName
+        val extension = when (format) {
+            PackageExportFormat.APK -> "apk"
+            PackageExportFormat.APKS -> "apks"
+            PackageExportFormat.XAPK -> "xapk"
+        }
+        val mimeType = if (format == PackageExportFormat.APK) {
+            "application/vnd.android.package-archive"
+        } else {
+            "application/zip"
+        }
+        val suggestedName = "${selected.packageName}-${selected.versionCode}.$extension"
+        val picker = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mimeType
+            putExtra(Intent.EXTRA_TITLE, suggestedName)
+        }
+        status.text = "Choose export destination for ${selected.packageName} • ${format.name}"
+        startActivityForResult(picker, REQ_EXPORT)
+    }
+
+    private fun exportSelectedPackage(destinationUri: Uri) {
+        val format = pendingExportFormat
+        val targetPackage = pendingExportPackage
+        pendingExportFormat = null
+        pendingExportPackage = null
+        if (format == null || targetPackage.isNullOrBlank()) {
+            status.text = "Export request expired; choose Export again"
+            return
+        }
+        status.text = "Exporting $targetPackage as ${format.name}…"
+        Thread {
+            val summary = runCatching {
+                val artifacts = installedPackageReader.read(targetPackage)
+                val plan = PackageExportPlan.forFormat(artifacts, format)
+                val result = packageExporter.export(plan, destinationUri)
+                val obbSummary = if (format == PackageExportFormat.XAPK) " • OBB=${result.obbIncluded}" else ""
+                "Export complete • ${format.name} • $targetPackage • files=${result.sha256ByEntry.size}$obbSummary"
+            }.getOrElse { error ->
+                "EXPORT_FAILED: ${error.javaClass.simpleName}: ${error.message}"
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) status.text = summary
+            }
+        }.start()
+    }
+
     private fun openPackagePicker(allowMultiple: Boolean) {
         val userActionMode = if (Build.VERSION.SDK_INT >= 31) PackageInstaller.SessionParams.USER_ACTION_REQUIRED else -1
         status.text = "Opening package picker… userActionMode=$userActionMode"
@@ -329,6 +421,20 @@ class AppPackageManagerActivity : Activity() {
     @Deprecated("legacy Activity result keeps the app dependency-free")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_EXPORT) {
+            val destination = data?.data
+            if (resultCode == RESULT_OK && destination != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(destination, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                }
+                exportSelectedPackage(destination)
+            } else {
+                pendingExportFormat = null
+                pendingExportPackage = null
+                status.text = "Export cancelled"
+            }
+            return
+        }
         if (requestCode != REQ_PACKAGE || resultCode != RESULT_OK || data == null) return
         val uris = buildList {
             data.data?.let(::add)
@@ -517,7 +623,6 @@ class AppPackageManagerActivity : Activity() {
             .putExtra(AppInstallStatusReceiver.SESSION_ID, sessionId),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
     ).intentSender
-
     private fun displayName(uri: Uri): String = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         if (cursor.moveToFirst()) cursor.getString(0) else null
     } ?: uri.lastPathSegment ?: "package.apk"
@@ -584,5 +689,8 @@ class AppPackageManagerActivity : Activity() {
         const val MODE_INSTALLER = "installer"
         const val MODE_UPDATER = "updater"
         private const val REQ_PACKAGE = 4101
+        private const val REQ_EXPORT = 4102
+        private const val STATE_EXPORT_FORMAT = "pending_export_format"
+        private const val STATE_EXPORT_PACKAGE = "pending_export_package"
     }
 }
