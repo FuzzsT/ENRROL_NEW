@@ -6,7 +6,7 @@ STORE = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppLockStore.kt'
 COORDINATOR = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppLockCoordinator.kt'
 ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppLockActivity.kt'
 RECEIVER = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppLockAlarmReceiver.kt'
-LAUNCHER = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ActivityLauncherHubActivity.kt'
+DASHBOARD = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt'
 MANIFEST = ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml'
 
 
@@ -53,19 +53,19 @@ def main():
     need(ACTIVITY, [
         'EXTRA_TARGET_PACKAGE',
         'PinGuard',
+        'Package name',
         'Lock app',
         'Unlock permanently',
         'Unlock 1 min',
         'Unlock 5 min',
         'Unlock 15 min',
         'AppLockCoordinator',
+        'reconcileExpiredUnlocks(',
     ])
 
-    need(LAUNCHER, [
+    need(DASHBOARD, [
         'App Lock',
         'AppLockActivity::class.java',
-        'AppLockActivity.EXTRA_TARGET_PACKAGE',
-        'reconcileExpiredUnlocks(',
     ])
 
     need(MANIFEST, [
