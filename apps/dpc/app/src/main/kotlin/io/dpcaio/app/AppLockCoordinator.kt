@@ -15,6 +15,7 @@ enum class AppLockResult {
     SUCCESS,
     PIN_REQUIRED,
     INVALID_PIN,
+    NOT_MANAGED,
     DEVICE_OWNER_REQUIRED,
     POLICY_REJECTED,
 }
@@ -45,6 +46,11 @@ class AppLockCoordinator(
     }
 
     fun unlock(packageName: String, pin: CharArray, durationMillis: Long? = null): AppLockResult {
+        val record = store.read(packageName)
+        if (record?.locked != true) {
+            pin.fill('\u0000')
+            return AppLockResult.NOT_MANAGED
+        }
         if (!pinGuard.isConfigured()) {
             pin.fill('\u0000')
             return AppLockResult.PIN_REQUIRED
@@ -62,7 +68,7 @@ class AppLockCoordinator(
         }
 
         val deadline = clock() + durationMillis.coerceAtLeast(1L)
-        val saved = store.write(AppLockRecord(packageName, locked = true, unlockedUntilMillis = deadline))
+        val saved = store.write(record.copy(locked = true, unlockedUntilMillis = deadline))
         if (!saved) return AppLockResult.POLICY_REJECTED
         scheduleRelock(packageName, deadline)
         return AppLockResult.SUCCESS
