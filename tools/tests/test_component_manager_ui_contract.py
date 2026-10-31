@@ -9,14 +9,18 @@ c=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt'
 p=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt'
 autostart=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AutostartManagerActivity.kt'
 picker=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/RuntimeTargetPicker.kt'
+verification=ROOT/'apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ComponentMutationVerification.kt'
 route_executor=ROOT/'apps/dpc/modules/activity/android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityRouteExecutor.kt'
 manifest=ROOT/'apps/dpc/app/src/main/AndroidManifest.xml'
 assert s.is_file(),s
 assert picker.is_file(),picker
+assert verification.is_file(),verification
 assert route_executor.is_file(),route_executor
-t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8'); route=route_executor.read_text(encoding='utf-8')
-for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker','intent.getIntExtra("userId", current)','takeIf { it >= 0 }']:
+t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8'); verify=verification.read_text(encoding='utf-8'); route=route_executor.read_text(encoding='utf-8')
+for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','ComponentMutationVerification.statusLine','ComponentMutationVerification.canLaunchAfterEnable','result.observedState','result.verified','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker','intent.getIntExtra("userId", current)','takeIf { it >= 0 }']:
     assert n in t,n
+assert 'SUBMITTED, cross-user readback not claimed' not in t
+assert 'readback via rescan' not in t
 for n in [
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
     'SortDirection { ASCENDING, DESCENDING }',
@@ -90,6 +94,18 @@ for n in ['object RuntimeTargetPicker','showUserPicker(','showPackagePicker(','s
 assert r'UserInfo\\{' in pick, 'Runtime target picker must keep the escaped UserInfo regex source contract'
 
 for n in [
+    'object ComponentMutationVerification',
+    'fun statusLine(',
+    'requested.name',
+    'observed?.name ?: "UNKNOWN"',
+    'append(verified)',
+    'fun canLaunchAfterEnable(',
+    'requested == ComponentOverrideState.ENABLED',
+    'observed == ComponentOverrideState.ENABLED',
+]:
+    assert n in verify,f'Component mutation verification helper missing {n}'
+
+for n in [
     'UserHandle.getUserHandleForUid(Process.myUid())',
     'user != currentUser',
     'Cross-user route requires LauncherApps or a privileged executor',
@@ -108,13 +124,17 @@ for n in [
     'queryBroadcastReceivers',
     'AndroidComponentStateGateway',
     'ShizukuComponentStateExecutor',
+    'ComponentMutationVerification.statusLine',
+    'result.observedState',
+    'result.verified',
     'ComponentOverrideState.ENABLED',
     'ComponentOverrideState.DISABLED',
     'Target user ID',
     'Choose user',
     'RuntimeTargetPicker.showUserPicker',
     'CURRENT_USER_READBACK',
-    'TARGET_USER_SUBMITTED',
+    'TARGET_USER_VERIFIED',
+    'TARGET_USER_FAILED',
     'Restore default',
     'queryLocalBootReceivers()',
     'queryCrossUserBootReceivers(selectedUser)',
@@ -122,10 +142,12 @@ for n in [
     'LOCAL_PACKAGE_MANAGER',
     'CROSS_USER_SHIZUKU',
     'TARGET_USER_INVENTORY',
+    'lastVerified=',
     'Cross-user inventory unavailable',
     'manifestEnabled = null',
 ]:
     assert n in aut,f'Autostart Manager missing {n}'
+assert 'TARGET_USER_SUBMITTED' not in aut
 assert 'else queryLocalBootReceivers()' not in aut, 'cross-user scan must not silently fall back to current-user inventory'
 mt=manifest.read_text(encoding='utf-8')
 assert '.AutostartManagerActivity' in mt,'Autostart Manager manifest entry missing'
