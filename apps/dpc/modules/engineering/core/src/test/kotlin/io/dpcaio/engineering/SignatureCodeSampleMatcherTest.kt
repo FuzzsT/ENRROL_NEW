@@ -26,9 +26,6 @@ private fun deriveExpected(identity: AppSigningIdentity, recipe: SignatureCodeRe
     return result.candidate.candidate
 }
 
-private fun bestExact(result: SignatureCodeSampleMatcherResult.Success): SignatureCodeSampleMatch =
-    result.matches.maxWith(compareBy<SignatureCodeSampleMatch> { it.exactMatches }.thenByDescending { -it.recipe.steps.size })
-
 fun main() {
     val target = AutoSignatureCodeCatalog.recipes().first { it.id == "sha256-cert-first4-six" }
     val threeSamples = (1..3).map { seed ->
@@ -75,6 +72,33 @@ fun main() {
     check(ambiguousExact.all { it.ambiguityCount > 1 })
     check(ambiguousExact.all { it.confidence != SampleMatchConfidence.HIGH }) {
         "ambiguous exact matches must not be HIGH confidence"
+    }
+
+    val firstSigner = sampleSigner(30)
+    val secondSigner = sampleSigner(31)
+    val multiSignerIdentity = AppSigningIdentity(
+        packageName = "com.example.multisigner",
+        versionCode = 99L,
+        currentSigners = listOf(firstSigner, secondSigner),
+    )
+    val secondSignerExpected = SignatureCodeDerivationEngine().derive(
+        identity = multiSignerIdentity,
+        recipe = target,
+        signer = secondSigner,
+    )
+    check(secondSignerExpected is SignatureCodeDerivationResult.Success)
+    val multiSignerResult = SignatureCodeSampleMatcher.match(
+        listOf(
+            SignatureCodeSample(
+                identity = multiSignerIdentity,
+                expectedCode = secondSignerExpected.candidate.candidate,
+                outputKind = DerivedCodeKind.NUMERIC,
+            )
+        )
+    )
+    check(multiSignerResult is SignatureCodeSampleMatcherResult.Success)
+    check(multiSignerResult.matches.any { it.recipe.id == target.id && it.exactMatches == 1 }) {
+        "matcher must evaluate every current signer; the expected sample is derived from the second signer"
     }
 
     val tooManySamples = List(33) { index -> threeSamples[index % threeSamples.size] }
