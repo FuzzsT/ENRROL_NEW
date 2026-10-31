@@ -61,6 +61,10 @@ def main():
         'verifier.verify(',
         'verifier.configure(',
         'verifier.clear()',
+        'Executors.newSingleThreadExecutor()',
+        'runOnUiThread',
+        'setBusy(',
+        'isEnabled = !busy',
     ])
     assert activity.index('verifier.verify(') < activity.index('verifier.clear()'), 'Disable PIN must verify current PIN before clearing verifier state'
     need(DASHBOARD, ['PIN Guard', 'PinGuardActivity::class.java'])
