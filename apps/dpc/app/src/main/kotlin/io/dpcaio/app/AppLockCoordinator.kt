@@ -35,18 +35,36 @@ class AppLockCoordinator(
     private val alarmManager = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     fun lock(packageName: String): AppLockResult = synchronized(transitionLock) {
+        val previous = store.read(packageName)
+        val pendingLockRecord = (previous ?: AppLockRecord(
+            packageName = packageName,
+            locked = true,
+            unlockedUntilMillis = 0L,
+        )).copy(
+            locked = true,
+            unlockedUntilMillis = 0L,
+            pendingUnlock = false,
+            pendingLock = true,
+        )
+        if (!store.write(pendingLockRecord)) {
+            return@synchronized AppLockResult.POLICY_REJECTED
+        }
+
         val outcome = policy.setSuspended(packageName, true)
         if (outcome.verification != AppPolicyVerification.VERIFIED) {
-            return@synchronized if (outcome.mutationStatus.name == "NOT_AUTHORIZED") {
-                AppLockResult.DEVICE_OWNER_REQUIRED
-            } else {
-                AppLockResult.POLICY_REJECTED
+            if (outcome.mutationStatus.name == "NOT_AUTHORIZED") {
+                if (previous == null) store.remove(packageName) else store.write(previous)
+                return@synchronized AppLockResult.DEVICE_OWNER_REQUIRED
             }
+            keepPendingLockRecovery(pendingLockRecord)
+            return@synchronized AppLockResult.POLICY_REJECTED
         }
+
         cancelRelock(packageName)
-        if (store.write(AppLockRecord(packageName, locked = true, unlockedUntilMillis = 0L, pendingUnlock = false))) {
+        return@synchronized if (store.write(pendingLockRecord.copy(pendingLock = false))) {
             AppLockResult.SUCCESS
         } else {
+            keepPendingLockRecovery(pendingLockRecord)
             AppLockResult.POLICY_REJECTED
         }
     }
@@ -68,6 +86,7 @@ class AppLockCoordinator(
             locked = true,
             unlockedUntilMillis = deadline,
             pendingUnlock = true,
+            pendingLock = false,
         )
         if (!store.write(pendingRecord)) {
             return@synchronized AppLockResult.POLICY_REJECTED
@@ -77,7 +96,7 @@ class AppLockCoordinator(
         if (outcome.verification != AppPolicyVerification.VERIFIED) {
             val rollbackVerified = rollbackSuspension(packageName)
             if (rollbackVerified) {
-                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false, pendingLock = false))
             } else {
                 keepPendingRecovery(pendingRecord)
             }
@@ -95,7 +114,7 @@ class AppLockCoordinator(
             }
             val rollbackVerified = rollbackSuspension(packageName)
             if (rollbackVerified) {
-                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false, pendingLock = false))
             } else {
                 keepPendingRecovery(pendingRecord)
             }
@@ -106,17 +125,17 @@ class AppLockCoordinator(
         if (!scheduled) {
             val rollbackVerified = rollbackSuspension(packageName)
             if (rollbackVerified) {
-                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false, pendingLock = false))
             } else {
                 keepPendingRecovery(pendingRecord)
             }
             return@synchronized AppLockResult.POLICY_REJECTED
         }
 
-        if (!store.write(pendingRecord.copy(pendingUnlock = false))) {
+        if (!store.write(pendingRecord.copy(pendingUnlock = false, pendingLock = false))) {
             val rollbackVerified = rollbackSuspension(packageName)
             if (rollbackVerified) {
-                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false, pendingLock = false))
             } else {
                 keepPendingRecovery(pendingRecord)
             }
@@ -130,18 +149,25 @@ class AppLockCoordinator(
         store.all()
             .filter {
                 it.locked && (
-                    it.pendingUnlock ||
+                    it.pendingLock ||
+                        it.pendingUnlock ||
                         (it.unlockedUntilMillis > 0L && it.unlockedUntilMillis <= nowMillis)
                     )
             }
             .forEach { record ->
                 val outcome = policy.setSuspended(record.packageName, true)
                 if (outcome.verification == AppPolicyVerification.VERIFIED) {
-                    store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                    store.write(record.copy(
+                        unlockedUntilMillis = 0L,
+                        pendingUnlock = false,
+                        pendingLock = false,
+                    ))
                     cancelRelock(record.packageName)
                     relocked++
+                } else if (record.pendingLock) {
+                    keepPendingLockRecovery(record)
                 } else {
-                    keepPendingRecovery(record.copy(pendingUnlock = true))
+                    keepPendingRecovery(record.copy(pendingUnlock = true, pendingLock = false))
                 }
             }
         relocked
@@ -150,16 +176,22 @@ class AppLockCoordinator(
     fun restorePendingRelocks(nowMillis: Long = clock()): Int = synchronized(transitionLock) {
         var restored = 0
         store.all()
-            .filter { it.locked && (it.pendingUnlock || it.unlockedUntilMillis > 0L) }
+            .filter { it.locked && (it.pendingLock || it.pendingUnlock || it.unlockedUntilMillis > 0L) }
             .forEach { record ->
-                if (record.pendingUnlock || record.unlockedUntilMillis <= nowMillis) {
+                if (record.pendingLock || record.pendingUnlock || record.unlockedUntilMillis <= nowMillis) {
                     val outcome = policy.setSuspended(record.packageName, true)
                     if (outcome.verification == AppPolicyVerification.VERIFIED) {
-                        store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                        store.write(record.copy(
+                            unlockedUntilMillis = 0L,
+                            pendingUnlock = false,
+                            pendingLock = false,
+                        ))
                         cancelRelock(record.packageName)
                         restored++
+                    } else if (record.pendingLock) {
+                        keepPendingLockRecovery(record)
                     } else {
-                        keepPendingRecovery(record.copy(pendingUnlock = true))
+                        keepPendingRecovery(record.copy(pendingUnlock = true, pendingLock = false))
                     }
                 } else {
                     val scheduled = runCatching {
@@ -170,9 +202,13 @@ class AppLockCoordinator(
                     } else {
                         val rollbackVerified = rollbackSuspension(record.packageName)
                         if (rollbackVerified) {
-                            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                            store.write(record.copy(
+                                unlockedUntilMillis = 0L,
+                                pendingUnlock = false,
+                                pendingLock = false,
+                            ))
                         } else {
-                            keepPendingRecovery(record.copy(pendingUnlock = true))
+                            keepPendingRecovery(record.copy(pendingUnlock = true, pendingLock = false))
                         }
                     }
                 }
@@ -194,7 +230,21 @@ class AppLockCoordinator(
     }
 
     private fun keepPendingRecovery(record: AppLockRecord) {
-        store.write(record.copy(locked = true, pendingUnlock = true))
+        store.write(record.copy(
+            locked = true,
+            pendingUnlock = true,
+            pendingLock = false,
+        ))
+        scheduleRecoveryRetry(record.packageName)
+    }
+
+    private fun keepPendingLockRecovery(record: AppLockRecord) {
+        store.write(record.copy(
+            locked = true,
+            unlockedUntilMillis = 0L,
+            pendingUnlock = false,
+            pendingLock = true,
+        ))
         scheduleRecoveryRetry(record.packageName)
     }
 
