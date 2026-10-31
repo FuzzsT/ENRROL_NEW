@@ -147,10 +147,13 @@ class AppLockCoordinator(
 
     private fun scheduleRelock(packageName: String, deadline: Long) {
         val pending = relockIntent(packageName)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            throw SecurityException("Exact alarms are not available for bounded App Lock relock")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, deadline, pending)
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, deadline, pending)
         } else {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, deadline, pending)
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, deadline, pending)
         }
     }
 
