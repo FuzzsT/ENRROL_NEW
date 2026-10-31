@@ -64,7 +64,7 @@ def main():
     assert 'openOutputStream(destinationUri, "w")' not in exporter, 'plain write mode may leave stale trailing bytes on some providers'
 
     workflow = need(WORKFLOW, [
-        'Run app security contracts',
+        'Run package export contracts',
         'python3 tools/tests/test_package_export_contract.py',
     ])
     assert workflow.count('test_package_export_contract.py') == 1
