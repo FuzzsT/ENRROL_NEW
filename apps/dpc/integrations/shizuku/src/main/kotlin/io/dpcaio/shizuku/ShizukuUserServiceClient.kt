@@ -63,7 +63,7 @@ class ShizukuUserServiceClient(context: Context) {
         .daemon(false)
         .processNameSuffix("aio")
         .debuggable(false)
-        .version(3)
+        .version(4)
 
     fun bind(): Boolean {
         autoRebindEnabled = true
@@ -229,6 +229,9 @@ class ShizukuUserServiceClient(context: Context) {
 
     fun setComponentEnabledState(packageName: String, className: String, state: String, userId: Int): Int? =
         runCatching { connectedRemote()?.setComponentEnabledState(packageName, className, state, userId) }.getOrNull()
+
+    fun setComponentEnabledStateVerified(packageName: String, className: String, state: String, userId: Int): String? =
+        runCatching { connectedRemote()?.setComponentEnabledStateVerified(packageName, className, state, userId) }.getOrNull()
 
     fun installExistingPackage(packageName: String, userId: Int): Int? =
         runCatching { connectedRemote()?.installExistingPackage(packageName, userId) }.getOrNull()
