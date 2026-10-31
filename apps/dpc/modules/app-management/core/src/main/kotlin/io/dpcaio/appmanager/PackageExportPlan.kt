@@ -63,6 +63,9 @@ data class PackageExportPlan(
             )
         }
 
+        fun forFormat(artifacts: InstalledPackageArtifacts, format: PackageExportFormat): PackageExportPlan =
+            forFormat(format, artifacts)
+
         private fun buildArchiveEntries(
             artifacts: InstalledPackageArtifacts,
             includeObb: Boolean,
