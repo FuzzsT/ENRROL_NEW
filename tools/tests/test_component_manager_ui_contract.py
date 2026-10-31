@@ -9,10 +9,12 @@ c=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt'
 p=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt'
 autostart=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AutostartManagerActivity.kt'
 picker=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/RuntimeTargetPicker.kt'
+route_executor=ROOT/'apps/dpc/modules/activity/android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityRouteExecutor.kt'
 manifest=ROOT/'apps/dpc/app/src/main/AndroidManifest.xml'
 assert s.is_file(),s
 assert picker.is_file(),picker
-t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8')
+assert route_executor.is_file(),route_executor
+t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8'); route=route_executor.read_text(encoding='utf-8')
 for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker']:
     assert n in t,n
 for n in [
@@ -85,6 +87,16 @@ assert 'previousOverrideState' in st
 
 for n in ['object RuntimeTargetPicker','showUserPicker(','showPackagePicker(','listUsers()','listPackagesForUser(userId)','AlertDialog.Builder']:
     assert n in pick,f'Runtime target picker missing {n}'
+assert r'UserInfo\\{' in pick, 'Runtime target picker must keep the escaped UserInfo regex source contract'
+
+for n in [
+    'UserHandle.getUserHandleForUid(Process.myUid())',
+    'user != currentUser',
+    'Cross-user route requires LauncherApps or a privileged executor',
+    'ActivityRoute.FRAMEWORK_EXPLICIT, ActivityRoute.SAME_UID',
+    'ActivityRoute.DEEP_LINK',
+]:
+    assert n in route, f'Cross-user route guard missing {n}'
 
 assert autostart.is_file(), 'AutostartManagerActivity.kt missing'
 aut=autostart.read_text(encoding='utf-8')
