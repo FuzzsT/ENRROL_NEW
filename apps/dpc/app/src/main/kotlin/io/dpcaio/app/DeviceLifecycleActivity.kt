@@ -47,6 +47,16 @@ class DeviceLifecycleActivity : Activity() {
         root.addView(
             ModernUi.card(this).apply {
                 addView(kiosk)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Choose allowed packages") {
+                        RuntimeTargetPicker.showPackageMultiPicker(
+                            this@DeviceLifecycleActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackages = csv(kiosk.text.toString()),
+                            title = "Choose Lock Task packages",
+                        ) { selected -> kiosk.setText(selected.joinToString(", ")) }
+                    }
+                )
                 addView(systemInfo)
                 addView(notifications)
                 addView(home)
@@ -138,6 +148,16 @@ class DeviceLifecycleActivity : Activity() {
                 )
                 addView(ModernUi.spacer(this@DeviceLifecycleActivity, 7))
                 addView(userControl)
+                addView(
+                    ModernUi.action(this@DeviceLifecycleActivity, "Choose user-control-disabled packages") {
+                        RuntimeTargetPicker.showPackageMultiPicker(
+                            this@DeviceLifecycleActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackages = csv(userControl.text.toString()),
+                            title = "Choose user-control-disabled packages",
+                        ) { selected -> userControl.setText(selected.joinToString(", ")) }
+                    }
+                )
                 addView(
                     ModernUi.action(this@DeviceLifecycleActivity, "Apply user-control-disabled packages") {
                         show(gateway.setUserControlDisabledPackagesPolicy(csv(userControl.text.toString())).toString())
