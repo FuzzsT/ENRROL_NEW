@@ -39,6 +39,7 @@ class AioDashboardActivity : Activity() {
         add(body, "Work Profile / COPE") { WorkProfileCopeActivity::class.java }
         add(body, "Knox Enterprise Center") { KnoxEnterpriseCenterActivity::class.java }
         add(body, "PIN Guard") { PinGuardActivity::class.java }
+        add(body, "App Lock") { AppLockActivity::class.java }
 
         addSection(body, "Tools")
         add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
