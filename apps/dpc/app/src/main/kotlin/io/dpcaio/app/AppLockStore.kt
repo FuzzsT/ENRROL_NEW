@@ -6,6 +6,7 @@ data class AppLockRecord(
     val packageName: String,
     val locked: Boolean,
     val unlockedUntilMillis: Long,
+    val pendingUnlock: Boolean = false,
 )
 
 class AppLockStore(context: Context) {
@@ -17,6 +18,7 @@ class AppLockStore(context: Context) {
             packageName = packageName,
             locked = prefs.getBoolean(key(packageName, "locked"), false),
             unlockedUntilMillis = prefs.getLong(key(packageName, "unlockedUntilMillis"), 0L),
+            pendingUnlock = prefs.getBoolean(key(packageName, "pendingUnlock"), false),
         )
     }
 
@@ -26,6 +28,7 @@ class AppLockStore(context: Context) {
             .putStringSet(KEY_PACKAGES, packages)
             .putBoolean(key(record.packageName, "locked"), record.locked)
             .putLong(key(record.packageName, "unlockedUntilMillis"), record.unlockedUntilMillis)
+            .putBoolean(key(record.packageName, "pendingUnlock"), record.pendingUnlock)
             .commit()
     }
 
@@ -35,6 +38,7 @@ class AppLockStore(context: Context) {
             .putStringSet(KEY_PACKAGES, packages)
             .remove(key(packageName, "locked"))
             .remove(key(packageName, "unlockedUntilMillis"))
+            .remove(key(packageName, "pendingUnlock"))
             .commit()
     }
 
