@@ -40,6 +40,12 @@ for marker in [
     if marker not in workflow:
         errors.append(f'workflow runtime smoke missing {marker}')
 
+# aosp_atd images do not need an explicit hardware profile. Passing one makes
+# avdmanager attempt to load a system-image devices.xml that the ATD package
+# does not provide, producing a deterministic "Could not load devices" error.
+if re.search(r'target:\s*aosp_atd\s*\n\s*arch:\s*x86_64\s*\n\s*profile:', workflow):
+    errors.append('aosp_atd runtime smoke must not force an AVD hardware profile')
+
 # Runtime smoke must happen before integrity packaging and before the verified
 # artifact set is uploaded/published. The unified workflow publishes both stable
 # and emergency modes through one publish job, so contract the behavior rather
