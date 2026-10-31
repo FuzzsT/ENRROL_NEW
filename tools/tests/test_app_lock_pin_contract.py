@@ -40,7 +40,10 @@ def main():
         'setSuspended(packageName, true)',
         'setSuspended(packageName, false)',
         'DEVICE_OWNER_REQUIRED',
+        'NOT_MANAGED',
+        'store.read(packageName)',
     ])
+    assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
     assert 'Accessibility' not in coordinator
     assert 'overlay' not in coordinator.lower()
 
