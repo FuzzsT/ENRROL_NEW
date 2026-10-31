@@ -76,10 +76,10 @@ object RuntimeTargetPicker {
                 }
             }
 
-            val rows = local.values.sortedWith(
-                compareBy<PackageChoice>(String.CASE_INSENSITIVE_ORDER) { it.label }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.packageName },
-            )
+            val rows = local.values.sortedWith(Comparator { left, right ->
+                val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
+                if (byLabel != 0) byLabel else String.CASE_INSENSITIVE_ORDER.compare(left.packageName, right.packageName)
+            })
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 if (rows.isEmpty()) {
