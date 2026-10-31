@@ -50,7 +50,7 @@ fun main() {
     check(patternDeclaration.declarationKind == SecretCodeDeclarationKind.PATTERN_ONLY)
     check(patternDeclaration.normalizedCode == null)
 
-    val multipleHosts = SecretCodeManifestExtractor.extractDeclarationsForTest(
+    val multipleHosts = SecretCodeManifestExtractor.extractDeclarations(
         events = listOf(
             BinaryXmlEvent.StartElement("receiver", attrs("name" to ".MultiReceiver", "enabled" to "true", "exported" to "true")),
             BinaryXmlEvent.StartElement("intent-filter", emptyList()),
