@@ -24,8 +24,12 @@ data class BroadcastRequest(
 object BroadcastIntentBuilder {
     fun build(request: BroadcastRequest): Intent {
         require(request.action.isNotBlank()) { "Broadcast action is required" }
+        val normalizedPackage = request.packageName?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedPackage != null && request.component != null && request.component?.packageName != normalizedPackage) {
+            error("Broadcast component package must match target package")
+        }
         val intent = Intent(request.action)
-        request.packageName?.trim()?.takeIf { it.isNotEmpty() }?.let(intent::setPackage)
+        normalizedPackage?.let(intent::setPackage)
         request.component?.let(intent::setComponent)
         request.data?.let(intent::setData)
         request.extras.forEach { extra ->
