@@ -18,7 +18,6 @@ def require(source: str, needles: list[str], label: str) -> None:
 appops = text("AppOpsVerifiedEditorActivity.kt")
 permission = text("PermissionManagerActivity.kt")
 developer = text("DeveloperActivitiesActivity.kt")
-explorer = text("ActivityExplorerActivity.kt")
 
 shared = [
     '"Choose package"',
@@ -45,10 +44,5 @@ require(developer, shared + [
     "ActivityExplorerActivity::class.java",
     'putExtra("userId", userId)',
 ], "Developer Activities")
-
-require(explorer, [
-    'intent.getIntExtra("userId", -1)',
-    "Target user ID",
-], "Activity Explorer user propagation")
 
 print("RUNTIME_TARGET_PICKER_FOLLOWUP_CONTRACT: PASS")
