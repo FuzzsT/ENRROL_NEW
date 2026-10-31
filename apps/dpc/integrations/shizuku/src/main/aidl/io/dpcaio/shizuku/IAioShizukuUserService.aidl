@@ -8,6 +8,7 @@ interface IAioShizukuUserService {
     String listPermissions();
     int grantRuntimePermission(String packageName, String permissionName, int userId);
     int revokeRuntimePermission(String packageName, String permissionName, int userId);
+    String getRuntimePermissionState(String packageName, String permissionName, int userId);
     int setAppOp(String packageName, String op, String mode, int userId);
     String getAppOps(String packageName, int userId);
     String getAppOp(String packageName, String op, int userId);
