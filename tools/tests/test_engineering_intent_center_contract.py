@@ -23,8 +23,11 @@ broadcast = need(ENG / 'BroadcastIntentBuilder.kt', [
     'setData',
     'putExtra',
     'val normalizedPackage = request.packageName?.trim()?.takeIf { it.isNotEmpty() }',
+    'PACKAGE_PATTERN.matches(normalizedPackage)',
+    'Broadcast target package is invalid',
     'request.component?.packageName != normalizedPackage',
     'Broadcast component package must match target package',
+    'private val PACKAGE_PATTERN = Regex(',
 ])
 assert 'Runtime.getRuntime' not in broadcast
 assert 'Shizuku.newProcess' not in broadcast
