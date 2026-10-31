@@ -14,6 +14,7 @@ interface IAioShizukuUserService {
     String resolveAppOp(String op);
     int setPackageEnabled(String packageName, boolean enabled, int userId);
     int setComponentEnabledState(String packageName, String className, String state, int userId);
+    String setComponentEnabledStateVerified(String packageName, String className, String state, int userId);
     int installExistingPackage(String packageName, int userId);
     String listPackagesForUser(int userId);
     int uninstallPackageForUser(String packageName, int userId);
