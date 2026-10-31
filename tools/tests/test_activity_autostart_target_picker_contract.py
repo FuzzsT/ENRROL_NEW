@@ -33,7 +33,7 @@ require(
         "listUsers()",
         "listPackagesForUser(userId)",
         "package:",
-        "UserInfo\\{",
+        r"UserInfo\\{",
         "currentUserId",
         "onSelected",
     ],
