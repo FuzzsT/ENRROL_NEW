@@ -13,7 +13,21 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
 
     override fun startActivity(packageName: String, className: String, userId: Int): Int {
         if (!validPackage(packageName) || !validClass(className) || userId < 0) return RESULT_INVALID_ARGUMENT
-        return runTyped(listOf("/system/bin/am", "start", "--user", userId.toString(), "-n", "$packageName/$className"))
+        val component = "$packageName/$className"
+        val primary = runTyped(listOf("/system/bin/am", "start", "-W", "--user", userId.toString(), "-n", component))
+        if (primary == 0) return primary
+        return runTyped(
+            listOf(
+                "/system/bin/cmd",
+                "activity",
+                "start-activity",
+                "-W",
+                "--user",
+                userId.toString(),
+                "-n",
+                component,
+            )
+        )
     }
 
     override fun sendBroadcast(action: String, packageName: String, userId: Int): Int {
@@ -95,7 +109,7 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
     }
 
     override fun listPackagesForUser(userId: Int): String {
-        if (userId <= 0) return "INVALID_ARGUMENT"
+        if (userId < 0) return "INVALID_ARGUMENT"
         return runTypedCapture(listOf("/system/bin/pm", "list", "packages", "--user", userId.toString()))
     }
 
