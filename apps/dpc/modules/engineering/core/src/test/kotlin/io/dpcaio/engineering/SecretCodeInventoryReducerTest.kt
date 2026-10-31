@@ -6,12 +6,13 @@ private fun declaration(
     permission: String? = null,
     sourceKind: SecretCodeSourceKind = SecretCodeSourceKind.BASE_APK,
     sourceApkName: String = "base.apk",
+    actions: Set<String> = setOf(SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION),
     kind: SecretCodeDeclarationKind = if (code == null) SecretCodeDeclarationKind.PATTERN_ONLY else SecretCodeDeclarationKind.LITERAL_HOST,
 ): SecretCodeDeclaration = SecretCodeDeclaration(
     rawHost = code ?: "*",
     normalizedCode = code,
     receiverClassName = ".SecretReceiver",
-    actions = setOf(SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION),
+    actions = actions,
     scheme = SecretCodeManifestExtractor.SECRET_CODE_SCHEME,
     enabled = enabled,
     exported = true,
@@ -24,10 +25,11 @@ private fun declaration(
 private fun live(
     enabled: Boolean = true,
     permission: String? = null,
+    action: String = SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION,
 ): SecretCodeLiveReceiver = SecretCodeLiveReceiver(
     packageName = "com.example.secret",
     className = ".SecretReceiver",
-    action = SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION,
+    action = action,
     enabled = enabled,
     exported = true,
     requiredPermission = permission,
@@ -82,6 +84,27 @@ fun main() {
     check(deduped.size == 1)
     check(deduped.single().sourceKinds == setOf(SecretCodeSourceKind.BASE_APK, SecretCodeSourceKind.SPLIT_APK))
     check(deduped.single().sourceApkNames == setOf("base.apk", "split_config.apk"))
+
+    val legacySplit = declaration(
+        sourceKind = SecretCodeSourceKind.SPLIT_APK,
+        sourceApkName = "split_legacy.apk",
+        actions = setOf(SecretCodeManifestExtractor.LEGACY_SECRET_CODE_ACTION),
+    )
+    val crossAction = SecretCodeInventoryReducer.reduce(
+        packageName = "com.example.secret",
+        declarations = listOf(duplicateBase, legacySplit),
+        liveReceivers = listOf(
+            live(),
+            live(action = SecretCodeManifestExtractor.LEGACY_SECRET_CODE_ACTION),
+        ),
+    )
+    check(crossAction.size == 1)
+    check(
+        crossAction.single().actions == setOf(
+            SecretCodeManifestExtractor.CURRENT_SECRET_CODE_ACTION,
+            SecretCodeManifestExtractor.LEGACY_SECRET_CODE_ACTION,
+        )
+    )
 
     println("SecretCodeInventoryReducerTest: PASS")
 }
