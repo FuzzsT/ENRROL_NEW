@@ -73,6 +73,8 @@ require(
     [
         '"Choose package"',
         "RuntimeTargetPicker.showPackagePicker",
+        'EXTRA_TARGET_PACKAGE',
+        'intent.getStringExtra(EXTRA_TARGET_PACKAGE)',
     ],
     "SignatureCodeLabActivity",
 )
