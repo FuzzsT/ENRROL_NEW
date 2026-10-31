@@ -105,6 +105,8 @@ def main():
         'EXTRA_TARGET_PACKAGE',
         'PIN Guard',
         'Package name',
+        'Choose package',
+        'RuntimeTargetPicker.showPackagePicker',
         'Lock app',
         'Unlock permanently',
         'Unlock 1 min',

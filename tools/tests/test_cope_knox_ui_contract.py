@@ -4,7 +4,7 @@ m=(R/'apps/dpc/app/src/main/AndroidManifest.xml').read_text(); d=(R/'apps/dpc/ap
 cope=R/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/WorkProfileCopeActivity.kt'; knox=R/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxEnterpriseCenterActivity.kt'
 assert cope.exists() and knox.exists()
 a=cope.read_text(); k=knox.read_text()
-for n in ['CapabilityResolver','Contacts access','Caller ID access','Cross-profile packages','Maximum time off','Personal apps','Organization','Affiliation','72']:
+for n in ['CapabilityResolver','Contacts access','Caller ID access','Cross-profile packages','Maximum time off','Personal apps','Organization','Affiliation','72','Choose cross-profile packages','Choose contacts/caller-ID packages','RuntimeTargetPicker.showPackageMultiPicker']:
     assert n in a
 for n in ['Knox KPE','KNOX_AUDIT_LOG','DEPRECATED_PLATFORM_API','Enhanced Attestation','ApplicationPolicy','CertificatePolicy','Kiosk','Firewall / VPN']:
     assert n in k

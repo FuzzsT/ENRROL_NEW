@@ -4,10 +4,12 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.os.Bundle
+import android.os.Process
 import android.widget.LinearLayout
 import io.dpcaio.core.model.CapabilityRequirements
 import io.dpcaio.core.model.CapabilityResolver
 import io.dpcaio.core.model.OwnershipRequirement
+import io.dpcaio.platform.AndroidUserId
 import io.dpcaio.policy.CopePolicyValidator
 import io.dpcaio.policy.ManagedProfilePackagePolicySpec
 import io.dpcaio.policy.PackageAccessPolicyType
@@ -53,6 +55,16 @@ class WorkProfileCopeActivity : Activity() {
             ModernUi.card(this).apply {
                 addView(packages)
                 addView(
+                    ModernUi.action(this@WorkProfileCopeActivity, "Choose cross-profile packages") {
+                        RuntimeTargetPicker.showPackageMultiPicker(
+                            this@WorkProfileCopeActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackages = csv(packages.text.toString()),
+                            title = "Choose cross-profile packages",
+                        ) { selected -> packages.setText(selected.joinToString(", ")) }
+                    }
+                )
+                addView(
                     action("Apply Cross-profile packages", cap.executable) {
                         show(gateway.setCrossProfilePackagesPolicy(csv(packages.text.toString())).toString())
                     }
@@ -66,6 +78,16 @@ class WorkProfileCopeActivity : Activity() {
             ModernUi.card(this).apply {
                 addView(ModernUi.body(this@WorkProfileCopeActivity, "Android 14+ PackagePolicy controls for managed-profile contacts access."))
                 addView(contactsPackages)
+                addView(
+                    ModernUi.action(this@WorkProfileCopeActivity, "Choose contacts/caller-ID packages") {
+                        RuntimeTargetPicker.showPackageMultiPicker(
+                            this@WorkProfileCopeActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackages = csv(contactsPackages.text.toString()),
+                            title = "Choose contacts/caller-ID packages",
+                        ) { selected -> contactsPackages.setText(selected.joinToString(", ")) }
+                    }
+                )
                 addView(action("Contacts access: Allowlist + system", cap.executable) {
                     show(gateway.setManagedProfileContactsAccessPolicy(ManagedProfilePackagePolicySpec(PackageAccessPolicyType.ALLOWLIST_AND_SYSTEM, csv(contactsPackages.text.toString()))).toString())
                 })
