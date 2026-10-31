@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Process
 import android.widget.EditText
 import android.widget.TextView
 import io.dpcaio.app.engineering.BroadcastExtra
@@ -15,6 +16,7 @@ import io.dpcaio.app.engineering.BroadcastRequest
 import io.dpcaio.app.engineering.SamsungSecretCodeCatalog
 import io.dpcaio.app.engineering.SamsungSecretCodeDiscovery
 import io.dpcaio.app.engineering.UssdIntentFactory
+import io.dpcaio.platform.AndroidUserId
 
 class EngineeringIntentCenterActivity : Activity() {
     private lateinit var broadcastAction: EditText
@@ -56,6 +58,15 @@ class EngineeringIntentCenterActivity : Activity() {
                 extraValue = ModernUi.field(this@EngineeringIntentCenterActivity, "Extra value")
                 addView(broadcastAction)
                 addView(broadcastPackage)
+                addView(
+                    ModernUi.action(this@EngineeringIntentCenterActivity, "Choose target package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@EngineeringIntentCenterActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = broadcastPackage.text.toString().trim(),
+                        ) { selected -> broadcastPackage.setText(selected) }
+                    }
+                )
                 addView(broadcastComponent)
                 addView(broadcastData)
                 addView(extraKey)
@@ -113,7 +124,14 @@ class EngineeringIntentCenterActivity : Activity() {
                 )
                 addView(
                     ModernUi.action(this@EngineeringIntentCenterActivity, "Signature Code Lab", primary = true) {
-                        startActivity(Intent(this@EngineeringIntentCenterActivity, SignatureCodeLabActivity::class.java))
+                        val selectedPackage = broadcastPackage.text.toString().trim()
+                        startActivity(
+                            Intent(this@EngineeringIntentCenterActivity, SignatureCodeLabActivity::class.java).apply {
+                                if (selectedPackage.isNotEmpty()) {
+                                    putExtra(SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE, selectedPackage)
+                                }
+                            }
+                        )
                     }
                 )
                 addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Open calculator") { openCalculator() })
