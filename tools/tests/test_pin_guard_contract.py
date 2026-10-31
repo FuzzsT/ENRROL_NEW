@@ -6,6 +6,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / 'apps/dpc/modules/app-management/core/src/main/kotlin/io/dpcaio/appmanager/PinGuardPolicy.kt'
 STORE = ROOT / 'apps/dpc/modules/app-management/android/src/main/kotlin/io/dpcaio/appmanager/android/AndroidPinGuardStore.kt'
 VERIFIER = ROOT / 'apps/dpc/modules/app-management/android/src/main/kotlin/io/dpcaio/appmanager/android/PinGuardVerifier.kt'
+ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PinGuardActivity.kt'
+DASHBOARD = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt'
+MANIFEST = ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml'
 
 
 def need(path: Path, tokens):
@@ -46,6 +49,23 @@ def main():
         assert token not in combined, f'PIN guard must not persist plaintext PIN marker: {token}'
 
     assert 'lockoutUntilMillis' in core or 'lockoutUntilMillis' in verifier, 'lockout decision must be represented in PIN guard logic'
+
+    activity = need(ACTIVITY, [
+        'PinGuardVerifier',
+        'Set / Change PIN',
+        'Verify PIN',
+        'Disable PIN',
+        'currentPin',
+        'newPin',
+        'confirmPin',
+        'verifier.verify(',
+        'verifier.configure(',
+        'verifier.clear()',
+    ])
+    assert activity.index('verifier.verify(') < activity.index('verifier.clear()'), 'Disable PIN must verify current PIN before clearing verifier state'
+    need(DASHBOARD, ['PIN Guard', 'PinGuardActivity::class.java'])
+    need(MANIFEST, ['<activity android:name=".PinGuardActivity" android:exported="false" />'])
+
     print('test_pin_guard_contract: PASS')
 
 
