@@ -14,6 +14,9 @@ for n in [
     'ComponentMutationVerification.statusLine',
     'componentMutation.verified',
     'componentMutation.observedState',
+    'getRuntimePermissionState',
+    'shizukuObserved',
+    'observed=${shizukuObserved ?: "UNKNOWN"}',
     'POLICY_READBACK_MISMATCH',
     'COMPONENT_STATE_MISMATCH',
     'OFFLINE_VERIFIED',
@@ -22,6 +25,7 @@ for n in [
     assert n in at,n
 old_shizuku_submission = 'ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(activity.packageName, activity.className, targetUserId, desired).submitted'
 assert old_shizuku_submission not in at, 'offline component verification must not reduce Shizuku result to submitted-only state'
+assert 'targetUserId != currentUser -> false' not in at, 'offline Shizuku permission verification must use target-user readback instead of rejecting all cross-user results'
 for forbidden in ['HttpURLConnection','EnrollmentHttpClient','java.net.URL(','InetAddress']:
     assert forbidden not in at,forbidden
 assert 'OfflinePolicyApplier' in jt and 'PACKAGES_INSTALLED' in jt
