@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-CORE = ROOT / 'apps/dpc/modules/engineering/core/src/main/kotlin/io/dpcaio/engineering'
-TEST = ROOT / 'apps/dpc/modules/engineering/core/src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
+CORE_ROOT = ROOT / 'apps/dpc/modules/engineering/core'
+CORE = CORE_ROOT / 'src/main/kotlin/io/dpcaio/engineering'
+TEST = CORE_ROOT / 'src/test/kotlin/io/dpcaio/engineering/SignatureCodeRecipeTest.kt'
 
 
 def need(path: Path, needles):
@@ -72,5 +75,24 @@ for forbidden in [
 ]:
     if forbidden in combined:
         raise AssertionError(f'forbidden execution/search primitive present: {forbidden}')
+
+sources = sorted(
+    str(path)
+    for source_root in [CORE_ROOT / 'src/main/kotlin', CORE_ROOT / 'src/test/kotlin']
+    for path in source_root.rglob('*.kt')
+)
+with tempfile.TemporaryDirectory(prefix='signature-code-contract-') as tmp:
+    classes = Path(tmp) / 'classes'
+    classes.mkdir()
+    subprocess.run(['kotlinc', *sources, '-d', str(classes)], cwd=ROOT, check=True)
+    result = subprocess.run(
+        ['kotlin', '-classpath', str(classes), 'io.dpcaio.engineering.SignatureCodeRecipeTestKt'],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    if 'SignatureCodeRecipeTest: PASS' not in result.stdout:
+        raise AssertionError(f'unexpected Kotlin test output: {result.stdout!r} {result.stderr!r}')
 
 print('test_signature_code_derivation_contract: PASS')
