@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import io.dpcaio.appmanager.AppPolicyCoordinator
 import io.dpcaio.appmanager.AppPolicyVerification
 import io.dpcaio.appmanager.PinGuardResult
@@ -74,7 +75,12 @@ class AppLockCoordinator(
 
         val outcome = policy.setSuspended(packageName, false)
         if (outcome.verification != AppPolicyVerification.VERIFIED) {
-            store.write(record.copy(pendingUnlock = false))
+            val rollbackVerified = rollbackSuspension(packageName)
+            if (rollbackVerified) {
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            } else {
+                keepPendingRecovery(pendingRecord)
+            }
             return@synchronized if (outcome.mutationStatus.name == "NOT_AUTHORIZED") {
                 AppLockResult.DEVICE_OWNER_REQUIRED
             } else {
@@ -83,23 +89,37 @@ class AppLockCoordinator(
         }
 
         if (durationMillis == null) {
-            cancelRelock(packageName)
-            if (store.remove(packageName)) return@synchronized AppLockResult.SUCCESS
-            rollbackSuspension(packageName)
-            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            if (store.remove(packageName)) {
+                cancelRelock(packageName)
+                return@synchronized AppLockResult.SUCCESS
+            }
+            val rollbackVerified = rollbackSuspension(packageName)
+            if (rollbackVerified) {
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            } else {
+                keepPendingRecovery(pendingRecord)
+            }
             return@synchronized AppLockResult.POLICY_REJECTED
         }
 
         val scheduled = runCatching { scheduleRelock(packageName, deadline) }.isSuccess
         if (!scheduled) {
-            rollbackSuspension(packageName)
-            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            val rollbackVerified = rollbackSuspension(packageName)
+            if (rollbackVerified) {
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            } else {
+                keepPendingRecovery(pendingRecord)
+            }
             return@synchronized AppLockResult.POLICY_REJECTED
         }
 
         if (!store.write(pendingRecord.copy(pendingUnlock = false))) {
-            rollbackSuspension(packageName)
-            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            val rollbackVerified = rollbackSuspension(packageName)
+            if (rollbackVerified) {
+                store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            } else {
+                keepPendingRecovery(pendingRecord)
+            }
             return@synchronized AppLockResult.POLICY_REJECTED
         }
         AppLockResult.SUCCESS
@@ -120,6 +140,8 @@ class AppLockCoordinator(
                     store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                     cancelRelock(record.packageName)
                     relocked++
+                } else if (record.pendingUnlock) {
+                    keepPendingRecovery(record)
                 }
             }
         relocked
@@ -136,6 +158,8 @@ class AppLockCoordinator(
                         store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                         cancelRelock(record.packageName)
                         restored++
+                    } else {
+                        keepPendingRecovery(record.copy(pendingUnlock = true))
                     }
                 } else {
                     val scheduled = runCatching {
@@ -144,8 +168,12 @@ class AppLockCoordinator(
                     if (scheduled) {
                         restored++
                     } else {
-                        rollbackSuspension(record.packageName)
-                        store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                        val rollbackVerified = rollbackSuspension(record.packageName)
+                        if (rollbackVerified) {
+                            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+                        } else {
+                            keepPendingRecovery(record.copy(pendingUnlock = true))
+                        }
                     }
                 }
             }
@@ -156,9 +184,36 @@ class AppLockCoordinator(
         store.read(packageName)
     }
 
-    private fun rollbackSuspension(packageName: String) {
-        policy.setSuspended(packageName, true)
-        cancelRelock(packageName)
+    private fun rollbackSuspension(packageName: String): Boolean {
+        val outcome = policy.setSuspended(packageName, true)
+        val rollbackVerified = outcome.verification == AppPolicyVerification.VERIFIED
+        if (rollbackVerified) {
+            cancelRelock(packageName)
+        }
+        return rollbackVerified
+    }
+
+    private fun keepPendingRecovery(record: AppLockRecord) {
+        store.write(record.copy(locked = true, pendingUnlock = true))
+        scheduleRecoveryRetry(record.packageName)
+    }
+
+    private fun scheduleRecoveryRetry(packageName: String) {
+        val pending = relockIntent(packageName)
+        val wallClockDeadline = clock() + RECOVERY_RETRY_MS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            alarmManager.set(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + RECOVERY_RETRY_MS,
+                pending,
+            )
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, wallClockDeadline, pending)
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, wallClockDeadline, pending)
+        }
     }
 
     private fun scheduleRelock(packageName: String, deadline: Long) {
@@ -191,6 +246,7 @@ class AppLockCoordinator(
     }
 
     companion object {
+        private const val RECOVERY_RETRY_MS = 15_000L
         private val transitionLock = Any()
     }
 }
