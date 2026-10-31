@@ -54,6 +54,7 @@
         <activity android:name=".FileManagerActivity" android:exported="false" />
         <activity android:name=".AutostartManagerActivity" android:exported="false" />
         <activity android:name=".EngineeringIntentCenterActivity" android:exported="false" />
+        <activity android:name=".SecretCodeInventoryActivity" android:exported="false" />
         <activity android:name=".DeveloperActivitiesActivity" android:exported="false" />
         <activity android:name=".EnterprisePolicyHubActivity" android:exported="false" />
         <activity android:name=".EnterpriseOperationsActivity" android:exported="false" />
