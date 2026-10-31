@@ -61,6 +61,7 @@
         <activity android:name=".WorkProfileCopeActivity" android:exported="false" />
         <activity android:name=".KnoxEnterpriseCenterActivity" android:exported="false" />
         <activity android:name=".PinGuardActivity" android:exported="false" />
+        <activity android:name=".AppLockActivity" android:exported="false" />
         <activity android:name=".DpcDiagnosticsActivity" android:exported="false" />
         <activity android:name=".EnrollmentStatusActivity" android:exported="false" />
         <activity android:name=".EnrollmentManualActivity" android:exported="false" />
@@ -112,6 +113,7 @@
         <receiver android:name=".AppInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".OfflineInstallStatusReceiver" android:exported="false" />
         <receiver android:name=".SelfUpdateStatusReceiver" android:exported="false" />
+        <receiver android:name=".AppLockAlarmReceiver" android:exported="false" />
 
         <receiver
             android:name=".OfflineRecoveryReceiver"
