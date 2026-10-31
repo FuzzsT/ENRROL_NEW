@@ -43,7 +43,7 @@ class AppLockCoordinator(
             }
         }
         cancelRelock(packageName)
-        if (store.write(AppLockRecord(packageName, locked = true, unlockedUntilMillis = 0L))) {
+        if (store.write(AppLockRecord(packageName, locked = true, unlockedUntilMillis = 0L, pendingUnlock = false))) {
             AppLockResult.SUCCESS
         } else {
             AppLockResult.POLICY_REJECTED
@@ -62,8 +62,19 @@ class AppLockCoordinator(
         }
         if (pinGuard.verify(pin) != PinGuardResult.SUCCESS) return@synchronized AppLockResult.INVALID_PIN
 
+        val deadline = durationMillis?.let { clock() + it.coerceAtLeast(1L) } ?: 0L
+        val pendingRecord = record.copy(
+            locked = true,
+            unlockedUntilMillis = deadline,
+            pendingUnlock = true,
+        )
+        if (!store.write(pendingRecord)) {
+            return@synchronized AppLockResult.POLICY_REJECTED
+        }
+
         val outcome = policy.setSuspended(packageName, false)
         if (outcome.verification != AppPolicyVerification.VERIFIED) {
+            store.write(record.copy(pendingUnlock = false))
             return@synchronized if (outcome.mutationStatus.name == "NOT_AUTHORIZED") {
                 AppLockResult.DEVICE_OWNER_REQUIRED
             } else {
@@ -75,20 +86,20 @@ class AppLockCoordinator(
             cancelRelock(packageName)
             if (store.remove(packageName)) return@synchronized AppLockResult.SUCCESS
             rollbackSuspension(packageName)
-            return@synchronized AppLockResult.POLICY_REJECTED
-        }
-
-        val deadline = clock() + durationMillis.coerceAtLeast(1L)
-        val saved = store.write(record.copy(locked = true, unlockedUntilMillis = deadline))
-        if (!saved) {
-            rollbackSuspension(packageName)
+            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
             return@synchronized AppLockResult.POLICY_REJECTED
         }
 
         val scheduled = runCatching { scheduleRelock(packageName, deadline) }.isSuccess
         if (!scheduled) {
             rollbackSuspension(packageName)
-            store.write(record.copy(locked = true, unlockedUntilMillis = 0L))
+            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
+            return@synchronized AppLockResult.POLICY_REJECTED
+        }
+
+        if (!store.write(pendingRecord.copy(pendingUnlock = false))) {
+            rollbackSuspension(packageName)
+            store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
             return@synchronized AppLockResult.POLICY_REJECTED
         }
         AppLockResult.SUCCESS
@@ -97,11 +108,16 @@ class AppLockCoordinator(
     fun reconcileExpiredUnlocks(nowMillis: Long = clock()): Int = synchronized(transitionLock) {
         var relocked = 0
         store.all()
-            .filter { it.locked && it.unlockedUntilMillis > 0L && it.unlockedUntilMillis <= nowMillis }
+            .filter {
+                it.locked && (
+                    it.pendingUnlock ||
+                        (it.unlockedUntilMillis > 0L && it.unlockedUntilMillis <= nowMillis)
+                    )
+            }
             .forEach { record ->
                 val outcome = policy.setSuspended(record.packageName, true)
                 if (outcome.verification == AppPolicyVerification.VERIFIED) {
-                    store.write(record.copy(unlockedUntilMillis = 0L))
+                    store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                     cancelRelock(record.packageName)
                     relocked++
                 }
@@ -112,12 +128,12 @@ class AppLockCoordinator(
     fun restorePendingRelocks(nowMillis: Long = clock()): Int = synchronized(transitionLock) {
         var restored = 0
         store.all()
-            .filter { it.locked && it.unlockedUntilMillis > 0L }
+            .filter { it.locked && (it.pendingUnlock || it.unlockedUntilMillis > 0L) }
             .forEach { record ->
-                if (record.unlockedUntilMillis <= nowMillis) {
+                if (record.pendingUnlock || record.unlockedUntilMillis <= nowMillis) {
                     val outcome = policy.setSuspended(record.packageName, true)
                     if (outcome.verification == AppPolicyVerification.VERIFIED) {
-                        store.write(record.copy(unlockedUntilMillis = 0L))
+                        store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                         cancelRelock(record.packageName)
                         restored++
                     }
@@ -129,7 +145,7 @@ class AppLockCoordinator(
                         restored++
                     } else {
                         rollbackSuspension(record.packageName)
-                        store.write(record.copy(unlockedUntilMillis = 0L))
+                        store.write(record.copy(unlockedUntilMillis = 0L, pendingUnlock = false))
                     }
                 }
             }
