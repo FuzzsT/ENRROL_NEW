@@ -27,9 +27,21 @@ def main():
         'fun requestInstallAuthorization(',
         'PinGuardResult.SUCCESS',
         'authorizationGranted',
+        'requestGeneration',
+        'invalidatePendingRequest(',
+        'verifyPin(',
     ])
     assert 'SharedPreferences' in auth or 'getSharedPreferences' in auth
     assert 'plaintext' not in auth.lower()
+    assert auth.count('invalidatePendingRequest()') >= 2, 'cancel/dismiss paths must invalidate an in-flight PIN request'
+    assert 'requestGeneration.get() != requestId' in auth or 'requestGeneration.get() == requestId' in auth, 'async verification must confirm the request is still current before granting authorization'
+
+    # Dialog verification must not call authorize(), because authorize grants immediately.
+    executor_start = auth.index('executor.execute')
+    callback_start = auth.index('activity.runOnUiThread', executor_start)
+    executor_body = auth[executor_start:callback_start]
+    assert 'verifyPin(' in executor_body, 'dialog worker must perform verification without granting authorization yet'
+    assert 'authorize(' not in executor_body, 'cancellable dialog verification must not grant authorization before request validity is rechecked'
 
     queue = need(QUEUE, [
         'InstallAuthorizationCoordinator',
