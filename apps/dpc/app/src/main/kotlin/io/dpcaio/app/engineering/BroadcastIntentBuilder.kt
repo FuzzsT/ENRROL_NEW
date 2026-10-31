@@ -22,9 +22,14 @@ data class BroadcastRequest(
 )
 
 object BroadcastIntentBuilder {
+    private val PACKAGE_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")
+
     fun build(request: BroadcastRequest): Intent {
         require(request.action.isNotBlank()) { "Broadcast action is required" }
         val normalizedPackage = request.packageName?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedPackage != null && !PACKAGE_PATTERN.matches(normalizedPackage)) {
+            error("Broadcast target package is invalid")
+        }
         if (normalizedPackage != null && request.component != null && request.component?.packageName != normalizedPackage) {
             error("Broadcast component package must match target package")
         }
