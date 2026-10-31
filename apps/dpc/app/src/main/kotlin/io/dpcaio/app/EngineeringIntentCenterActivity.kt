@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.TextView
 import io.dpcaio.app.engineering.BroadcastExtra
 import io.dpcaio.app.engineering.BroadcastIntentBuilder
@@ -110,6 +109,11 @@ class EngineeringIntentCenterActivity : Activity() {
                 addView(
                     ModernUi.action(this@EngineeringIntentCenterActivity, "Secret Code Inventory", primary = true) {
                         startActivity(Intent(this@EngineeringIntentCenterActivity, SecretCodeInventoryActivity::class.java))
+                    }
+                )
+                addView(
+                    ModernUi.action(this@EngineeringIntentCenterActivity, "Signature Code Lab", primary = true) {
+                        startActivity(Intent(this@EngineeringIntentCenterActivity, SignatureCodeLabActivity::class.java))
                     }
                 )
                 addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Open calculator") { openCalculator() })
