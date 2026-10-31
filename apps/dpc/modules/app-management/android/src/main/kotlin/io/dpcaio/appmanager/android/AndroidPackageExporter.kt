@@ -40,7 +40,7 @@ class AndroidPackageExporter(context: Context) {
         val entry = plan.entries.single()
         PackageExportPlan.requireSafeEntryName(entry.entryName)
         val source = requireReadableFile(entry.sourcePath)
-        val output = requireNotNull(contentResolver.openOutputStream(destinationUri, "w")) {
+        val output = requireNotNull(contentResolver.openOutputStream(destinationUri, "wt")) {
             "Unable to open SAF destination for APK export"
         }
         val digest = output.use { out ->
@@ -56,7 +56,7 @@ class AndroidPackageExporter(context: Context) {
     }
 
     private fun exportArchive(plan: PackageExportPlan, destinationUri: Uri): PackageExportResult {
-        val output = requireNotNull(contentResolver.openOutputStream(destinationUri, "w")) {
+        val output = requireNotNull(contentResolver.openOutputStream(destinationUri, "wt")) {
             "Unable to open SAF destination for package archive export"
         }
         val hashes = linkedMapOf<String, String>()
