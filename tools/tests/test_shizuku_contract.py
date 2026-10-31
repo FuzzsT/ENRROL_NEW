@@ -97,8 +97,13 @@ def main():
         'getDeclaredMethod("strDebugOpToOp"',
         'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
         'override fun queryBroadcastReceivers(action: String, userId: Int): String',
-        '"/system/bin/pm", "query-receivers", "--brief", "--components", "--user"',
-        '"--query-flags", "0x00000200"',
+        '"/system/bin/pm"',
+        '"query-receivers"',
+        '"--brief"',
+        '"--components"',
+        '"--user"',
+        '"--query-flags"',
+        '"0x00000200"',
     ]:
         if token not in service_text:
             raise AssertionError(f"checked AppOps/cross-user inventory missing {token}")
