@@ -24,6 +24,7 @@ sealed interface SignatureCodeStep {
     data object Sum16 : SignatureCodeStep
     data object HexUpper : SignatureCodeStep
     data object HexLower : SignatureCodeStep
+    data object Ascii : SignatureCodeStep
     data object UIntBe : SignatureCodeStep
     data object UIntLe : SignatureCodeStep
     data class PrefixBytes(val count: Int) : SignatureCodeStep
@@ -94,14 +95,9 @@ object SignatureCodeRecipeValidator {
         return SignatureCodeRecipeValidation.Valid
     }
 
-    private fun initialType(input: SignatureCodeInputKind): SignatureValueType = when (input) {
-        SignatureCodeInputKind.CERT_SHA256_HEX,
-        SignatureCodeInputKind.CERT_SHA1_HEX,
-        SignatureCodeInputKind.CERT_SHA256_HEX_THEN_PACKAGE,
-        SignatureCodeInputKind.PACKAGE_THEN_CERT_SHA256_HEX,
-        -> SignatureValueType.TEXT
-
-        else -> SignatureValueType.BYTES
+    private fun initialType(input: SignatureCodeInputKind): SignatureValueType {
+        input.name
+        return SignatureValueType.BYTES
     }
 
     private fun validateArguments(step: SignatureCodeStep): SignatureCodeRecipeValidation.Invalid? = when (step) {
@@ -166,6 +162,7 @@ object SignatureCodeRecipeValidator {
 
         SignatureCodeStep.HexUpper,
         SignatureCodeStep.HexLower,
+        SignatureCodeStep.Ascii,
         -> if (current == SignatureValueType.BYTES) SignatureValueType.TEXT else null
 
         SignatureCodeStep.UIntBe,
