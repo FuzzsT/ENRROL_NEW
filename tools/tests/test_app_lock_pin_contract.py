@@ -37,23 +37,34 @@ def main():
         'fun lock(',
         'fun unlock(',
         'fun reconcileExpiredUnlocks(',
+        'fun restorePendingRelocks(',
         'setSuspended(packageName, true)',
         'setSuspended(packageName, false)',
         'DEVICE_OWNER_REQUIRED',
         'NOT_MANAGED',
         'store.read(packageName)',
+        'transitionLock',
+        'synchronized(transitionLock)',
+        'Uri.encode(packageName)',
+        '.setData(',
+        'rollbackSuspension(',
     ])
     assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
+    assert coordinator.count('synchronized(transitionLock)') >= 4, 'lock/unlock/reconcile/restore transitions must share synchronization'
     assert 'Accessibility' not in coordinator
     assert 'overlay' not in coordinator.lower()
 
-    need(RECEIVER, [
+    receiver = need(RECEIVER, [
         'class AppLockAlarmReceiver',
         'BroadcastReceiver',
+        'Intent.ACTION_BOOT_COMPLETED',
+        'Intent.ACTION_MY_PACKAGE_REPLACED',
+        'restorePendingRelocks(',
         'reconcileExpiredUnlocks(',
     ])
+    assert 'goAsync()' in receiver
 
-    need(ACTIVITY, [
+    activity = need(ACTIVITY, [
         'EXTRA_TARGET_PACKAGE',
         'PIN Guard',
         'Package name',
@@ -64,7 +75,9 @@ def main():
         'Unlock 15 min',
         'AppLockCoordinator',
         'reconcileExpiredUnlocks(',
+        'operationResult',
     ])
+    assert activity.index('operationResult') < activity.index('refreshState('), 'operation result must be preserved when refreshing state'
 
     need(DASHBOARD, [
         'App Lock',
@@ -73,7 +86,9 @@ def main():
 
     need(MANIFEST, [
         '<activity android:name=".AppLockActivity" android:exported="false" />',
-        '<receiver android:name=".AppLockAlarmReceiver" android:exported="false" />',
+        'android:name=".AppLockAlarmReceiver"',
+        '<action android:name="android.intent.action.BOOT_COMPLETED" />',
+        '<action android:name="android.intent.action.MY_PACKAGE_REPLACED" />',
     ])
 
     print('test_app_lock_pin_contract: PASS')
