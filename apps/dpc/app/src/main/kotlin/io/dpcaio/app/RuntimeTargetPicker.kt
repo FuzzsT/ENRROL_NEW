@@ -66,28 +66,11 @@ object RuntimeTargetPicker {
         onSelected: (String) -> Unit,
     ) {
         Thread {
-            val local = installedPackages(activity.packageManager)
-                .associateBy { it.packageName }
-                .toMutableMap()
-
-            if (shizuku != null && shizuku.awaitConnected(1200L)) {
-                parsePackages(shizuku.listPackagesForUser(userId).orEmpty()).forEach { packageName ->
-                    local.putIfAbsent(packageName, PackageChoice(packageName, packageName))
-                }
-            }
-
-            val rows = local.values.sortedWith(Comparator { left, right ->
-                val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
-                if (byLabel != 0) byLabel else String.CASE_INSENSITIVE_ORDER.compare(left.packageName, right.packageName)
-            })
+            val rows = packageChoices(activity, shizuku, userId, setOfNotNull(currentPackage?.takeIf { it.isNotBlank() }))
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 if (rows.isEmpty()) {
-                    AlertDialog.Builder(activity)
-                        .setTitle("Choose package")
-                        .setMessage("No packages are visible for user $userId in the current runtime.")
-                        .setPositiveButton("OK", null)
-                        .show()
+                    showNoPackages(activity, userId)
                     return@runOnUiThread
                 }
                 val labels = rows.map(PackageChoice::toString).toTypedArray()
@@ -102,6 +85,78 @@ object RuntimeTargetPicker {
                     .show()
             }
         }.start()
+    }
+
+    fun showPackageMultiPicker(
+        activity: Activity,
+        shizuku: ShizukuUserServiceClient? = null,
+        userId: Int,
+        currentPackages: Set<String> = emptySet(),
+        title: String = "Choose packages",
+        onSelected: (Set<String>) -> Unit,
+    ) {
+        Thread {
+            val normalizedCurrent = currentPackages.map(String::trim).filter(String::isNotEmpty).toSet()
+            val rows = packageChoices(activity, shizuku, userId, normalizedCurrent)
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                if (rows.isEmpty()) {
+                    showNoPackages(activity, userId)
+                    return@runOnUiThread
+                }
+
+                val labels = rows.map(PackageChoice::toString).toTypedArray()
+                val checked = BooleanArray(rows.size) { index -> rows[index].packageName in normalizedCurrent }
+                val selected = normalizedCurrent.toMutableSet()
+
+                AlertDialog.Builder(activity)
+                    .setTitle(title)
+                    .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                        val packageName = rows[which].packageName
+                        if (isChecked) selected += packageName else selected -= packageName
+                    }
+                    .setPositiveButton("Apply") { _, _ ->
+                        onSelected(selected.toSortedSet(String.CASE_INSENSITIVE_ORDER))
+                    }
+                    .setNeutralButton("Clear") { _, _ -> onSelected(emptySet()) }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun packageChoices(
+        activity: Activity,
+        shizuku: ShizukuUserServiceClient?,
+        userId: Int,
+        preservePackages: Set<String>,
+    ): List<PackageChoice> {
+        val choices = installedPackages(activity.packageManager)
+            .associateBy { it.packageName }
+            .toMutableMap()
+
+        if (shizuku != null && shizuku.awaitConnected(1200L)) {
+            parsePackages(shizuku.listPackagesForUser(userId).orEmpty()).forEach { packageName ->
+                choices.putIfAbsent(packageName, PackageChoice(packageName, packageName))
+            }
+        }
+
+        preservePackages.filter(PACKAGE_PATTERN::matches).forEach { packageName ->
+            choices.putIfAbsent(packageName, PackageChoice(packageName, packageName))
+        }
+
+        return choices.values.sortedWith(Comparator { left, right ->
+            val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
+            if (byLabel != 0) byLabel else String.CASE_INSENSITIVE_ORDER.compare(left.packageName, right.packageName)
+        })
+    }
+
+    private fun showNoPackages(activity: Activity, userId: Int) {
+        AlertDialog.Builder(activity)
+            .setTitle("Choose package")
+            .setMessage("No packages are visible for user $userId in the current runtime.")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     @Suppress("DEPRECATION")
