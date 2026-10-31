@@ -10,7 +10,7 @@ for pid in ['usb_data','auto_time','auto_timezone','thread_network','nfc_radio',
     assert f'"{pid}"' in c, pid
 for token in ['minApi = 31','minApi = 35','minApi = 36','minApi = 37','RiskClass.HIGH','VisibilityClass.EXPERIMENTAL']:
     assert token in c, token
-for token in ['CapabilityResolver.resolve','ManagementContextFactory.create','AndroidDevicePolicyGateway','AlertDialog.Builder','ACCESS_LOCAL_NETWORK','PolicyResult']:
+for token in ['CapabilityResolver.resolve','ManagementContextFactory.create','AndroidDevicePolicyGateway','AlertDialog.Builder','ACCESS_LOCAL_NETWORK','PolicyResult','Choose package','RuntimeTargetPicker.showPackagePicker']:
     assert token in h, token
 for token in ['ModernUi.page','ModernUi.hero','ModernUi.section','ModernUi.card','ModernUi.chip','ModernUi.action','ModernUi.actionRow']:
     assert token in h, token
