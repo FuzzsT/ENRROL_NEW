@@ -2,14 +2,22 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/engineering/SigningIdentityReader.kt'
+APP = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app'
+TARGET = APP / 'engineering/SigningIdentityReader.kt'
+RESOLVER = APP / 'engineering/SignatureCodeEvidenceResolver.kt'
 
-if not TARGET.exists():
-    raise AssertionError(f'missing {TARGET.relative_to(ROOT)}')
 
-text = TARGET.read_text(encoding='utf-8')
+def need(path: Path, needles):
+    if not path.exists():
+        raise AssertionError(f'missing {path.relative_to(ROOT)}')
+    text = path.read_text(encoding='utf-8')
+    for needle in needles:
+        if needle not in text:
+            raise AssertionError(f'{path.relative_to(ROOT)}: missing {needle!r}')
+    return text
 
-required = [
+
+text = need(TARGET, [
     'class SigningIdentityReader',
     'sealed interface SigningIdentityReadResult',
     'fun readInstalled(',
@@ -24,10 +32,7 @@ required = [
     'PACKAGE_NOT_FOUND',
     'SIGNING_INFO_UNAVAILABLE',
     'NO_CURRENT_SIGNER',
-]
-for needle in required:
-    if needle not in text:
-        raise AssertionError(f'{TARGET.relative_to(ROOT)}: missing {needle!r}')
+])
 
 for forbidden in [
     'PrivateKey',
@@ -42,8 +47,39 @@ for forbidden in [
     if forbidden in text:
         raise AssertionError(f'{TARGET.relative_to(ROOT)}: forbidden {forbidden!r}')
 
-# Require compatibility handling for modern and legacy PackageManager signatures.
 if 'PackageInfoFlags.of' not in text and 'Build.VERSION.SDK_INT >= 33' not in text:
     raise AssertionError('SigningIdentityReader must handle modern PackageInfo flags explicitly')
+
+resolver = need(RESOLVER, [
+    'enum class SignatureCodeEvidence',
+    'SIGNATURE_DERIVED',
+    'VENDOR_PROFILE_MATCH',
+    'SAMPLE_MATCHED',
+    'MANIFEST_MATCH',
+    'RUNTIME_VERIFIED',
+    'data class SignatureCodeEvidenceResult',
+    'class SignatureCodeEvidenceResolver',
+    'fun resolve(',
+    'DerivedCodeCandidate',
+    'SecretCodeInventoryRepository',
+    'SecretCodeRuntimeVerifier',
+    'SamsungSecretCodeCatalog.normalize',
+    'queryReceivers(',
+    'normalizedCode',
+    'rawHost',
+])
+
+for forbidden in [
+    'sendBroadcast(',
+    'startService(',
+    'startForegroundService(',
+    'ACTION_CALL',
+    'UssdIntentFactory',
+    'Runtime.getRuntime',
+    'ProcessBuilder',
+    'Shizuku',
+]:
+    if forbidden in resolver:
+        raise AssertionError(f'{RESOLVER.relative_to(ROOT)}: forbidden {forbidden!r}')
 
 print('test_signature_code_android_contract: PASS')
