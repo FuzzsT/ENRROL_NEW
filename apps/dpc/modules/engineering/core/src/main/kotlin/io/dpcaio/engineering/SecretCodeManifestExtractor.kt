@@ -62,7 +62,7 @@ object SecretCodeManifestExtractor {
         }
     }
 
-    private fun extractDeclarations(
+    internal fun extractDeclarations(
         events: List<BinaryXmlEvent>,
         sourceApkName: String,
         sourceKind: SecretCodeSourceKind,
@@ -74,42 +74,50 @@ object SecretCodeManifestExtractor {
             val exported: Boolean?,
             val permission: String?,
         )
+        data class DataContext(
+            val scheme: String,
+            val host: String?,
+        )
         data class FilterContext(
             val actions: MutableSet<String> = linkedSetOf(),
-            var scheme: String? = null,
-            var host: String? = null,
-            var relevantDataSeen: Boolean = false,
+            val data: MutableList<DataContext> = mutableListOf(),
         )
 
         var receiver: ReceiverContext? = null
         var filter: FilterContext? = null
         val declarations = linkedSetOf<SecretCodeDeclaration>()
 
-        fun addCandidate() {
-            val currentReceiver = receiver ?: return
-            val currentFilter = filter ?: return
-            if (currentFilter.actions.none(::isSecretCodeAction)) return
-            if (!currentFilter.relevantDataSeen) return
-
-            val rawHost = currentFilter.host?.trim()?.takeIf { it.isNotEmpty() }
-            val literal = rawHost != null && !rawHost.contains('*')
-            val declaration = SecretCodeDeclaration(
-                rawHost = rawHost,
-                normalizedCode = rawHost?.takeIf { literal },
-                receiverClassName = currentReceiver.className,
-                actions = currentFilter.actions.toSet(),
-                scheme = currentFilter.scheme,
-                enabled = currentReceiver.enabled,
-                exported = currentReceiver.exported,
-                requiredPermission = currentReceiver.permission,
-                sourceKind = sourceKind,
-                sourceApkName = sourceApkName,
-                declarationKind = if (literal) SecretCodeDeclarationKind.LITERAL_HOST else SecretCodeDeclarationKind.PATTERN_ONLY,
-            )
+        fun addCandidate(declaration: SecretCodeDeclaration) {
             if (declaration !in declarations && declarations.size >= limits.maxCandidates) {
                 throw CandidateLimitExceeded
             }
             declarations += declaration
+        }
+
+        fun addCandidates() {
+            val currentReceiver = receiver ?: return
+            val currentFilter = filter ?: return
+            if (currentFilter.actions.none(::isSecretCodeAction)) return
+
+            currentFilter.data.forEach { data ->
+                val rawHost = data.host?.trim()?.takeIf { it.isNotEmpty() }
+                val literal = rawHost != null && !rawHost.contains('*')
+                addCandidate(
+                    SecretCodeDeclaration(
+                        rawHost = rawHost,
+                        normalizedCode = rawHost?.takeIf { literal },
+                        receiverClassName = currentReceiver.className,
+                        actions = currentFilter.actions.toSet(),
+                        scheme = data.scheme,
+                        enabled = currentReceiver.enabled,
+                        exported = currentReceiver.exported,
+                        requiredPermission = currentReceiver.permission,
+                        sourceKind = sourceKind,
+                        sourceApkName = sourceApkName,
+                        declarationKind = if (literal) SecretCodeDeclarationKind.LITERAL_HOST else SecretCodeDeclarationKind.PATTERN_ONLY,
+                    )
+                )
+            }
         }
 
         try {
@@ -131,15 +139,16 @@ object SecretCodeManifestExtractor {
                         "data" -> filter?.let { current ->
                             val scheme = event.attribute("scheme")
                             if (scheme == SECRET_CODE_SCHEME) {
-                                current.scheme = scheme
-                                current.host = event.attribute("host")
-                                current.relevantDataSeen = true
+                                current.data += DataContext(
+                                    scheme = scheme,
+                                    host = event.attribute("host"),
+                                )
                             }
                         }
                     }
                     is BinaryXmlEvent.EndElement -> when (event.name) {
                         "intent-filter" -> {
-                            addCandidate()
+                            addCandidates()
                             filter = null
                         }
                         "receiver" -> {
