@@ -75,6 +75,8 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'DeveloperActivitiesActivity::class.java',
     'Open calculator',
     'Intent.CATEGORY_APP_CALCULATOR',
+    'Signature Code Lab',
+    'SignatureCodeLabActivity::class.java',
 ])
 assert 'Runtime.getRuntime' not in center
 assert 'Shizuku.newProcess' not in center
@@ -102,6 +104,7 @@ developer = need(APP / 'DeveloperActivitiesActivity.kt', [
 manifest = need(ROOT / 'apps/dpc/app/src/main/AndroidManifest.xml', [
     '.EngineeringIntentCenterActivity',
     '.DeveloperActivitiesActivity',
+    '.SignatureCodeLabActivity',
 ])
 
 dashboard = need(APP / 'AioDashboardActivity.kt', [
