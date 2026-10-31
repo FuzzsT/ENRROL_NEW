@@ -63,6 +63,15 @@ for text in (discovery, verifier):
     assert 'am broadcast' not in text
     assert 'sendBroadcast(' not in text
 
+picker = need(APP / 'RuntimeTargetPicker.kt', [
+    'fun showReceiverPicker(',
+    'PackageManager.GET_RECEIVERS',
+    'PackageManager.MATCH_DISABLED_COMPONENTS',
+    'packageInfo.receivers',
+    'ComponentName(',
+    'No broadcast receivers are visible',
+])
+
 center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'Broadcast Lab',
     'USSD / Dial Lab',
@@ -79,6 +88,9 @@ center = need(APP / 'EngineeringIntentCenterActivity.kt', [
     'SignatureCodeLabActivity::class.java',
     'Choose target package',
     'RuntimeTargetPicker.showPackagePicker',
+    'Choose target receiver',
+    'chooseBroadcastReceiver()',
+    'RuntimeTargetPicker.showReceiverPicker',
     'SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
     'putExtra(SignatureCodeLabActivity.EXTRA_TARGET_PACKAGE',
 ])
