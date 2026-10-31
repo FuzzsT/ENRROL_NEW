@@ -107,6 +107,11 @@ class EngineeringIntentCenterActivity : Activity() {
                 addView(secretCode)
                 addView(ModernUi.spacer(this@EngineeringIntentCenterActivity, 8))
                 addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Scan secret-code receivers") { scanSecretCodeReceivers() })
+                addView(
+                    ModernUi.action(this@EngineeringIntentCenterActivity, "Secret Code Inventory", primary = true) {
+                        startActivity(Intent(this@EngineeringIntentCenterActivity, SecretCodeInventoryActivity::class.java))
+                    }
+                )
                 addView(ModernUi.action(this@EngineeringIntentCenterActivity, "Open calculator") { openCalculator() })
             }
         )
