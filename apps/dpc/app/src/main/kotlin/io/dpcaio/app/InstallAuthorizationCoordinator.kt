@@ -10,6 +10,7 @@ import android.widget.EditText
 import io.dpcaio.appmanager.PinGuardResult
 import io.dpcaio.appmanager.android.PinGuardVerifier
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 class InstallAuthorizationCoordinator(
     context: Context,
@@ -18,6 +19,7 @@ class InstallAuthorizationCoordinator(
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val executor = Executors.newSingleThreadExecutor()
+    private val requestGeneration = AtomicLong(0L)
     @Volatile private var authorizationGranted = false
     @Volatile private var promptVisible = false
 
@@ -25,20 +27,23 @@ class InstallAuthorizationCoordinator(
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
-        if (!enabled) authorizationGranted = false
+        if (!enabled) invalidatePendingRequest()
     }
 
-    fun authorize(pin: CharArray): PinGuardResult {
+    private fun verifyPin(pin: CharArray): PinGuardResult {
         if (!isEnabled()) {
             pin.fill('\u0000')
-            authorizationGranted = true
             return PinGuardResult.SUCCESS
         }
         if (!pinGuard.isConfigured()) {
             pin.fill('\u0000')
             return PinGuardResult.NOT_CONFIGURED
         }
-        val result = pinGuard.verify(pin)
+        return pinGuard.verify(pin)
+    }
+
+    fun authorize(pin: CharArray): PinGuardResult {
+        val result = verifyPin(pin)
         if (result == PinGuardResult.SUCCESS) authorizationGranted = true
         return result
     }
@@ -51,6 +56,12 @@ class InstallAuthorizationCoordinator(
         return true
     }
 
+    private fun invalidatePendingRequest() {
+        requestGeneration.incrementAndGet()
+        authorizationGranted = false
+        promptVisible = false
+    }
+
     fun requestInstallAuthorization(context: Context): Boolean {
         if (!isEnabled()) {
             authorizationGranted = true
@@ -61,15 +72,16 @@ class InstallAuthorizationCoordinator(
         if (activity.isFinishing || activity.isDestroyed || promptVisible) return false
         if (!pinGuard.isConfigured()) {
             promptVisible = true
+            requestGeneration.incrementAndGet()
             AlertDialog.Builder(activity)
                 .setTitle("Require PIN for installs")
                 .setMessage("PIN Guard is not configured. Configure a PIN before installing queued packages.")
                 .setPositiveButton("Configure PIN") { _, _ ->
-                    promptVisible = false
+                    invalidatePendingRequest()
                     activity.startActivity(Intent(activity, PinGuardActivity::class.java))
                 }
-                .setNegativeButton("Cancel") { _, _ -> promptVisible = false }
-                .setOnCancelListener { promptVisible = false }
+                .setNegativeButton("Cancel") { _, _ -> invalidatePendingRequest() }
+                .setOnCancelListener { invalidatePendingRequest() }
                 .show()
             return true
         }
@@ -79,14 +91,15 @@ class InstallAuthorizationCoordinator(
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(MAX_PIN_LENGTH))
         }
+        val requestId = requestGeneration.incrementAndGet()
         promptVisible = true
         val dialog = AlertDialog.Builder(activity)
             .setTitle("Require PIN for installs")
             .setMessage("Enter PIN Guard PIN to authorize exactly one queued install.")
             .setView(field)
             .setPositiveButton("Authorize", null)
-            .setNegativeButton("Cancel") { _, _ -> promptVisible = false }
-            .setOnCancelListener { promptVisible = false }
+            .setNegativeButton("Cancel") { _, _ -> invalidatePendingRequest() }
+            .setOnCancelListener { invalidatePendingRequest() }
             .create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -95,17 +108,20 @@ class InstallAuthorizationCoordinator(
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 executor.execute {
                     val result = try {
-                        authorize(pin)
+                        verifyPin(pin)
                     } finally {
                         pin.fill('\u0000')
                     }
                     activity.runOnUiThread {
+                        if (requestGeneration.get() != requestId) return@runOnUiThread
                         if (activity.isFinishing || activity.isDestroyed) {
-                            promptVisible = false
+                            invalidatePendingRequest()
                             return@runOnUiThread
                         }
                         if (result == PinGuardResult.SUCCESS) {
+                            authorizationGranted = true
                             promptVisible = false
+                            requestGeneration.incrementAndGet()
                             dialog.dismiss()
                             notifyQueueChanged()
                         } else {
