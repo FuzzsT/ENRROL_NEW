@@ -18,6 +18,7 @@ def require(source: str, needles: list[str], label: str) -> None:
 appops = text("AppOpsVerifiedEditorActivity.kt")
 permission = text("PermissionManagerActivity.kt")
 developer = text("DeveloperActivitiesActivity.kt")
+explorer = text("ActivityExplorerActivity.kt")
 
 shared = [
     '"Choose package"',
@@ -29,11 +30,14 @@ shared = [
 require(appops, shared + [
     "readCurrent()",
     "targetUserIdOrNull()",
+    "EXTRA_TARGET_USER_ID",
+    "intent.getIntExtra(EXTRA_TARGET_USER_ID",
 ], "Verified AppOps")
 
 require(permission, shared + [
     "scanAppPermissions(false)",
     "openVerifiedAppOps()",
+    "AppOpsVerifiedEditorActivity.EXTRA_TARGET_USER_ID",
 ], "Permission Manager")
 
 require(developer, shared + [
@@ -41,5 +45,10 @@ require(developer, shared + [
     "ActivityExplorerActivity::class.java",
     'putExtra("userId", userId)',
 ], "Developer Activities")
+
+require(explorer, [
+    'intent.getIntExtra("userId", -1)',
+    "Target user ID",
+], "Activity Explorer user propagation")
 
 print("RUNTIME_TARGET_PICKER_FOLLOWUP_CONTRACT: PASS")
