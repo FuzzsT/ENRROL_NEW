@@ -2,8 +2,10 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ComponentName
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Build
 import io.dpcaio.shizuku.ShizukuUserServiceClient
 
 /**
@@ -18,6 +20,21 @@ object RuntimeTargetPicker {
 
     private data class PackageChoice(val packageName: String, val label: String) {
         override fun toString(): String = if (label == packageName) packageName else "$label • $packageName"
+    }
+
+    private data class ReceiverChoice(
+        val componentName: String,
+        val label: String,
+        val enabled: Boolean,
+        val exported: Boolean,
+    ) {
+        override fun toString(): String = buildString {
+            append(label)
+            append(" • ")
+            append(componentName)
+            append(if (enabled) " • enabled" else " • disabled")
+            append(if (exported) " • exported" else " • private")
+        }
     }
 
     fun showUserPicker(
@@ -125,6 +142,43 @@ object RuntimeTargetPicker {
         }.start()
     }
 
+    fun showReceiverPicker(
+        activity: Activity,
+        packageName: String,
+        currentComponent: String? = null,
+        onSelected: (String) -> Unit,
+    ) {
+        Thread {
+            val rows = receiverChoices(activity.packageManager, packageName)
+            val normalizedCurrent = currentComponent
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let(ComponentName::unflattenFromString)
+                ?.flattenToShortString()
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                if (rows.isEmpty()) {
+                    AlertDialog.Builder(activity)
+                        .setTitle("Choose receiver")
+                        .setMessage("No broadcast receivers are visible for $packageName.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@runOnUiThread
+                }
+                val labels = rows.map(ReceiverChoice::toString).toTypedArray()
+                val checked = rows.indexOfFirst { it.componentName == normalizedCurrent }.coerceAtLeast(0)
+                AlertDialog.Builder(activity)
+                    .setTitle("Choose receiver")
+                    .setSingleChoiceItems(labels, checked) { dialog, which ->
+                        onSelected(rows[which].componentName)
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }.start()
+    }
+
     private fun packageChoices(
         activity: Activity,
         shizuku: ShizukuUserServiceClient?,
@@ -148,6 +202,34 @@ object RuntimeTargetPicker {
         return choices.values.sortedWith(Comparator { left, right ->
             val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
             if (byLabel != 0) byLabel else String.CASE_INSENSITIVE_ORDER.compare(left.packageName, right.packageName)
+        })
+    }
+
+    private fun receiverChoices(pm: PackageManager, packageName: String): List<ReceiverChoice> {
+        val flags = PackageManager.GET_RECEIVERS or PackageManager.MATCH_DISABLED_COMPONENTS
+        val packageInfo = runCatching {
+            if (Build.VERSION.SDK_INT >= 33) {
+                pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(packageName, flags)
+            }
+        }.getOrNull() ?: return emptyList()
+
+        return packageInfo.receivers.orEmpty().map { info ->
+            val componentName = ComponentName(info.packageName, info.name).flattenToShortString()
+            val label = runCatching { info.loadLabel(pm).toString() }
+                .getOrDefault(info.name)
+                .ifBlank { info.name.substringAfterLast('.') }
+            ReceiverChoice(
+                componentName = componentName,
+                label = label,
+                enabled = info.enabled,
+                exported = info.exported,
+            )
+        }.sortedWith(Comparator { left, right ->
+            val byLabel = String.CASE_INSENSITIVE_ORDER.compare(left.label, right.label)
+            if (byLabel != 0) byLabel else String.CASE_INSENSITIVE_ORDER.compare(left.componentName, right.componentName)
         })
     }
 
