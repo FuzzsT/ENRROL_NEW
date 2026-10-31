@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallAuthorizationCoordinator.kt'
+QUEUE = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/InstallQueueCoordinator.kt'
 ACTIVITY = ROOT / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AppPackageManagerActivity.kt'
 WORKFLOW = ROOT / '.github/workflows/pr-android-ci.yml'
 
@@ -23,30 +24,37 @@ def main():
         'fun setEnabled(',
         'fun authorize(',
         'fun consumeAuthorization(',
+        'fun requestInstallAuthorization(',
         'PinGuardResult.SUCCESS',
+        'authorizationGranted',
     ])
     assert 'SharedPreferences' in auth or 'getSharedPreferences' in auth
     assert 'plaintext' not in auth.lower()
-    assert 'authorizationGranted' in auth or 'authorizedItemId' in auth
+
+    queue = need(QUEUE, [
+        'InstallAuthorizationCoordinator',
+        'fun startOrResume(',
+        'authorization.consumeAuthorization()',
+        'authorization.requestInstallAuthorization(',
+        'InstallQueueState.PREFLIGHT',
+        'store.updateItem(updated)',
+    ])
+
+    # Authorization must happen before a queued item is moved into PREFLIGHT.
+    start = queue.index('fun startOrResume(')
+    mark_installing = queue.index('fun markInstalling(', start)
+    start_body = queue[start:mark_installing]
+    assert start_body.index('authorization.consumeAuthorization()') < start_body.index('InstallQueueState.PREFLIGHT'), 'one-shot authorization must be consumed before QUEUED -> PREFLIGHT'
+    assert start_body.index('authorization.requestInstallAuthorization(') < start_body.index('InstallQueueState.PREFLIGHT'), 'PIN prompt must be requested before QUEUED -> PREFLIGHT'
+    assert start_body.index('InstallQueueState.PREFLIGHT') < start_body.index('store.updateItem(updated)'), 'PREFLIGHT state must only be persisted after authorization'
 
     activity = need(ACTIVITY, [
-        'InstallAuthorizationCoordinator',
-        'Require PIN for installs',
-        'requestInstallAuthorization(',
-        'consumeAuthorization(',
         'continueQueueIfReady(',
         'queueCoordinator.startOrResume()',
         'PackageInstaller',
         'verifyTargetAndSigner(',
         'createSession(',
     ])
-
-    # Authorization must happen before a queued item is moved into PREFLIGHT.
-    continue_start = activity.index('private fun continueQueueIfReady(')
-    process_start = activity.index('private fun processQueueItem(', continue_start)
-    continue_body = activity[continue_start:process_start]
-    assert continue_body.index('requestInstallAuthorization(') < continue_body.index('queueCoordinator.startOrResume()'), 'PIN authorization must be requested before QUEUED -> PREFLIGHT'
-    assert continue_body.index('consumeAuthorization(') < continue_body.index('queueCoordinator.startOrResume()'), 'one-shot authorization must be consumed before starting preflight'
 
     # Existing package/signer validation must remain before PackageInstaller session creation.
     single_start = activity.index('private fun installSingleApk(')
