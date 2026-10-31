@@ -94,5 +94,39 @@ fun main(){
     pmAssert(shizukuDefault.route==PermissionControlRoute.UNAVAILABLE, "DPC DEFAULT must not be faked by Shizuku")
     pmAssert(shizukuDefault.reason=="DPC_DEFAULT_REQUIRES_DPC", "default route reason")
 
+    val dump = """
+        Packages:
+          Package [com.example.camera] (abc123):
+            userId=10123
+            User 0:
+              installed=true
+              runtime permissions:
+                android.permission.CAMERA: granted=false, flags=[ USER_SET ]
+            User 10:
+              installed=true
+              runtime permissions:
+                android.permission.CAMERA: granted=true, flags=[ USER_SET ]
+    """.trimIndent()
+    pmAssert(
+        RuntimePermissionReadbackParser.parse(dump, 10, "android.permission.CAMERA") == RuntimePermissionReadbackState.GRANTED,
+        "user 10 granted runtime permission",
+    )
+    pmAssert(
+        RuntimePermissionReadbackParser.parse(dump, 0, "android.permission.CAMERA") == RuntimePermissionReadbackState.DENIED,
+        "user 0 denied runtime permission",
+    )
+    pmAssert(
+        RuntimePermissionReadbackParser.parse(dump, 10, "android.permission.RECORD_AUDIO") == RuntimePermissionReadbackState.DENIED,
+        "missing permission inside known user block is denied",
+    )
+    pmAssert(
+        RuntimePermissionReadbackParser.parse(dump, 11, "android.permission.CAMERA") == RuntimePermissionReadbackState.UNKNOWN,
+        "missing user block is unknown",
+    )
+    pmAssert(
+        RuntimePermissionReadbackParser.parse("EXECUTION_ERROR", 10, "android.permission.CAMERA") == RuntimePermissionReadbackState.UNKNOWN,
+        "malformed dump is unknown",
+    )
+
     println("PermissionManagerModelsTest: PASS")
 }
