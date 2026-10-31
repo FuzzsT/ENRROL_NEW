@@ -13,6 +13,7 @@ class AppLockActivity : Activity() {
     private lateinit var packageNameField: EditText
     private lateinit var pin: EditText
     private lateinit var status: TextView
+    private var operationResult: AppLockResult? = null
     private val actionButtons = mutableListOf<Button>()
     private val executor = Executors.newSingleThreadExecutor()
     private val coordinator by lazy { AppLockCoordinator(this) }
@@ -117,8 +118,8 @@ class AppLockActivity : Activity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 pin.text?.clear()
                 setBusy(false)
-                showStatus("$target: ${result.name}")
-                refreshState(target)
+                operationResult = result
+                refreshState(target, operationResult)
             }
         }
     }
@@ -129,12 +130,12 @@ class AppLockActivity : Activity() {
             coordinator.reconcileExpiredUnlocks()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (target.isNotBlank()) refreshState(target)
+                if (target.isNotBlank()) refreshState(target, null)
             }
         }
     }
 
-    private fun refreshState(target: String = targetPackage()) {
+    private fun refreshState(target: String = targetPackage(), operationResult: AppLockResult? = null) {
         if (target.isBlank()) {
             showStatus("Enter package name")
             return
@@ -146,7 +147,8 @@ class AppLockActivity : Activity() {
             record.locked -> "locked"
             else -> "unlocked"
         }
-        showStatus("Target: $target • $detail")
+        val operation = operationResult?.let { "Operation: ${it.name} • " }.orEmpty()
+        showStatus("${operation}Target: $target • $detail")
     }
 
     private fun setBusy(busy: Boolean) {
