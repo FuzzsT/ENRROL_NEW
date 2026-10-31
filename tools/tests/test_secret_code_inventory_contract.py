@@ -33,14 +33,15 @@ extractor = need(SRC / 'SecretCodeManifestExtractor.kt', [
 ])
 
 scanner = need(APP_ENG / 'InstalledPackageSecretCodeScanner.kt', [
+    'data class SecretCodeInventoryItem',
+    'data class SecretCodeScanProgress',
+    'sealed interface SecretCodeScanEvent',
     'class InstalledPackageSecretCodeScanner',
     'getInstalledApplications',
     'sourceDir',
     'splitSourceDirs',
     'SecretCodeManifestExtractor.extract',
     'cancelled()',
-    'SecretCodeScanProgress',
-    'SecretCodeScanEvent',
 ])
 verifier = need(APP_ENG / 'SecretCodeRuntimeVerifier.kt', [
     'enum class SecretCodeVerification',
@@ -53,9 +54,6 @@ verifier = need(APP_ENG / 'SecretCodeRuntimeVerifier.kt', [
     'MATCH_DISABLED_COMPONENTS',
 ])
 repository = need(APP_ENG / 'SecretCodeInventoryRepository.kt', [
-    'data class SecretCodeInventoryItem',
-    'data class SecretCodeScanProgress',
-    'sealed interface SecretCodeScanEvent',
     'class SecretCodeInventoryRepository',
     'fun scan(',
     'fun invalidate()',
