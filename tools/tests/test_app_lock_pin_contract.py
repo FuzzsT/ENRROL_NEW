@@ -52,7 +52,7 @@ def main():
 
     need(ACTIVITY, [
         'EXTRA_TARGET_PACKAGE',
-        'PinGuard',
+        'PIN Guard',
         'Package name',
         'Lock app',
         'Unlock permanently',
