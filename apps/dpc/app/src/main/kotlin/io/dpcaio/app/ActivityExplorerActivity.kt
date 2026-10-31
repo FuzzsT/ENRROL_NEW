@@ -95,6 +95,35 @@ class ActivityExplorerActivity : Activity() {
                 }
                 addView(packageNameInput)
                 addView(targetUserInput)
+                addView(ModernUi.spacer(this@ActivityExplorerActivity, 8))
+                addView(
+                    ModernUi.actionRow(
+                        this@ActivityExplorerActivity,
+                        ModernUi.action(this@ActivityExplorerActivity, "Choose package") {
+                            RuntimeTargetPicker.showPackagePicker(
+                                this@ActivityExplorerActivity,
+                                shizuku,
+                                targetUserId(),
+                                packageNameInput.text.toString().trim(),
+                            ) { selected ->
+                                packageNameInput.setText(selected)
+                                scan()
+                            }
+                        },
+                        ModernUi.action(this@ActivityExplorerActivity, "Choose user") {
+                            val current = AndroidUserId.fromUid(Process.myUid())
+                            RuntimeTargetPicker.showUserPicker(
+                                this@ActivityExplorerActivity,
+                                shizuku,
+                                current,
+                                targetUserId(),
+                            ) { selected ->
+                                targetUserInput.setText(selected.toString())
+                                scan()
+                            }
+                        },
+                    )
+                )
                 addView(
                     ModernUi.action(this@ActivityExplorerActivity, "Scan activities", primary = true) { scan() }
                 )
@@ -178,7 +207,7 @@ class ActivityExplorerActivity : Activity() {
         shizuku.bind()
     }
 
-    private fun targetUserId(): Int = targetUserInput.text.toString().trim().toIntOrNull()
+    private fun targetUserId(): Int = targetUserInput.text.toString().trim().toIntOrNull()?.takeIf { it >= 0 }
         ?: AndroidUserId.fromUid(Process.myUid())
 
     private fun scan() {
@@ -499,13 +528,14 @@ class ActivityExplorerActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 status.text = detail
-                if (launchAfter && decision.route == ComponentControlRoute.OWN_UID && detail.contains("VERIFIED")) {
-                    launch(activity, operationUserId)
-                } else if (launchAfter && decision.route == ComponentControlRoute.SHIZUKU && detail.contains("SUBMITTED")) {
-                    val exit = shizuku.startActivity(activity.packageName, activity.className, operationUserId)
-                    status.append("\nlaunch exit=$exit")
+                if (launchAfter && desired == ComponentOverrideState.ENABLED &&
+                    ((decision.route == ComponentControlRoute.OWN_UID && detail.contains("VERIFIED")) ||
+                        (decision.route == ComponentControlRoute.SHIZUKU && detail.contains("SUBMITTED")))
+                ) {
+                    launch(activity.copy(enabled = true, effectiveEnabled = true), operationUserId)
+                } else {
+                    scan()
                 }
-                scan()
             }
         }.start()
     }
@@ -648,25 +678,40 @@ class ActivityExplorerActivity : Activity() {
     }
 
     private fun launch(activity: DiscoveredActivity, targetUserId: Int = targetUserId()) {
-        val shizukuState = AndroidShizukuRuntime().probe()
-        val input = ActivityAccessInput(
-            packageName = activity.packageName,
-            className = activity.className,
-            enabled = activity.effectiveEnabled,
-            exported = activity.exported,
-            launcherVisible = activity.launcherVisible,
-            sameUid = activity.sameUid,
-            userAccessible = activity.userAccessible,
-            shizukuAccessible = shizukuState.binderAlive && shizukuState.permissionGranted,
-        )
-        val executor = ActivityExecutorRouter(
-            AndroidActivityRouteExecutor(
-                this,
-                UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
-            ),
-            mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId)),
-        )
-        val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
-        status.text = "selected=${result.selectedRoute}\nblockers=${result.blockers}\nattempts=${result.attempts.joinToString { "${it.route}:${it.success}" }}"
+        status.text = "Launching ${activity.className} for user $targetUserId..."
+        Thread {
+            val shizukuState = AndroidShizukuRuntime().probe()
+            val input = ActivityAccessInput(
+                packageName = activity.packageName,
+                className = activity.className,
+                enabled = activity.effectiveEnabled,
+                exported = activity.exported,
+                launcherVisible = activity.launcherVisible,
+                sameUid = activity.sameUid,
+                userAccessible = activity.userAccessible,
+                shizukuAccessible = shizukuState.binderAlive && shizukuState.permissionGranted,
+            )
+            val executor = ActivityExecutorRouter(
+                AndroidActivityRouteExecutor(
+                    this,
+                    UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
+                ),
+                mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId)),
+            )
+            val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
+            val report = buildString {
+                appendLine("selected=${result.selectedRoute}")
+                appendLine("blockers=${result.blockers}")
+                appendLine("attempts:")
+                result.attempts.forEach { attempt ->
+                    appendLine("- ${attempt.route}: success=${attempt.success} ${attempt.detail.orEmpty()}")
+                }
+            }.trimEnd()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                status.text = report
+                if (result.selectedRoute != null) scan()
+            }
+        }.start()
     }
 }
