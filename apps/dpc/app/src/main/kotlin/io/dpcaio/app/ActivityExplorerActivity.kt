@@ -91,7 +91,9 @@ class ActivityExplorerActivity : Activity() {
                     "Target user ID",
                     InputType.TYPE_CLASS_NUMBER,
                 ).apply {
-                    setText(AndroidUserId.fromUid(Process.myUid()).toString())
+                    val current = AndroidUserId.fromUid(Process.myUid())
+                    val requested = intent.getIntExtra("userId", current).takeIf { it >= 0 } ?: current
+                    setText(requested.toString())
                 }
                 addView(packageNameInput)
                 addView(targetUserInput)
