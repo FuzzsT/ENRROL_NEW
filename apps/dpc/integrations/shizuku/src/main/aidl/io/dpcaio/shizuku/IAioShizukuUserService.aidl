@@ -4,6 +4,7 @@ interface IAioShizukuUserService {
     String identity();
     int startActivity(String packageName, String className, int userId);
     int sendBroadcast(String action, String packageName, int userId);
+    String queryBroadcastReceivers(String action, int userId);
     String listPermissions();
     int grantRuntimePermission(String packageName, String permissionName, int userId);
     int revokeRuntimePermission(String packageName, String permissionName, int userId);

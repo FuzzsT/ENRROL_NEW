@@ -35,6 +35,24 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
         return runTyped(listOf("/system/bin/am", "broadcast", "--user", userId.toString(), "-a", action, "-p", packageName))
     }
 
+    override fun queryBroadcastReceivers(action: String, userId: Int): String {
+        if (!validAction(action) || userId < 0) return "INVALID_ARGUMENT"
+        return runTypedCaptureChecked(
+            listOf(
+                "/system/bin/pm",
+                "query-receivers",
+                "--brief",
+                "--components",
+                "--user",
+                userId.toString(),
+                "--query-flags",
+                "0x00000200",
+                "-a",
+                action,
+            )
+        )
+    }
+
     override fun listPermissions(): String = runTypedCapture(listOf("/system/bin/pm", "list", "permissions", "-f", "-g", "-d", "-u"))
 
     override fun grantRuntimePermission(packageName: String, permissionName: String, userId: Int): Int {
