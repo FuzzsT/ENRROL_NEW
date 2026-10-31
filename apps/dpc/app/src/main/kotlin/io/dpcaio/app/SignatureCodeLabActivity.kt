@@ -69,7 +69,9 @@ class SignatureCodeLabActivity : Activity() {
         body.addView(
             ModernUi.card(this, emphasized = true).apply {
                 packageField = ModernUi.field(this@SignatureCodeLabActivity, "Package name / search").apply {
-                    setText(savedInstanceState?.getString(STATE_PACKAGE).orEmpty())
+                    val restoredPackage = savedInstanceState?.getString(STATE_PACKAGE)
+                    val incomingPackage = intent.getStringExtra(EXTRA_TARGET_PACKAGE)
+                    setText(restoredPackage ?: incomingPackage.orEmpty())
                 }
                 addView(packageField)
                 addView(ModernUi.spacer(this@SignatureCodeLabActivity, 8))
@@ -384,6 +386,7 @@ class SignatureCodeLabActivity : Activity() {
     }
 
     companion object {
+        const val EXTRA_TARGET_PACKAGE = "signature_code_lab.target_package"
         private const val STATE_PACKAGE = "signature_code_lab.package"
         private const val STATE_SAMPLE = "signature_code_lab.sample"
         private const val STATE_CUSTOM_DIGITS = "signature_code_lab.custom_digits"
