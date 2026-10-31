@@ -31,6 +31,7 @@ class AutostartManagerActivity : Activity() {
     private lateinit var listRoot: LinearLayout
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
     private val localGateway by lazy { AndroidComponentStateGateway(this) }
+    private val submittedTargetStates = mutableMapOf<String, ComponentOverrideState>()
 
     private val protectedComponents by lazy {
         setOf(
@@ -60,6 +61,19 @@ class AutostartManagerActivity : Activity() {
             }
             addView(targetUser)
             addView(ModernUi.spacer(this@AutostartManagerActivity, 8))
+            addView(ModernUi.action(this@AutostartManagerActivity, "Choose user") {
+                val current = AndroidUserId.fromUid(Process.myUid())
+                RuntimeTargetPicker.showUserPicker(
+                    this@AutostartManagerActivity,
+                    shizuku,
+                    current,
+                    targetUserId(),
+                ) { selected ->
+                    targetUser.setText(selected.toString())
+                    scan()
+                }
+            })
+            addView(ModernUi.spacer(this@AutostartManagerActivity, 8))
             addView(ModernUi.action(this@AutostartManagerActivity, "Scan autostart") { scan() })
         })
 
@@ -80,7 +94,8 @@ class AutostartManagerActivity : Activity() {
         ?: AndroidUserId.fromUid(Process.myUid())
 
     private fun scan() {
-        output.text = "Scanning boot receivers..."
+        val selectedUser = targetUserId()
+        output.text = "Scanning boot receivers for target user $selectedUser..."
         Thread {
             val actions = listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED)
             val rows = actions.flatMap { action ->
@@ -101,8 +116,8 @@ class AutostartManagerActivity : Activity() {
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                renderRows(rows)
-                output.text = "Found ${rows.size} boot receivers • target user ${targetUserId()}"
+                renderRows(rows, selectedUser)
+                output.text = "Found ${rows.size} boot receivers • target user $selectedUser"
             }
         }.start()
     }
@@ -118,17 +133,27 @@ class AutostartManagerActivity : Activity() {
             packageManager.queryBroadcastReceivers(intent, PackageManager.MATCH_DISABLED_COMPONENTS)
         }
 
-    private fun renderRows(rows: List<BootReceiver>) {
+    private fun renderRows(rows: List<BootReceiver>, selectedUser: Int = targetUserId()) {
         listRoot.removeAllViews()
+        val currentUser = AndroidUserId.fromUid(Process.myUid())
         rows.forEach { row ->
-            val readback = runCatching { localGateway.readback(row.component, row.manifestEnabled) }.getOrNull()
+            val readback = if (selectedUser == currentUser) {
+                runCatching { localGateway.readback(row.component, row.manifestEnabled) }.getOrNull()
+            } else {
+                null
+            }
+            val submitted = submittedTargetStates[stateKey(selectedUser, row.component)]
             val protected = row.component in protectedComponents
-            listRoot.addView(ModernUi.card(this, emphasized = readback?.effectiveEnabled == true).apply {
+            listRoot.addView(ModernUi.card(this, emphasized = readback?.effectiveEnabled == true || submitted == ComponentOverrideState.ENABLED).apply {
                 addView(ModernUi.title(this@AutostartManagerActivity, row.label))
+                val stateText = if (selectedUser == currentUser) {
+                    "CURRENT_USER_READBACK user=$selectedUser • Manifest=${row.manifestEnabled} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}"
+                } else {
+                    "TARGET_USER_SUBMITTED user=$selectedUser • requested=${submitted?.name ?: "none"} • manifest metadata=${row.manifestEnabled} • local readback intentionally not reused"
+                }
                 addView(ModernUi.body(
                     this@AutostartManagerActivity,
-                    "${row.component.flattenToShortString()}\n${row.action}\n" +
-                        "Manifest=${row.manifestEnabled} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}" +
+                    "${row.component.flattenToShortString()}\n${row.action}\n$stateText" +
                         if (protected) "\nPROTECTED_DPC_COMPONENT" else "",
                 ))
                 addView(ModernUi.action(this@AutostartManagerActivity, "Enable") {
@@ -137,9 +162,15 @@ class AutostartManagerActivity : Activity() {
                 addView(ModernUi.action(this@AutostartManagerActivity, "Disable", destructive = true) {
                     mutate(row, ComponentOverrideState.DISABLED)
                 }.apply { isEnabled = !protected })
+                addView(ModernUi.action(this@AutostartManagerActivity, "Restore default") {
+                    mutate(row, ComponentOverrideState.DEFAULT)
+                }.apply { isEnabled = !protected })
             })
         }
     }
+
+    private fun stateKey(userId: Int, component: ComponentName): String =
+        "$userId:${component.flattenToString()}"
 
     private fun mutate(row: BootReceiver, state: ComponentOverrideState) {
         if (row.component in protectedComponents) {
@@ -147,14 +178,15 @@ class AutostartManagerActivity : Activity() {
             return
         }
         val userId = targetUserId()
-        output.text = "Applying ${state.name} to ${row.component.flattenToShortString()}..."
+        val currentUser = AndroidUserId.fromUid(Process.myUid())
+        output.text = "Applying ${state.name} to ${row.component.flattenToShortString()} for target user $userId..."
         Thread {
             val samePackage = row.component.packageName == packageName
-            val detail = if (samePackage && userId == AndroidUserId.fromUid(Process.myUid())) {
+            val detail = if (samePackage && userId == currentUser) {
                 val result = localGateway.setState(row.component, row.manifestEnabled, state, dontKillApp = true)
-                "LOCAL accepted=${result.accepted} observed=${result.observedState} ${result.detail}"
+                "CURRENT_USER_READBACK accepted=${result.accepted} requested=$state observed=${result.observedState} effective=${result.effectiveEnabled} ${result.detail}"
             } else {
-                val ready = shizuku.awaitConnected(1500L)
+                val ready = shizuku.awaitConnected(1800L)
                 if (!ready) {
                     "SHIZUKU_NOT_READY"
                 } else {
@@ -164,11 +196,18 @@ class AutostartManagerActivity : Activity() {
                         userId,
                         state,
                     )
-                    "SHIZUKU submitted=${result.submitted} exit=${result.exitCode} ${result.detail}"
+                    if (result.submitted) {
+                        "TARGET_USER_SUBMITTED user=$userId requested=$state exit=${result.exitCode} ${result.detail}"
+                    } else {
+                        "TARGET_USER_FAILED user=$userId requested=$state exit=${result.exitCode} ${result.detail}"
+                    }
                 }
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (detail.startsWith("TARGET_USER_SUBMITTED")) {
+                    submittedTargetStates[stateKey(userId, row.component)] = state
+                }
                 output.text = detail
                 scan()
             }

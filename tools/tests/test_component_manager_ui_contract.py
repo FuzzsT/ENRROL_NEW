@@ -8,10 +8,12 @@ d=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt'
 c=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/ControlCenterActivity.kt'
 p=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/PermissionManagerActivity.kt'
 autostart=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AutostartManagerActivity.kt'
+picker=ROOT/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/RuntimeTargetPicker.kt'
 manifest=ROOT/'apps/dpc/app/src/main/AndroidManifest.xml'
 assert s.is_file(),s
-t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text()
-for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor']:
+assert picker.is_file(),picker
+t=u.read_text(); ht=h.read_text(); at=a.read_text(); st=s.read_text(); dt=d.read_text(); ct=c.read_text(); pt=p.read_text(); pick=picker.read_text(encoding='utf-8')
+for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective','Enable','Disable','Restore default','Enable & Launch','Batch Enable','Batch Disable','Batch Restore Default','Batch Preview','Apply batch','Restore snapshot','BATCH_NOT_ATOMIC','setStates(','PROTECTED_DPC_COMPONENT','AndroidComponentStateGateway','ShizukuComponentStateExecutor','Choose package','Choose user','RuntimeTargetPicker.showPackagePicker','RuntimeTargetPicker.showUserPicker']:
     assert n in t,n
 for n in [
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
@@ -81,6 +83,9 @@ for n in [
 assert 'createDeviceProtectedStorageContext' in st
 assert 'previousOverrideState' in st
 
+for n in ['object RuntimeTargetPicker','showUserPicker(','showPackagePicker(','listUsers()','listPackagesForUser(userId)','AlertDialog.Builder']:
+    assert n in pick,f'Runtime target picker missing {n}'
+
 assert autostart.is_file(), 'AutostartManagerActivity.kt missing'
 aut=autostart.read_text(encoding='utf-8')
 for n in [
@@ -94,6 +99,11 @@ for n in [
     'ComponentOverrideState.ENABLED',
     'ComponentOverrideState.DISABLED',
     'Target user ID',
+    'Choose user',
+    'RuntimeTargetPicker.showUserPicker',
+    'CURRENT_USER_READBACK',
+    'TARGET_USER_SUBMITTED',
+    'Restore default',
 ]:
     assert n in aut,f'Autostart Manager missing {n}'
 mt=manifest.read_text(encoding='utf-8')

@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.os.Process
 import android.widget.EditText
 import android.widget.TextView
 import io.dpcaio.app.engineering.SignatureCodeEvidenceResolver
@@ -25,6 +26,7 @@ import io.dpcaio.engineering.SignatureCodeSampleMatcherResult
 import io.dpcaio.engineering.SignatureCodeSource
 import io.dpcaio.engineering.SignatureCodeStep
 import io.dpcaio.engineering.SignatureCodeVendorProfileMatcher
+import io.dpcaio.platform.AndroidUserId
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -71,6 +73,17 @@ class SignatureCodeLabActivity : Activity() {
                 }
                 addView(packageField)
                 addView(ModernUi.spacer(this@SignatureCodeLabActivity, 8))
+                addView(
+                    ModernUi.action(this@SignatureCodeLabActivity, "Choose package") {
+                        RuntimeTargetPicker.showPackagePicker(
+                            this@SignatureCodeLabActivity,
+                            userId = AndroidUserId.fromUid(Process.myUid()),
+                            currentPackage = packageField.text.toString().trim(),
+                        ) { selected ->
+                            packageField.setText(selected)
+                        }
+                    }
+                )
                 addView(
                     ModernUi.actionRow(
                         this@SignatureCodeLabActivity,

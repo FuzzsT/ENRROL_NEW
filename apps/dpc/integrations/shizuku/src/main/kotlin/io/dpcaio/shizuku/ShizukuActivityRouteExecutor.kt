@@ -13,12 +13,15 @@ class ShizukuActivityRouteExecutor(
         if (route != ActivityRoute.SHIZUKU) {
             return ActivityRouteResult(route, false, "Unsupported route for Shizuku executor")
         }
+        if (!client.awaitConnected(1800L)) {
+            return ActivityRouteResult(route, false, "Shizuku user service not connected")
+        }
         val result = client.startActivity(input.packageName, input.className, userId)
-            ?: return ActivityRouteResult(route, false, "Shizuku user service not connected")
+            ?: return ActivityRouteResult(route, false, "Shizuku user service disconnected")
         return ActivityRouteResult(
             route = route,
             success = result == 0,
-            detail = "Shizuku am start exit=$result"
+            detail = "Shizuku shell launch exit=$result"
         )
     }
 }
