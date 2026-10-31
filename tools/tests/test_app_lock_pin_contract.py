@@ -86,7 +86,7 @@ def main():
     reconcile_start = coordinator.index('fun reconcileExpiredUnlocks(')
     restore_start = coordinator.index('fun restorePendingRelocks(', reconcile_start)
     reconcile_body = coordinator[reconcile_start:restore_start]
-    assert 'keepPendingRecovery(record.copy(pendingUnlock = true))' in reconcile_body, 'failed expiry relock must persist recovery state and schedule a retry'
+    assert 'keepPendingRecovery(record.copy(' in reconcile_body and 'pendingUnlock = true' in reconcile_body and 'pendingLock = false' in reconcile_body, 'failed expiry relock must persist recovery state and schedule a retry'
 
     restore_body = coordinator[restore_start:coordinator.index('fun state(', restore_start)]
     assert 'record.pendingLock' in restore_body, 'boot/update recovery must process incomplete lock ownership transitions'
