@@ -64,10 +64,15 @@ class EngineeringIntentCenterActivity : Activity() {
                             this@EngineeringIntentCenterActivity,
                             userId = AndroidUserId.fromUid(Process.myUid()),
                             currentPackage = broadcastPackage.text.toString().trim(),
-                        ) { selected -> broadcastPackage.setText(selected) }
+                        ) { selected -> applyBroadcastPackage(selected) }
                     }
                 )
                 addView(broadcastComponent)
+                addView(
+                    ModernUi.action(this@EngineeringIntentCenterActivity, "Choose target receiver") {
+                        chooseBroadcastReceiver()
+                    }
+                )
                 addView(broadcastData)
                 addView(extraKey)
                 addView(extraType)
@@ -160,6 +165,41 @@ class EngineeringIntentCenterActivity : Activity() {
         body.addView(ModernUi.outputCard(this, output))
 
         setContentView(ModernUi.scrollPage(this, body))
+    }
+
+    private fun applyBroadcastPackage(packageName: String) {
+        val currentComponent = ComponentName.unflattenFromString(broadcastComponent.text.toString().trim())
+        broadcastPackage.setText(packageName)
+        if (currentComponent != null && currentComponent.packageName != packageName) {
+            broadcastComponent.setText("")
+        }
+    }
+
+    private fun chooseBroadcastReceiver() {
+        val selectedPackage = broadcastPackage.text.toString().trim()
+        if (selectedPackage.isNotEmpty()) {
+            showReceiverPicker(selectedPackage)
+            return
+        }
+        RuntimeTargetPicker.showPackagePicker(
+            this,
+            userId = AndroidUserId.fromUid(Process.myUid()),
+            currentPackage = null,
+        ) { packageName ->
+            applyBroadcastPackage(packageName)
+            showReceiverPicker(packageName)
+        }
+    }
+
+    private fun showReceiverPicker(packageName: String) {
+        RuntimeTargetPicker.showReceiverPicker(
+            this,
+            packageName = packageName,
+            currentComponent = broadcastComponent.text.toString().trim(),
+        ) { componentName ->
+            applyBroadcastPackage(packageName)
+            broadcastComponent.setText(componentName)
+        }
     }
 
     private fun buildBroadcast(): Intent {
