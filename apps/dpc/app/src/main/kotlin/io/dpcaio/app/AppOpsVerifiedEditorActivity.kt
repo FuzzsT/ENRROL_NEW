@@ -91,6 +91,34 @@ class AppOpsVerifiedEditorActivity : Activity() {
                 }
                 addView(packageNameField)
                 addView(userIdField)
+                addView(
+                    ModernUi.actionRow(
+                        this@AppOpsVerifiedEditorActivity,
+                        ModernUi.action(this@AppOpsVerifiedEditorActivity, "Choose package") {
+                            RuntimeTargetPicker.showPackagePicker(
+                                this@AppOpsVerifiedEditorActivity,
+                                shizuku,
+                                targetUserIdOrNull() ?: AndroidUserId.fromUid(Process.myUid()),
+                                packageNameField.text.toString().trim(),
+                            ) { selected ->
+                                packageNameField.setText(selected)
+                                readCurrent()
+                            }
+                        },
+                        ModernUi.action(this@AppOpsVerifiedEditorActivity, "Choose user") {
+                            val current = AndroidUserId.fromUid(Process.myUid())
+                            RuntimeTargetPicker.showUserPicker(
+                                this@AppOpsVerifiedEditorActivity,
+                                shizuku,
+                                current,
+                                targetUserIdOrNull() ?: current,
+                            ) { selected ->
+                                userIdField.setText(selected.toString())
+                                if (packageNameField.text.isNotBlank()) readCurrent()
+                            }
+                        },
+                    )
+                )
                 addView(opField)
                 addView(ModernUi.body(this@AppOpsVerifiedEditorActivity, "AppOp mode"))
                 addView(modeSpinner)
