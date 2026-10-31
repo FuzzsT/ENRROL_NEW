@@ -56,6 +56,9 @@ def main():
         'pendingUnlock = true',
         'pendingUnlock = false',
         'it.pendingUnlock',
+        'private fun rollbackSuspension(packageName: String): Boolean',
+        'rollbackVerified',
+        'keepPendingRecovery(',
     ])
     assert coordinator.index('store.read(packageName)') < coordinator.index('setSuspended(packageName, false)'), 'unlock must verify App Lock ownership before unsuspending a package'
     assert coordinator.index('pendingUnlock = true') < coordinator.index('setSuspended(packageName, false)'), 'recoverable pending unlock must be persisted before unsuspending'
@@ -63,6 +66,16 @@ def main():
     assert 'setAndAllowWhileIdle(' not in coordinator, 'bounded App Lock unlocks must not rely on inexact alarms'
     assert 'Accessibility' not in coordinator
     assert 'overlay' not in coordinator.lower()
+
+    # A non-VERIFIED unsuspend may still have changed platform state. Recovery must remain
+    # pending until a verified resuspension succeeds.
+    unsuspend_index = coordinator.index('val outcome = policy.setSuspended(packageName, false)')
+    non_verified_index = coordinator.index('if (outcome.verification != AppPolicyVerification.VERIFIED)', unsuspend_index)
+    recovery_index = coordinator.index('keepPendingRecovery(', non_verified_index)
+    assert recovery_index > non_verified_index, 'failed unsuspend verification must preserve fail-closed recovery state'
+
+    # All rollback paths must verify resuspension before clearing pending recovery state.
+    assert coordinator.count('rollbackVerified') >= 3, 'rollback result must be checked on every post-unsuspend failure path'
 
     receiver = need(RECEIVER, [
         'class AppLockAlarmReceiver',
