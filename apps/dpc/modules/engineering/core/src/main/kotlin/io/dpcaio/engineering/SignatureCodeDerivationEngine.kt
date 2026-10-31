@@ -30,6 +30,7 @@ class SignatureCodeDerivationEngine {
         recipe: SignatureCodeRecipe,
         signer: SigningCertificateIdentity,
         limits: SignatureCodeLimits = SignatureCodeLimits(),
+        source: SignatureCodeSource = SignatureCodeSource.AUTO,
     ): SignatureCodeDerivationResult {
         val validation = SignatureCodeRecipeValidator.validate(recipe, limits)
         if (validation is SignatureCodeRecipeValidation.Invalid) {
@@ -75,7 +76,7 @@ class SignatureCodeDerivationEngine {
                 recipeName = recipe.displayName,
                 candidate = output,
                 candidateKind = recipe.outputKind,
-                source = SignatureCodeSource.AUTO,
+                source = source,
                 stages = stages,
             )
         )
