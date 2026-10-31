@@ -85,7 +85,7 @@ for n in [
 assert 'createDeviceProtectedStorageContext' in st
 assert 'previousOverrideState' in st
 
-for n in ['object RuntimeTargetPicker','showUserPicker(','showPackagePicker(','listUsers()','listPackagesForUser(userId)','AlertDialog.Builder']:
+for n in ['object RuntimeTargetPicker','showUserPicker(','showPackagePicker(','showPackageMultiPicker(','setMultiChoiceItems','listUsers()','listPackagesForUser(userId)','AlertDialog.Builder']:
     assert n in pick,f'Runtime target picker missing {n}'
 assert r'UserInfo\\{' in pick, 'Runtime target picker must keep the escaped UserInfo regex source contract'
 
