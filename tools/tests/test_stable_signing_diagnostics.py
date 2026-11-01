@@ -6,6 +6,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 SETUP_TOOL = ROOT / "tools/release/stable_signing_setup.py"
+RECOVERY_TOOL = ROOT / "tools/release/recover_stable_signing.py"
 
 workflow = WORKFLOW.read_text(encoding="utf-8")
 
@@ -77,5 +78,37 @@ assert help_proc.returncode == 0, help_proc.stdout
 assert "--keystore" in help_proc.stdout
 assert "--apply" in help_proc.stdout
 assert "--repo" in help_proc.stdout
+
+assert RECOVERY_TOOL.is_file(), "persisted stable signer recovery tool is missing"
+recovery_source = RECOVERY_TOOL.read_text(encoding="utf-8")
+for token in [
+    "DPC-AIO-signing-keystore.enc",
+    "dpc-aio-continuous",
+    "aes-256-cbc",
+    "pbkdf2",
+    "600000",
+    "DPC_AIO_LEGACY_SIGNING_PASSWORD",
+    "getpass",
+    "stable_signing_setup.py",
+    "--apply",
+    "TemporaryDirectory",
+]:
+    assert token in recovery_source, f"stable signer recovery tool missing contract token: {token}"
+
+for forbidden in [
+    "print(password)",
+    "--pass", "password=" + "{password}",
+]:
+    assert forbidden not in recovery_source, f"stable signer recovery tool must not expose passwords: {forbidden}"
+
+recovery_help = subprocess.run(
+    [sys.executable, str(RECOVERY_TOOL), "--help"],
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+)
+assert recovery_help.returncode == 0, recovery_help.stdout
+for token in ["--encrypted", "--alias", "--repo", "--apply"]:
+    assert token in recovery_help.stdout, f"recovery help missing: {token}"
 
 print("STABLE_SIGNING_DIAGNOSTICS: PASS")
