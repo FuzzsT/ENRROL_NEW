@@ -40,6 +40,7 @@ class AutostartManagerActivity : Activity() {
     private val shizuku by lazy { ShizukuUserServiceClient(this) }
     private val localGateway by lazy { AndroidComponentStateGateway(this) }
     private val submittedTargetStates = mutableMapOf<String, ComponentOverrideState>()
+    private var scanGeneration = 0L
 
     private val protectedComponents by lazy {
         setOf(
@@ -102,6 +103,7 @@ class AutostartManagerActivity : Activity() {
         ?: AndroidUserId.fromUid(Process.myUid())
 
     private fun scan() {
+        val generation = ++scanGeneration
         val selectedUser = targetUserId()
         val currentUser = AndroidUserId.fromUid(Process.myUid())
         output.text = "Scanning boot receivers for target user $selectedUser..."
@@ -114,6 +116,7 @@ class AutostartManagerActivity : Activity() {
 
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != scanGeneration) return@runOnUiThread
                 renderRows(inventory.rows, selectedUser)
                 output.text = if (inventory.error != null) {
                     "Cross-user inventory unavailable for user $selectedUser: ${inventory.error}"
