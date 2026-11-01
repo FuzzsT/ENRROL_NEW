@@ -15,5 +15,16 @@ for n in ['fun awaitConnected(timeoutMs: Long','SystemClock.elapsedRealtime()','
     assert n in ct,f'Shizuku readiness wait missing {n}'
 for n in ['val shizukuReady = shizuku?.awaitConnected(','shizukuAvailable = shizukuReady']:
     assert n in at,f'AUTO permission readiness missing {n}'
+for n in [
+    'shizuku?.getRuntimePermissionState(packageName, entry.name, userId)',
+    'shizuku?.getAppOp(packageName, pair.commandName, userId)',
+    'AppOpReadbackParser.parse(',
+    'observed=GRANTED',
+    'effectiveMode',
+    'user=$userId',
+]:
+    assert n in at,f'target-user AUTO permission readback missing {n}'
+assert 'exit == 0 && isGranted(packageName, entry.name)' not in at,'Shizuku runtime grant must not verify through current-user PackageManager'
+assert 'exit == 0 && verifyAppOp(packageName, pair.opStr)' not in at,'Shizuku AppOp grant must not verify through current-user uid/AppOpsManager'
 assert 'shizuku?.identity() != null' not in at,'AUTO permissions must not race on immediate identity() readback'
 print('PERMISSION_MANAGER_100_ANDROID_CONTRACT: PASS')
