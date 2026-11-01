@@ -13,6 +13,12 @@ for n in [
     assert n in t, f'component disabled readback mapping missing {n}'
 for n in ['manifestEnabled','overrideState','effectiveEnabled']:
     assert n in inv,n
+for n in [
+    'val currentUser = UserHandle.getUserHandleForUid(Process.myUid())',
+    'val sameUid = user == currentUser && packageUid != null && packageUid == Process.myUid()',
+    'sameUid = user == currentUser && launcherInfo.applicationInfo.uid == Process.myUid()',
+]:
+    assert n in inv, f'cross-user sameUid guard missing {n}'
 for forbidden in ['DevicePolicyManager','enableForeignActivity','disableForeignActivity']:
     assert forbidden not in t,forbidden
 print('COMPONENT_MANAGER_ANDROID_CONTRACT: PASS')
