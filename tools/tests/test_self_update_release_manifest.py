@@ -113,6 +113,12 @@ def main():
         "dpc-aio-stable",
         "DPC-AIO-enterprise-release.apk",
         "gh release upload",
+        "Verify published self-update manifest",
+        "public-self-update.json",
+        "manifest_apk_sha",
+        "manifest_apk_url",
+        "manifest_channel",
+        "PUBLIC_SELF_UPDATE_VERIFY_FAILED",
     ]:
         assert token in workflow, f"self-update release workflow missing: {token}"
     assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
@@ -138,6 +144,15 @@ def main():
     )
     assert 'if [[ "$mode" == "stable" && "$GITHUB_REF" == "refs/heads/main" && -z "${{ inputs.apk_url }}" ]]; then' in workflow, (
         "stable main builds must publish dpc-aio-continuous when they build their own APK"
+    )
+    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow, (
+        "published self-update verification must fetch the public manifest"
+    )
+    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow, (
+        "published self-update verification must fetch the APK declared by the manifest"
+    )
+    assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow, (
+        "published self-update verification must require public, manifest, and local APK SHA-256 identity"
     )
 
     client = CLIENT.read_text(encoding="utf-8")
