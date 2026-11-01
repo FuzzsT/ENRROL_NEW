@@ -11,7 +11,11 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class EnrollmentSecrets(val enrollmentToken: String? = null, val password: String? = null)
+data class EnrollmentSecrets(
+    val enrollmentToken: String? = null,
+    val password: String? = null,
+    val knoxLicenseKey: String? = null,
+)
 
 class EnrollmentSecretStore(context: Context) {
     private val prefs = context.createDeviceProtectedStorageContext()
@@ -21,6 +25,7 @@ class EnrollmentSecretStore(context: Context) {
         val plaintext = JSONObject().apply {
             put("token", secrets.enrollmentToken ?: JSONObject.NULL)
             put("password", secrets.password ?: JSONObject.NULL)
+            put("knoxLicenseKey", secrets.knoxLicenseKey ?: JSONObject.NULL)
         }.toString().toByteArray(Charsets.UTF_8)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
@@ -46,6 +51,7 @@ class EnrollmentSecretStore(context: Context) {
                 EnrollmentSecrets(
                     enrollmentToken = json.optString("token").takeIf { it.isNotBlank() && it != "null" },
                     password = json.optString("password").takeIf { it.isNotBlank() && it != "null" },
+                    knoxLicenseKey = json.optString("knoxLicenseKey").takeIf { it.isNotBlank() && it != "null" },
                 )
             } finally {
                 plaintext.fill(0)
