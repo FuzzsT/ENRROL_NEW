@@ -18,8 +18,8 @@ for n in ['val shizukuReady = shizuku?.awaitConnected(','shizukuAvailable = shiz
 for n in [
     'private fun isAlreadyGranted(',
     'AndroidUserId.fromUid(Process.myUid())',
-    'shizuku?.getRuntimePermissionState(packageName, entry.name, userId)',
-    'shizuku?.getAppOp(packageName, pair.commandName, userId)',
+    'shizuku.getRuntimePermissionState(packageName, entry.name, userId)',
+    'shizuku.getAppOp(packageName, pair.commandName, userId)',
     'AppOpReadbackParser.parse(',
     'observed=GRANTED',
     'effectiveMode',
@@ -38,7 +38,7 @@ for n in [
     'val appOp = APP_OPS[entry.name]',
     'if (appOp != null)',
     'return verifyAppOp(packageName, appOp.opStr)',
-    'shizuku?.getAppOp(packageName, appOp.commandName, userId)',
+    'shizuku.getAppOp(packageName, appOp.commandName, userId)',
     'AppOpReadbackParser.parse(snapshot)?.effectiveMode == "allow"',
 ]:
     assert n in at,f'AppOp-aware alreadyGranted readback missing {n}'
