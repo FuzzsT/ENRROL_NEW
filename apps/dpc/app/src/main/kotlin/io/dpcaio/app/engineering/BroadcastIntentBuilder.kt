@@ -30,7 +30,7 @@ object BroadcastIntentBuilder {
         if (normalizedPackage != null && !PACKAGE_PATTERN.matches(normalizedPackage)) {
             error("Broadcast target package is invalid")
         }
-        if (normalizedPackage != null && request.component != null && request.component?.packageName != normalizedPackage) {
+        if (normalizedPackage != null && request.component != null && request.component.packageName != normalizedPackage) {
             error("Broadcast component package must match target package")
         }
         val intent = Intent(request.action)
