@@ -118,6 +118,12 @@ def main():
     assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
     assert 'channel="continuous"' in workflow, "rolling release must produce continuous self-update channel"
     assert 'stable_alias="dpc-aio-stable"' in workflow, "stable self-update must use deterministic alias"
+    assert 'if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then' in workflow, (
+        "manual auto runs must be detected before the main-branch emergency fallback"
+    )
+    assert 'mode="stable" # manual auto repair/publish path' in workflow, (
+        "workflow_dispatch with signing_mode=auto must select stable signing for continuous self-update publishing"
+    )
 
     client = CLIENT.read_text(encoding="utf-8")
     for token in [
