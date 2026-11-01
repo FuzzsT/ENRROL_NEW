@@ -1,0 +1,89 @@
+name: Self Update health
+
+on:
+  pull_request:
+    paths:
+      - 'apps/dpc/modules/self-update/**'
+      - 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt'
+      - 'tools/tests/test_self_update_*.py'
+      - '.github/workflows/self-update-health.yml'
+      - '.github/workflows/build-aio-enrollment.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/dpc/modules/self-update/**'
+      - 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt'
+      - 'tools/tests/test_self_update_*.py'
+      - '.github/workflows/self-update-health.yml'
+      - '.github/workflows/build-aio-enrollment.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Self Update contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Run focused source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_self_update_core_contract.py
+          python3 tools/tests/test_self_update_release_manifest.py
+          python3 tools/tests/test_self_update_http_diagnostics.py
+
+  published-channel-health:
+    name: Published channel health
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe self-update manifests
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p channel-health
+          failures=0
+
+          probe() {
+            channel="$1"
+            tag="$2"
+            url="https://github.com/${REPOSITORY}/releases/download/${tag}/self-update.json"
+            code="$(curl -sS -L -o "channel-health/${channel}.json" -w '%{http_code}' --connect-timeout 15 --max-time 45 "$url" || true)"
+            if [[ "$code" != "200" ]]; then
+              echo "SELF_UPDATE_CHANNEL_UNAVAILABLE channel=$channel tag=$tag http=$code url=$url"
+              failures=$((failures + 1))
+              return
+            fi
+            python3 - "$channel" "channel-health/${channel}.json" <<'PY'
+import json
+import sys
+
+expected, path = sys.argv[1:]
+with open(path, encoding='utf-8') as fh:
+    data = json.load(fh)
+assert data.get('schemaVersion') == 1, data
+assert data.get('channel') == expected, data
+assert str(data.get('apkUrl', '')).startswith('https://'), data
+assert data.get('apkSha256'), data
+assert int(data.get('versionCode', 0)) > 0, data
+print(f"SELF_UPDATE_CHANNEL_OK channel={expected} version={data.get('versionName')} code={data.get('versionCode')}")
+PY
+          }
+
+          probe stable dpc-aio-stable
+          probe continuous dpc-aio-continuous
+
+          if [[ "$failures" -gt 0 ]]; then
+            echo "One or more published self-update channels are unavailable. Run Enrollment build + release manually with signing_mode=stable to republish continuous, or create a signed version tag to refresh stable."
+            exit 1
+          fi
