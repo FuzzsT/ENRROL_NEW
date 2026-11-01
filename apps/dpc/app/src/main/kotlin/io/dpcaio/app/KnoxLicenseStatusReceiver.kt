@@ -11,7 +11,7 @@ class KnoxLicenseStatusReceiver : BroadcastReceiver() {
         if (intent.action != ACTION_KNOX_LICENSE_STATUS) return
 
         val managerClass = runCatching {
-            Class.forName(KnoxLicenseController.KNOX_MANAGER_CLASS, false, context.classLoader)
+            Class.forName(KNOX_MANAGER_CLASS, false, context.classLoader)
         }.getOrNull() ?: return
 
         val statusExtra = stringConstant(managerClass, "EXTRA_LICENSE_STATUS") ?: return
@@ -51,6 +51,7 @@ class KnoxLicenseStatusReceiver : BroadcastReceiver() {
         runCatching { clazz.getField(fieldName).get(null) as? String }.getOrNull()
 
     companion object {
+        private const val KNOX_MANAGER_CLASS = "com.samsung.android.knox.license.KnoxEnterpriseLicenseManager"
         const val ACTION_KNOX_LICENSE_STATUS = "com.samsung.android.knox.intent.action.KNOX_LICENSE_STATUS"
     }
 }
