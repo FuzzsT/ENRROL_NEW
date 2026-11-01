@@ -19,6 +19,14 @@ for n in [
     'sameUid = user == currentUser && launcherInfo.applicationInfo.uid == Process.myUid()',
 ]:
     assert n in inv, f'cross-user sameUid guard missing {n}'
+for n in [
+    'private fun targetPackageAvailable(packageName: String, user: UserHandle, currentUser: UserHandle): Boolean',
+    'if (user == currentUser) return true',
+    'if (user !in launcherApps.profiles) return false',
+    'launcherApps.getApplicationInfo(packageName, 0, user)',
+    'if (!targetPackageAvailable(packageName, user, currentUser)) return emptyList()',
+]:
+    assert n in inv, f'target-user package availability guard missing {n}'
 for forbidden in ['DevicePolicyManager','enableForeignActivity','disableForeignActivity']:
     assert forbidden not in t,forbidden
 print('COMPONENT_MANAGER_ANDROID_CONTRACT: PASS')
