@@ -20,6 +20,8 @@ ENROLLMENT_ENDPOINT = 'io.dpcaio.extra.ENROLLMENT_ENDPOINT'
 ENROLLMENT_SOURCE = 'io.dpcaio.extra.ENROLLMENT_SOURCE'
 ENROLLMENT_OFFLINE_MODE = 'io.dpcaio.extra.ENROLLMENT_OFFLINE_MODE'
 OFFLINE_BUNDLE_ID = 'io.dpcaio.extra.OFFLINE_BUNDLE_ID'
+KNOX_LICENSE_KEY = 'knox.licenseKey'
+KNOX_AUTO_ACTIVATE = 'knox.autoActivate'
 OFFLINE_MODES = ('ONLINE', 'ONLINE_PREFERRED', 'FULL_OFFLINE', 'OFFLINE_THEN_SYNC')
 
 
@@ -76,6 +78,8 @@ def main() -> int:
     p.add_argument('--allow-offline', action='store_true')
     p.add_argument('--offline-mode', choices=OFFLINE_MODES, default='ONLINE')
     p.add_argument('--offline-bundle-id', default='')
+    p.add_argument('--knox-license-key', default='', help='Optional KPE key carried only in provisioning admin extras')
+    p.add_argument('--knox-auto-activate', action='store_true', help='Request Knox activation after ownership checks')
     args = p.parse_args()
 
     if not args.apk.is_file():
@@ -84,6 +88,8 @@ def main() -> int:
         p.error('--apk-url must use https:// for Android setup provisioning')
     if args.enrollment_endpoint and not args.enrollment_endpoint.lower().startswith('https://'):
         p.error('--enrollment-endpoint must use https://')
+    if args.knox_auto_activate and not args.knox_license_key.strip():
+        p.error('--knox-auto-activate requires --knox-license-key')
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     apk_hex, apk_b64 = sha256_file(args.apk)
@@ -111,6 +117,8 @@ def main() -> int:
         'enrollmentSource': args.enrollment_source,
         'offlineMode': args.offline_mode,
         'offlineBundleId': args.offline_bundle_id or None,
+        'knoxLicenseConfigured': bool(args.knox_license_key.strip()),
+        'knoxAutoActivate': bool(args.knox_auto_activate),
     }
     if mode == 'signature':
         cert_hex, cert_b64 = cert
@@ -135,6 +143,9 @@ def main() -> int:
             'enrollmentToken': args.enrollment_token,
             'policyProfile': args.policy_profile,
         })
+    if args.knox_license_key.strip():
+        admin_extras[KNOX_LICENSE_KEY] = args.knox_license_key.strip()
+        admin_extras[KNOX_AUTO_ACTIVATE] = bool(args.knox_auto_activate)
     payload[EXTRAS] = admin_extras
 
     compact = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
