@@ -33,7 +33,7 @@ class KnoxLicenseStatusReceiver : BroadcastReceiver() {
             KnoxLicenseActivationStatus.FAILED
         }
 
-        KnoxLicenseRuntimeStore(context).write(
+        val stored = KnoxLicenseRuntimeStore(context).write(
             KnoxLicenseActivationSnapshot(
                 status = normalized,
                 detail = when (normalized) {
@@ -45,6 +45,14 @@ class KnoxLicenseStatusReceiver : BroadcastReceiver() {
                 errorCode = errorCode.takeIf { it >= 0 },
             )
         )
+
+        val retry = KnoxLicenseRetryCoordinator(context)
+        when (stored.status) {
+            KnoxLicenseActivationStatus.ACTIVE -> retry.cancel()
+            KnoxLicenseActivationStatus.RETRYABLE -> retry.scheduleForRetry(stored)
+            KnoxLicenseActivationStatus.FAILED,
+            KnoxLicenseActivationStatus.UNSUPPORTED -> retry.cancel()
+        }
     }
 
     private fun stringConstant(clazz: Class<*>, fieldName: String): String? =
