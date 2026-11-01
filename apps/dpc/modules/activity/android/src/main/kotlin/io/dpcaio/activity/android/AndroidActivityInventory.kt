@@ -17,6 +17,7 @@ class AndroidActivityInventory(context: Context) {
 
     @Suppress("DEPRECATION")
     fun list(packageName: String, user: UserHandle): List<DiscoveredActivity> {
+        val currentUser = UserHandle.getUserHandleForUid(Process.myUid())
         val packageInfo = try {
             packageManager.getPackageInfo(
                 packageName,
@@ -30,7 +31,7 @@ class AndroidActivityInventory(context: Context) {
             .toSet()
         val userAccessible = launcherApps.profiles.contains(user)
         val packageUid = packageInfo.applicationInfo?.uid
-        val sameUid = packageUid != null && packageUid == Process.myUid()
+        val sameUid = user == currentUser && packageUid != null && packageUid == Process.myUid()
 
         return packageInfo.activities.orEmpty().map { info ->
             val component = ComponentName(info.packageName, info.name)
@@ -59,6 +60,7 @@ class AndroidActivityInventory(context: Context) {
     }
 
     private fun launcherFallback(packageName: String, user: UserHandle): List<DiscoveredActivity> {
+        val currentUser = UserHandle.getUserHandleForUid(Process.myUid())
         val userAccessible = launcherApps.profiles.contains(user)
         return launcherApps.getActivityList(packageName, user).map { launcherInfo ->
             val component = launcherInfo.componentName
@@ -70,7 +72,7 @@ class AndroidActivityInventory(context: Context) {
                 exported = true,
                 launcherVisible = true,
                 requiredPermission = null,
-                sameUid = launcherInfo.applicationInfo.uid == Process.myUid(),
+                sameUid = user == currentUser && launcherInfo.applicationInfo.uid == Process.myUid(),
                 userAccessible = userAccessible,
                 manifestEnabled = true,
                 overrideState = ComponentOverrideState.DEFAULT,
