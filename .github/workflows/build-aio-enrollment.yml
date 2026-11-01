@@ -299,17 +299,7 @@ jobs:
           metadata="$recovery_dir/metadata.json"
           test -s "$keystore"
           test -s "$metadata"
-          python3 - "$metadata" <<'PY'
-import json
-import sys
-from pathlib import Path
-payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-assert payload.get("historicalApkSignerVerified") is True, "historical signer verification missing"
-assert payload.get("alias") == "dpc-aio-enterprise", "unexpected recovered alias"
-fingerprint = str(payload.get("certificateSha256", "")).strip()
-assert len(fingerprint) == 64, "recovered certificate fingerprint missing"
-print(fingerprint)
-PY
+          python3 -c 'import json,sys; p=json.load(open(sys.argv[1], encoding="utf-8")); assert p.get("historicalApkSignerVerified") is True, "historical signer verification missing"; assert p.get("alias") == "dpc-aio-enterprise", "unexpected recovered alias"; f=str(p.get("certificateSha256", "")).strip(); assert len(f) == 64, "recovered certificate fingerprint missing"' "$metadata"
           fingerprint="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["certificateSha256"])' "$metadata")"
           alias="dpc-aio-enterprise"
           password="$DPC_AIO_RECOVERY_PASSWORD"
