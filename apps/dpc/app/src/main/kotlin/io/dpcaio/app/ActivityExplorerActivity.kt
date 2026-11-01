@@ -66,6 +66,7 @@ class ActivityExplorerActivity : Activity() {
     private var pendingBatchState: ComponentOverrideState? = null
     private var pendingBatchTargetUserId: Int? = null
     private var scanGeneration = 0L
+    private var mutationGeneration = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -497,6 +498,7 @@ class ActivityExplorerActivity : Activity() {
             status.text = "${decision.status}\n${decision.detail}\nRisk=${decision.risk}\nPROTECTED_DPC_COMPONENT=${decision.status == ComponentControlStatus.PROTECTED_DPC_COMPONENT}"
             return
         }
+        val generation = ++mutationGeneration
         snapshotStore.save(
             ComponentStateSnapshot(
                 operationUserId,
@@ -543,6 +545,8 @@ class ActivityExplorerActivity : Activity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != mutationGeneration) return@runOnUiThread
+                if (operationUserId != targetUserId()) return@runOnUiThread
                 status.text = detail
                 if (launchAfter && desired == ComponentOverrideState.ENABLED &&
                     ((decision.route == ComponentControlRoute.OWN_UID && detail.contains("VERIFIED")) ||
@@ -585,11 +589,16 @@ class ActivityExplorerActivity : Activity() {
             status.text = "Run Batch Preview first"
             return
         }
+        if (operationUserId != targetUserId()) {
+            status.text = "Batch target changed. Run Batch Preview again"
+            return
+        }
         val allowed = batch.filter { it.second.allowed }
         if (allowed.isEmpty()) {
             status.text = "Apply batch\nNo supported component changes"
             return
         }
+        val generation = ++mutationGeneration
         val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, batch.map { it.second })
         allowed.forEach { (activity, _) ->
             snapshotStore.save(
@@ -655,6 +664,8 @@ class ActivityExplorerActivity : Activity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != mutationGeneration) return@runOnUiThread
+                if (operationUserId != targetUserId()) return@runOnUiThread
                 status.text = "Apply batch\n${results.joinToString("\n")}"
                 scan()
             }
