@@ -1,16 +1,21 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WF = ROOT / ".github" / "workflows" / "build-aio-enrollment.yml"
+MAIN_WF = ROOT / ".github" / "workflows" / "build-aio-enrollment.yml"
+MIGRATION_WF = ROOT / ".github" / "workflows" / "migration-signing.yml"
+HELPER = ROOT / "tools" / "release" / "sign_migration_apk.py"
 CI = ROOT / ".github" / "workflows" / "pr-android-ci.yml"
 
 
 def main() -> None:
-    text = WF.read_text(encoding="utf-8")
+    main_text = MAIN_WF.read_text(encoding="utf-8")
+    migration_text = MIGRATION_WF.read_text(encoding="utf-8")
+    helper_text = HELPER.read_text(encoding="utf-8")
     ci = CI.read_text(encoding="utf-8")
 
-    required = [
-        "- migration",
+    required_workflow = [
+        "name: Migration signing validation",
+        "workflow_dispatch:",
         "publish_migration:",
         "MIGRATION_SIGNING_CONFIGURED",
         "MIGRATION_SIGNING_KEY_REQUIRED",
@@ -21,27 +26,38 @@ def main() -> None:
         "DPC_AIO_MIGRATION_NEW_CERT_SHA256",
         "Prepare migration signers",
         "Sign migration APK with lineage",
-        "--next-signer",
-        "--lineage",
-        "--rotation-min-sdk-version",
-        "33",
         "migration-signing-metadata.json",
         "MIGRATION_SIGNING_VERIFIED",
+        "dpc-aio-migration",
+        "inputs.publish_migration == true",
     ]
-    missing = [item for item in required if item not in text]
-    assert not missing, f"missing migration signing workflow markers: {missing}"
+    missing = [item for item in required_workflow if item not in migration_text]
+    assert not missing, f"missing migration workflow markers: {missing}"
+
+    required_helper = [
+        '"--next-signer"',
+        '"--lineage"',
+        '"--rotation-min-sdk-version"',
+        'default=33',
+        '"env:DPC_AIO_MIGRATION_OLD_STORE_PASSWORD"',
+        '"env:DPC_AIO_MIGRATION_NEW_STORE_PASSWORD"',
+        "MIGRATION_OLD_CERT_MISMATCH",
+        "MIGRATION_NEW_CERT_MISMATCH",
+        "MIGRATION_SIGNING_VERIFIED",
+    ]
+    helper_missing = [item for item in required_helper if item not in helper_text]
+    assert not helper_missing, f"missing migration helper markers: {helper_missing}"
 
     assert "test_migration_signing_workflow_contract.py" in ci, (
         "migration signing workflow contract must run in Android CI"
     )
 
-    # auto must remain stable; migration is explicit workflow_dispatch only.
-    assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in text
-    assert 'if [[ "$requested" == "auto" ]]; then\n            mode="stable"' in text
-    assert "workflow_dispatch" in text
-
-    # Publishing a migration build requires a second explicit opt-in.
-    assert "inputs.publish_migration" in text
+    # Normal production release stays isolated: auto remains stable and migration
+    # is not a signing_mode option in build-aio-enrollment.yml.
+    assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in main_text
+    assert 'if [[ "$requested" == "auto" ]]; then\n            mode="stable"' in main_text
+    signing_mode_section = main_text.split("signing_mode:", 1)[1].split("apk_url:", 1)[0]
+    assert "migration" not in signing_mode_section
 
     print("MIGRATION_SIGNING_WORKFLOW_CONTRACT: PASS")
 
