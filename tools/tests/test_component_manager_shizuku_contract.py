@@ -50,5 +50,15 @@ for token in [
     'sortRows(local + shizukuOnly)',
 ]:
     assert token in aut, f'current-user Shizuku inventory augmentation missing {token}'
+
+for token in [
+    'if (readback != null)',
+    'CURRENT_USER_SHIZUKU_STATE user=$selectedUser',
+    'lastVerified=${submitted?.name ?: "none"}',
+    'Manifest=unknown',
+    'liveReadback=mutation-only',
+]:
+    assert token in aut, f'current-user Shizuku verified state display missing {token}'
+
 assert 'else queryLocalBootReceivers()' not in aut, 'cross-user scan must not silently fall back to current-user inventory'
 print('COMPONENT_MANAGER_SHIZUKU_CONTRACT: PASS')
