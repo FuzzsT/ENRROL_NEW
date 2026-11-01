@@ -23,6 +23,7 @@ shizuku_executor = read("apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio
 planner = read("apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ActivityAccessPlanner.kt")
 planner_test = read("apps/dpc/modules/activity/core/src/test/kotlin/io/dpcaio/activity/ActivityAccessPlannerTest.kt")
 verification = read("apps/dpc/modules/activity/core/src/main/kotlin/io/dpcaio/activity/ComponentMutationVerification.kt")
+inventory = read("apps/dpc/modules/activity/android/src/main/kotlin/io/dpcaio/activity/android/AndroidActivityInventory.kt")
 
 require(
     picker,
@@ -79,6 +80,19 @@ require(
         "if (generation != scanGeneration) return@runOnUiThread",
     ],
     "AutostartManagerActivity",
+)
+
+require(
+    inventory,
+    [
+        "private fun launcherFallback(",
+        "launcherApps.getActivityList(packageName, user)",
+        "PackageManager.NameNotFoundException",
+        "launcherFallback(packageName, user)",
+        "launcherVisible = true",
+        "userAccessible = launcherApps.profiles.contains(user)",
+    ],
+    "AndroidActivityInventory cross-user fallback",
 )
 
 require(
