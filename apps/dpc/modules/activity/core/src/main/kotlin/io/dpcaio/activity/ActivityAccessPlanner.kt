@@ -8,10 +8,13 @@ class ActivityAccessPlanner {
         if (!input.enabled) blockers += "ACTIVITY_DISABLED"
         if (!input.userAccessible) blockers += "USER_NOT_ACCESSIBLE"
 
-        val packagePrepared = input.enabled && !input.packageHiddenByDpc && !input.suspendedByDpc
+        val needsDpcPrepare = (input.packageHiddenByDpc || input.suspendedByDpc) && input.dpcCanPrepare
+        val packagePrepared = input.enabled && (
+            (!input.packageHiddenByDpc && !input.suspendedByDpc) || needsDpcPrepare
+        )
         val frameworkPrepared = packagePrepared && input.userAccessible
-        if ((input.packageHiddenByDpc || input.suspendedByDpc) && input.dpcCanPrepare) {
-            routes += ActivityRoute.DPC_PREPARE_RETRY to 940
+        if (needsDpcPrepare) {
+            routes += ActivityRoute.DPC_PREPARE_RETRY to 1100
         }
 
         if (frameworkPrepared) {
