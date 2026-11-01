@@ -663,9 +663,10 @@ class ActivityExplorerActivity : Activity() {
 
     private fun restoreSnapshot() {
         val pkg = packageNameInput.text.toString().trim()
-        val snapshots = snapshotStore.list(pkg, targetUserId())
+        val operationUserId = targetUserId()
+        val snapshots = snapshotStore.list(pkg, operationUserId)
         if (snapshots.isEmpty()) {
-            status.text = "No snapshot for $pkg user ${targetUserId()}"
+            status.text = "No snapshot for $pkg user $operationUserId"
             return
         }
         val byClass = currentActivities.associateBy { it.className }
@@ -675,7 +676,7 @@ class ActivityExplorerActivity : Activity() {
             if (activity == null) {
                 results += "${snapshot.className}: COMPONENT_NOT_FOUND"
             } else {
-                val decision = decision(activity, snapshot.previousOverrideState)
+                val decision = decision(activity, snapshot.previousOverrideState, operationUserId)
                 results += "${snapshot.className}: restore ${snapshot.previousOverrideState} route=${decision.route} allowed=${decision.allowed}"
                 if (decision.allowed) {
                     when (decision.route) {
@@ -688,12 +689,12 @@ class ActivityExplorerActivity : Activity() {
                             val result = ShizukuComponentStateExecutor(shizuku).setComponentEnabledState(
                                 activity.packageName,
                                 activity.className,
-                                targetUserId(),
+                                operationUserId,
                                 snapshot.previousOverrideState,
                             )
                             results += "${snapshot.className}: ${ComponentMutationVerification.statusLine(
                                 route = "SHIZUKU",
-                                userId = targetUserId(),
+                                userId = operationUserId,
                                 requested = snapshot.previousOverrideState,
                                 observed = result.observedState,
                                 verified = result.verified,
@@ -705,7 +706,7 @@ class ActivityExplorerActivity : Activity() {
                 }
             }
         }
-        snapshotStore.clear(pkg, targetUserId())
+        snapshotStore.clear(pkg, operationUserId)
         status.text = "Restore snapshot\n${results.joinToString("\n")}"
         scan()
     }
