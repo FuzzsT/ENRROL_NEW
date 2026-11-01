@@ -38,7 +38,7 @@ for n in [
     'val appOp = APP_OPS[entry.name]',
     'if (appOp != null)',
     'return verifyAppOp(packageName, appOp.opStr)',
-    'shizuku.getAppOp(packageName, appOp.commandName, userId)',
+    'shizuku?.getAppOp(packageName, appOp.commandName, userId)',
     'AppOpReadbackParser.parse(snapshot)?.effectiveMode == "allow"',
 ]:
     assert n in at,f'AppOp-aware alreadyGranted readback missing {n}'
