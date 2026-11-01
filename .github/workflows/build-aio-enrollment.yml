@@ -89,6 +89,9 @@ jobs:
     timeout-minutes: 70
     permissions:
       contents: read
+    env:
+      STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
+      RECOVERY_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RECOVERY_PASSWORD != '' }}
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       release_tag: ${{ steps.mode.outputs.release_tag }}
@@ -101,8 +104,6 @@ jobs:
 
       - name: Resolve pipeline mode
         id: mode
-        env:
-          STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -114,7 +115,7 @@ jobs:
             elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
               mode="stable" # manual auto repair/publish path
             else
-              if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then
+              if [[ "$GITHUB_REF" == "refs/heads/main" && ( "$STABLE_SIGNING_CONFIGURED" == "true" || "$RECOVERY_SIGNING_CONFIGURED" == "true" ) ]]; then
                 mode="stable" # automatic main self-update publish when stable signer configured
               elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
                 mode="emergency"
@@ -246,7 +247,7 @@ jobs:
           echo "Provisioning APK URL: $url"
 
       - name: Prepare stable signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable'
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' && env.STABLE_SIGNING_CONFIGURED == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
@@ -278,6 +279,47 @@ jobs:
             printf 'DPC_AIO_RELEASE_KEY_PASSWORD=%q\n' "$KEY_PASSWORD"
             printf 'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=%q\n' "$EXPECTED_CERT"
             printf 'DPC_AIO_SIGNING_MODE=%q\n' 'stable'
+          } > "$DPC_AIO_SIGNING_ENV"
+          chmod 600 "$DPC_AIO_SIGNING_ENV"
+
+      - name: Prepare recovered stable signer
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' && env.STABLE_SIGNING_CONFIGURED != 'true' && env.RECOVERY_SIGNING_CONFIGURED == 'true'
+        env:
+          DPC_AIO_RECOVERY_PASSWORD: ${{ secrets.DPC_AIO_RECOVERY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DPC_AIO_RECOVERY_PASSWORD"
+          recovery_dir="$RUNNER_TEMP/dpc-aio-recovered-stable-signer"
+          rm -rf "$recovery_dir"
+          python3 tools/release/recover_persisted_signing_keystore.py \
+            --backup-dir "$recovery_dir"
+
+          keystore="$recovery_dir/dpc-aio-enterprise-release.p12"
+          metadata="$recovery_dir/metadata.json"
+          test -s "$keystore"
+          test -s "$metadata"
+          python3 - "$metadata" <<'PY'
+import json
+import sys
+from pathlib import Path
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert payload.get("historicalApkSignerVerified") is True, "historical signer verification missing"
+assert payload.get("alias") == "dpc-aio-enterprise", "unexpected recovered alias"
+fingerprint = str(payload.get("certificateSha256", "")).strip()
+assert len(fingerprint) == 64, "recovered certificate fingerprint missing"
+print(fingerprint)
+PY
+          fingerprint="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["certificateSha256"])' "$metadata")"
+          alias="dpc-aio-enterprise"
+          password="$DPC_AIO_RECOVERY_PASSWORD"
+          {
+            printf 'DPC_AIO_RELEASE_KEYSTORE_PATH=%q\n' "$keystore"
+            printf 'DPC_AIO_RELEASE_STORE_PASSWORD=%q\n' "$password"
+            printf 'DPC_AIO_RELEASE_KEY_ALIAS=%q\n' "$alias"
+            printf 'DPC_AIO_RELEASE_KEY_PASSWORD=%q\n' "$password"
+            printf 'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=%q\n' "$fingerprint"
+            echo 'DPC_AIO_SIGNING_MODE=recovered-stable'
           } > "$DPC_AIO_SIGNING_ENV"
           chmod 600 "$DPC_AIO_SIGNING_ENV"
 
@@ -344,6 +386,7 @@ jobs:
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
           python3 tools/tests/test_self_update_release_manifest.py
+          python3 tools/tests/test_self_update_recovery_workflow_contract.py
 
       - name: Build signed enterpriseRelease
         env:
@@ -456,6 +499,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12"
+          rm -rf "$RUNNER_TEMP/dpc-aio-recovered-stable-signer"
           rm -f "$DPC_AIO_SIGNING_ENV"
           test ! -e "$DPC_AIO_SIGNING_ENV"
 
@@ -544,6 +588,7 @@ jobs:
         run: |
           rm -f "$DPC_AIO_SIGNING_ENV" || true
           rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12" || true
+          rm -rf "$RUNNER_TEMP/dpc-aio-recovered-stable-signer" || true
 
   publish:
     needs: build
