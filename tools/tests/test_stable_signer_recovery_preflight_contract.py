@@ -10,8 +10,9 @@ def main() -> None:
     ci = CI.read_text(encoding="utf-8")
 
     required_ps1 = [
-        "Get-Command openssl",
-        "Get-Command keytool",
+        "function Resolve-RecoveryTool",
+        "Resolve-RecoveryTool -Name 'openssl'",
+        "Resolve-RecoveryTool -Name 'keytool'",
         "Get-Command apksigner",
         "$env:JAVA_HOME",
         "$env:ANDROID_SDK_ROOT",
@@ -23,6 +24,10 @@ def main() -> None:
     ]
     missing = [item for item in required_ps1 if item not in ps1]
     assert not missing, f"missing recovery preflight markers: {missing}"
+
+    assert "Git\\usr\\bin\\openssl.exe" in ps1, "openssl must have Git for Windows fallback"
+    assert "bin\\keytool.exe" in ps1, "keytool must have JAVA_HOME fallback"
+    assert "build-tools" in ps1 and "apksigner.bat" in ps1, "apksigner must resolve from Android SDK build-tools"
 
     gh_check = ps1.find("Get-Command gh")
     apply_gate = ps1.find("if ($Apply)")
