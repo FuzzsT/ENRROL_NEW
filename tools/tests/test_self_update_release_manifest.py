@@ -124,6 +124,21 @@ def main():
     assert 'mode="stable" # manual auto repair/publish path' in workflow, (
         "workflow_dispatch with signing_mode=auto must select stable signing for continuous self-update publishing"
     )
+    assert "STABLE_SIGNING_CONFIGURED" in workflow, (
+        "automatic main self-update publishing must be gated by a stable-signing readiness flag"
+    )
+    assert 'if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then' in workflow, (
+        "main auto mode must prefer stable signing only when the full stable signer is configured"
+    )
+    assert 'mode="stable" # automatic main self-update publish when stable signer configured' in workflow, (
+        "configured main pushes must publish the continuous self-update channel"
+    )
+    assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' in workflow, (
+        "main must retain an emergency fallback when stable signing is not configured"
+    )
+    assert 'if [[ "$mode" == "stable" && "$GITHUB_REF" == "refs/heads/main" && -z "${{ inputs.apk_url }}" ]]; then' in workflow, (
+        "stable main builds must publish dpc-aio-continuous when they build their own APK"
+    )
 
     client = CLIENT.read_text(encoding="utf-8")
     for token in [
