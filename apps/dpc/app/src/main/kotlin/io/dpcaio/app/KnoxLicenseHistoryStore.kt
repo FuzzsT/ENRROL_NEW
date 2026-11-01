@@ -18,6 +18,12 @@ enum class KnoxLicenseHistoryFilter {
     MANUAL,
 }
 
+enum class KnoxLicenseHealthVerdict {
+    HEALTHY,
+    DEGRADED,
+    FAILING,
+}
+
 data class KnoxLicenseHistoryEntry(
     val timestampEpochMs: Long,
     val source: KnoxLicenseAttemptSource,
@@ -33,6 +39,10 @@ data class KnoxLicenseHistorySummary(
     val lastFailureEpochMs: Long?,
     val statusCounts: Map<KnoxLicenseActivationStatus, Int>,
     val sourceCounts: Map<KnoxLicenseAttemptSource, Int>,
+    val successRate: Double,
+    val consecutiveProblemAttempts: Int,
+    val lastStableActiveEpochMs: Long?,
+    val healthVerdict: KnoxLicenseHealthVerdict,
 )
 
 class KnoxLicenseHistoryStore(context: Context) {
@@ -79,16 +89,39 @@ class KnoxLicenseHistoryStore(context: Context) {
 
     fun summary(): KnoxLicenseHistorySummary {
         val items = readAll()
+        val statusCounts = KnoxLicenseActivationStatus.entries.associateWith { status ->
+            items.count { it.newStatus == status }
+        }
+        val sourceCounts = KnoxLicenseAttemptSource.entries.associateWith { source ->
+            items.count { it.source == source }
+        }
+        val consecutiveProblems = items.asReversed()
+            .takeWhile {
+                it.newStatus == KnoxLicenseActivationStatus.RETRYABLE ||
+                    it.newStatus == KnoxLicenseActivationStatus.FAILED
+            }
+            .size
+        val lastStableActive = items.lastOrNull {
+            it.newStatus == KnoxLicenseActivationStatus.ACTIVE
+        }?.timestampEpochMs
+        val activeCount = statusCounts[KnoxLicenseActivationStatus.ACTIVE] ?: 0
+        val successRate = if (items.isEmpty()) 0.0 else (activeCount.toDouble() / items.size.toDouble()) * 100.0
+        val verdict = when {
+            items.isEmpty() -> KnoxLicenseHealthVerdict.DEGRADED
+            consecutiveProblems >= 3 -> KnoxLicenseHealthVerdict.FAILING
+            items.last().newStatus == KnoxLicenseActivationStatus.ACTIVE -> KnoxLicenseHealthVerdict.HEALTHY
+            else -> KnoxLicenseHealthVerdict.DEGRADED
+        }
         return KnoxLicenseHistorySummary(
             totalAttempts = items.size,
-            lastSuccessEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.ACTIVE }?.timestampEpochMs,
+            lastSuccessEpochMs = lastStableActive,
             lastFailureEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.FAILED }?.timestampEpochMs,
-            statusCounts = KnoxLicenseActivationStatus.entries.associateWith { status ->
-                items.count { it.newStatus == status }
-            },
-            sourceCounts = KnoxLicenseAttemptSource.entries.associateWith { source ->
-                items.count { it.source == source }
-            },
+            statusCounts = statusCounts,
+            sourceCounts = sourceCounts,
+            successRate = successRate,
+            consecutiveProblemAttempts = consecutiveProblems,
+            lastStableActiveEpochMs = lastStableActive,
+            healthVerdict = verdict,
         )
     }
 
@@ -111,6 +144,10 @@ class KnoxLicenseHistoryStore(context: Context) {
                     .put("lastFailureEpochMs", summary.lastFailureEpochMs ?: JSONObject.NULL)
                     .put("statusCounts", statusCounts)
                     .put("sourceCounts", sourceCounts)
+                    .put("successRate", summary.successRate)
+                    .put("consecutiveProblemAttempts", summary.consecutiveProblemAttempts)
+                    .put("lastStableActiveEpochMs", summary.lastStableActiveEpochMs ?: JSONObject.NULL)
+                    .put("healthVerdict", summary.healthVerdict.name)
             )
             .put("entries", entries)
             .toString(2)
