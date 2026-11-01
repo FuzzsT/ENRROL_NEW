@@ -11,6 +11,13 @@ enum class KnoxLicenseAttemptSource {
     BROADCAST,
 }
 
+enum class KnoxLicenseHistoryFilter {
+    ALL,
+    FAILED,
+    RETRYABLE,
+    MANUAL,
+}
+
 data class KnoxLicenseHistoryEntry(
     val timestampEpochMs: Long,
     val source: KnoxLicenseAttemptSource,
@@ -58,8 +65,22 @@ class KnoxLicenseHistoryStore(context: Context) {
         return entry
     }
 
-    fun readRecent(limit: Int = 10): List<KnoxLicenseHistoryEntry> =
-        readAll().takeLast(limit.coerceIn(0, MAX_ENTRIES)).asReversed()
+    fun readRecent(limit: Int = 10, filter: KnoxLicenseHistoryFilter = KnoxLicenseHistoryFilter.ALL): List<KnoxLicenseHistoryEntry> {
+        val filtered = readAll().filter { entry ->
+            when (filter) {
+                KnoxLicenseHistoryFilter.ALL -> true
+                KnoxLicenseHistoryFilter.FAILED -> entry.newStatus == KnoxLicenseActivationStatus.FAILED
+                KnoxLicenseHistoryFilter.RETRYABLE -> entry.newStatus == KnoxLicenseActivationStatus.RETRYABLE
+                KnoxLicenseHistoryFilter.MANUAL -> entry.source == KnoxLicenseAttemptSource.MANUAL
+            }
+        }
+        return filtered.takeLast(limit.coerceIn(0, MAX_ENTRIES)).asReversed()
+    }
+
+    @Synchronized
+    fun clear() {
+        prefs.edit().remove(KEY_HISTORY).apply()
+    }
 
     private fun readAll(): List<KnoxLicenseHistoryEntry> {
         val raw = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
