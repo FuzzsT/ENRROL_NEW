@@ -22,7 +22,7 @@ def main():
         'ErrorCode=',
         'RetryScheduled=',
         'Retry now',
-        'KnoxLicenseController(this@KnoxEnterpriseCenterActivity).activateIfRequested()',
+        '.activateIfRequested(KnoxLicenseAttemptSource.MANUAL)',
         'render()',
     ])
     need(RETRY, [
