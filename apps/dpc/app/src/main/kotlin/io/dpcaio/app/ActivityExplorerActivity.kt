@@ -215,11 +215,12 @@ class ActivityExplorerActivity : Activity() {
         ?: AndroidUserId.fromUid(Process.myUid())
 
     private fun scan() {
+        val operationGenerationAtStart = ++operationGeneration
         val pkg = packageNameInput.text.toString().trim()
         if (pkg.isBlank()) return
         val generation = ++scanGeneration
-        val targetUserId = targetUserId()
-        status.text = "Scanning $pkg for user $targetUserId..."
+        val scanUserId = targetUserId()
+        status.text = "Scanning $pkg for user $scanUserId..."
         Thread {
             if (pkg == KNOXZT_PACKAGE) {
                 KnoxZtRecoveryManager(this, AioDeviceAdminReceiver.componentName(this), shizuku = shizuku).ensureReady()
@@ -227,12 +228,14 @@ class ActivityExplorerActivity : Activity() {
             val activities = runCatching {
                 AndroidActivityInventory(this).list(
                     pkg,
-                    UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
+                    UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(scanUserId)),
                 )
             }.getOrElse { emptyList() }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (generation != scanGeneration) return@runOnUiThread
+                if (operationGenerationAtStart != operationGeneration) return@runOnUiThread
+                if (scanUserId != targetUserId()) return@runOnUiThread
                 currentActivities = activities
                 renderActivities(activities)
             }
@@ -673,6 +676,7 @@ class ActivityExplorerActivity : Activity() {
     }
 
     private fun restoreSnapshot() {
+        ++operationGeneration
         val pkg = packageNameInput.text.toString().trim()
         val operationUserId = targetUserId()
         val snapshots = snapshotStore.list(pkg, operationUserId)
