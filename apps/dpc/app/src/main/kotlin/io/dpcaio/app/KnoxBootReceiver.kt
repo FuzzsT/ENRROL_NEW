@@ -8,5 +8,6 @@ class KnoxBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         KnoxStartupController.evaluateAndPersist(context)
         KnoxZtStartupController.enqueue(context)
+        KnoxLicenseRetryCoordinator(context).onBootOrPackageReplace()
     }
 }
