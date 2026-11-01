@@ -81,6 +81,24 @@ fun main() {
     )
     assertEquals(null, blocked.selected, "private component without a valid route should remain blocked")
 
+    val hiddenButPreparable = planner.plan(
+        ActivityAccessInput(
+            packageName = "com.example.hidden",
+            className = ".MainActivity",
+            enabled = true,
+            exported = true,
+            launcherVisible = false,
+            sameUid = false,
+            userAccessible = true,
+            packageHiddenByDpc = true,
+            dpcCanPrepare = true,
+            shizukuAccessible = true
+        )
+    )
+    assertEquals(ActivityRoute.DPC_PREPARE_RETRY, hiddenButPreparable.routes.firstOrNull(), "DPC prepare must run before launch retries")
+    assertTrue(ActivityRoute.FRAMEWORK_EXPLICIT in hiddenButPreparable.routes, "preparable hidden package must retain framework retry route")
+    assertTrue(ActivityRoute.SHIZUKU in hiddenButPreparable.routes, "preparable hidden package must retain Shizuku retry route")
+
     val crossUserShizuku = planner.plan(
         ActivityAccessInput(
             packageName = "com.example.crossuser",
