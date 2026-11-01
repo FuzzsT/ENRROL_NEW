@@ -63,6 +63,7 @@ jobs:
           python3 tools/tests/test_migration_update_matrix_aio_windows_launcher_contract.py
           python3 tools/tests/test_migration_update_matrix_artifact_auto_runid.py
           python3 tools/tests/test_kpe_provisioning_secret_contract.py
+          python3 tools/tests/test_knox_license_controller_contract.py
 
       - name: Run PIN and app lock contracts
         shell: bash
