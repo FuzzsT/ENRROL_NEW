@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Contract intentionally remains source-only; this commit retriggers CI after a transient Android SDK outage.
 STORE = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxLicenseHistoryStore.kt')
 UI = Path('apps/dpc/app/src/main/kotlin/io/dpcaio/app/KnoxEnterpriseCenterActivity.kt')
 
