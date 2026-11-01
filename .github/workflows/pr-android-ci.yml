@@ -65,6 +65,7 @@ jobs:
           python3 tools/tests/test_kpe_provisioning_secret_contract.py
           python3 tools/tests/test_knox_license_controller_contract.py
           python3 tools/tests/test_knox_license_retry_contract.py
+          python3 tools/tests/test_knox_license_status_retry_contract.py
 
       - name: Run PIN and app lock contracts
         shell: bash
