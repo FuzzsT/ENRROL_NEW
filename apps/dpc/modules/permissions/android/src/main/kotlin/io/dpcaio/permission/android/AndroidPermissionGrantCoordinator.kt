@@ -143,12 +143,12 @@ class AndroidPermissionGrantCoordinator(
         if (appOp != null) {
             if (userId == currentUserId) return verifyAppOp(packageName, appOp.opStr)
             if (!shizukuReady) return false
-            val snapshot = shizuku.getAppOp(packageName, appOp.commandName, userId)
+            val snapshot = shizuku?.getAppOp(packageName, appOp.commandName, userId)
             return AppOpReadbackParser.parse(snapshot)?.effectiveMode == "allow"
         }
         if (userId == currentUserId) return isGranted(packageName, entry.name)
         if (!shizukuReady) return false
-        return shizuku.getRuntimePermissionState(packageName, entry.name, userId) == "GRANTED"
+        return shizuku?.getRuntimePermissionState(packageName, entry.name, userId) == "GRANTED"
     }
 
     private fun isGranted(packageName: String, permission: String) = pm.checkPermission(permission, packageName) == PackageManager.PERMISSION_GRANTED
