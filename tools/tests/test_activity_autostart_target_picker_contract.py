@@ -74,6 +74,9 @@ require(
         "result.observedState",
         "result.verified",
         '"Restore default"',
+        "private var scanGeneration = 0L",
+        "val generation = ++scanGeneration",
+        "if (generation != scanGeneration) return@runOnUiThread",
     ],
     "AutostartManagerActivity",
 )
