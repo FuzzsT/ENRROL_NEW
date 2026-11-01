@@ -109,6 +109,8 @@ jobs:
           if [[ "$requested" == "auto" ]]; then
             if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
               mode="stable"
+            elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              mode="stable" # manual auto repair/publish path
             elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
               mode="emergency"
             else
