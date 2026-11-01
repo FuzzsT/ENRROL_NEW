@@ -49,7 +49,7 @@ class SelfUpdateActivity : Activity() {
             val snapshot = SelfUpdateUiStateStore.read(this@SelfUpdateActivity)
             state = snapshot.state
             message = snapshot.message
-            currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
+            currentManifest = store.loadCheckedManifest()?.takeIf(::manifestAllowedForSelection)
             progressPercent = null
             render()
         }
@@ -67,7 +67,7 @@ class SelfUpdateActivity : Activity() {
                     ?: SelfUpdateInstallPolicy.SILENT_IF_ALLOWED.name
             )
         }.getOrDefault(SelfUpdateInstallPolicy.SILENT_IF_ALLOWED)
-        currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
+        currentManifest = store.loadCheckedManifest()?.takeIf(::manifestAllowedForSelection)
         val snapshot = SelfUpdateUiStateStore.read(this)
         state = snapshot.state
         message = snapshot.message
@@ -92,7 +92,7 @@ class SelfUpdateActivity : Activity() {
         val snapshot = SelfUpdateUiStateStore.read(this)
         state = snapshot.state
         message = snapshot.message
-        currentManifest = store.loadCheckedManifest()?.takeIf { it.channel == selectedChannel }
+        currentManifest = store.loadCheckedManifest()?.takeIf(::manifestAllowedForSelection)
         render()
     }
 
@@ -237,10 +237,10 @@ class SelfUpdateActivity : Activity() {
 
         body.addView(ModernUi.section(this, "Actions"))
         val updateAvailable = currentManifest?.let {
-            planner.evaluate(packageName, installed.second, selectedChannel, it).accepted
+            planner.evaluate(packageName, installed.second, it.channel, it).accepted
         } == true
         val verifiedCandidate = candidate?.let {
-            it.verified && it.apkFile.isFile && planner.evaluate(packageName, installed.second, selectedChannel, it.manifest).accepted
+            it.verified && it.apkFile.isFile && planner.evaluate(packageName, installed.second, it.manifest.channel, it.manifest).accepted
         } == true
         val notesAvailable = manifest?.releaseNotesUrl?.startsWith("https://", ignoreCase = true) == true
 
@@ -292,11 +292,6 @@ class SelfUpdateActivity : Activity() {
                 val decision = planner.evaluate(packageName, installed, effectiveChannel, manifest)
                 store.saveCheckedManifest(manifest)
                 runOnUiThread {
-                    if (effectiveChannel != channel) {
-                        store.clearCandidate()
-                        selectedChannel = effectiveChannel
-                        preferences.edit().putString(KEY_CHANNEL, effectiveChannel.name).apply()
-                    }
                     currentManifest = manifest
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
                     val detail = if (effectiveChannel != channel) {
@@ -330,7 +325,7 @@ class SelfUpdateActivity : Activity() {
             return setState(SelfUpdateState.ERROR, "Check for an update first")
         }
         val installedVersionCode = installedVersion().second
-        val decision = planner.evaluate(packageName, installedVersionCode, selectedChannel, manifest)
+        val decision = planner.evaluate(packageName, installedVersionCode, manifest.channel, manifest)
         if (!decision.accepted) {
             operations.finishDownload()
             notifyStateChanged()
@@ -428,7 +423,7 @@ class SelfUpdateActivity : Activity() {
             failBeforeStaging(SelfUpdateState.ERROR, "Candidate is not verified")
             return
         }
-        val decision = planner.evaluate(packageName, installedVersion().second, selectedChannel, candidate.manifest)
+        val decision = planner.evaluate(packageName, installedVersion().second, candidate.manifest.channel, candidate.manifest)
         if (!decision.accepted) {
             failBeforeStaging(
                 decision.state,
@@ -538,6 +533,10 @@ class SelfUpdateActivity : Activity() {
         SelfUpdateState.UPDATE_AVAILABLE, SelfUpdateState.WAITING_USER -> ModernUi.Tone.WARNING
         else -> ModernUi.Tone.NEUTRAL
     }
+
+    private fun manifestAllowedForSelection(manifest: SelfUpdateManifest): Boolean =
+        manifest.channel == selectedChannel ||
+            (selectedChannel == UpdateChannel.STABLE && manifest.channel == UpdateChannel.CONTINUOUS)
 
     private fun fetchManifestWithFallback(channel: UpdateChannel): Pair<UpdateChannel, SelfUpdateManifest> {
         return try {
