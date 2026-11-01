@@ -16,9 +16,10 @@ if 'UserHandle.of(' in activity or 'UserHandle.of(' in offline_policy:
     errors.append('app-dpc must use only public UserHandle APIs; UserHandle.of is not in the public SDK')
 if 'fun representativeUid(userId: Int): Int' not in platform:
     errors.append('AndroidUserId must expose representativeUid(userId) for public UserHandle.getUserHandleForUid conversion')
-if 'UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId))' not in activity:
+public_user_handle_prefix = 'UserHandle.getUserHandleForUid(AndroidUserId.representativeUid('
+if public_user_handle_prefix not in activity:
     errors.append('ActivityExplorer must resolve target users through public UserHandle.getUserHandleForUid')
-if 'UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId))' not in offline_policy:
+if public_user_handle_prefix not in offline_policy:
     errors.append('OfflinePolicyApplier must resolve target users through public UserHandle.getUserHandleForUid')
 if 'ModernUi.scrollPage(this, body)' not in activity:
     errors.append('ActivityExplorer must use the shared ModernUi scroll surface')
