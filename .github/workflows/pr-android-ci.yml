@@ -39,6 +39,12 @@ jobs:
           chmod +x tools/run_host_tests.sh
           ./tools/run_host_tests.sh
 
+      - name: Run Self Update HTTP diagnostics contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tests/test_self_update_http_diagnostics.py
+
       - name: Run PIN and app lock contracts
         shell: bash
         run: |
