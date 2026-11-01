@@ -165,6 +165,18 @@ for n in [
     'if (generation != scanGeneration) return@runOnUiThread',
 ]:
     assert n in aut,f'Autostart Manager missing {n}'
+
+mutate_start=aut.index('private fun mutate(')
+mutate_end=aut.index('\n    companion object', mutate_start)
+mutate=aut[mutate_start:mutate_end]
+for n in [
+    'private var mutationGeneration = 0L',
+    'val generation = ++mutationGeneration',
+    'if (generation != mutationGeneration) return@runOnUiThread',
+    'if (userId != targetUserId()) return@runOnUiThread',
+]:
+    assert n in aut if n.startswith('private var') else n in mutate, \
+        f'Autostart Manager missing stale mutation guard: {n}'
 assert 'TARGET_USER_SUBMITTED' not in aut
 assert 'else queryLocalBootReceivers()' not in aut, 'cross-user scan must not silently fall back to current-user inventory'
 mt=manifest.read_text(encoding='utf-8')
