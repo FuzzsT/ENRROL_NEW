@@ -25,6 +25,24 @@ assert 'SUBMITTED, cross-user readback not claimed' not in t
 assert 'readback via rescan' not in t
 
 for n in [
+    'DevicePolicyManager::class.java',
+    'isDeviceOwnerApp(packageName)',
+    'isProfileOwnerApp(packageName)',
+    'AndroidDevicePolicyGateway(',
+    'isApplicationHidden(activity.packageName)',
+    'isPackageSuspended(activity.packageName)',
+    'packageHiddenByDpc = packageHiddenByDpc',
+    'suspendedByDpc = suspendedByDpc',
+    'dpcCanPrepare = dpcCanPrepare',
+    'ActivityRoute.DPC_PREPARE_RETRY to',
+    'setApplicationHidden(input.packageName, false)',
+    'setPackagesSuspended(setOf(input.packageName), false)',
+    'isApplicationHidden(input.packageName)',
+    'isPackageSuspended(input.packageName)',
+]:
+    assert n in t, f'Activity Explorer verified DPC prepare missing {n}'
+
+for n in [
     'private fun launcherFallback(',
     'launcherApps.getActivityList(packageName, user)',
     'PackageManager.NameNotFoundException',
