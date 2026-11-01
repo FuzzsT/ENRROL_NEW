@@ -1,6 +1,7 @@
 package io.dpcaio.app
 
 import android.app.Activity
+import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.os.Bundle
 import android.os.Process
@@ -19,6 +20,8 @@ import io.dpcaio.activity.ActivityAccessPlanner
 import io.dpcaio.activity.ActivityExecutorRouter
 import io.dpcaio.activity.ActivityLaunchCoordinator
 import io.dpcaio.activity.ActivityRoute
+import io.dpcaio.activity.ActivityRouteExecutor
+import io.dpcaio.activity.ActivityRouteResult
 import io.dpcaio.activity.ComponentBatchPlanner
 import io.dpcaio.activity.ComponentControlDecision
 import io.dpcaio.activity.ComponentControlRequest
@@ -35,6 +38,7 @@ import io.dpcaio.activity.android.ComponentStateChange
 import io.dpcaio.knoxzt.KNOXZT_PACKAGE
 import io.dpcaio.knoxzt.android.KnoxZtRecoveryManager
 import io.dpcaio.platform.AndroidUserId
+import io.dpcaio.policy.android.AndroidDevicePolicyGateway
 import io.dpcaio.shizuku.AndroidShizukuRuntime
 import io.dpcaio.shizuku.ShizukuActivityRouteExecutor
 import io.dpcaio.shizuku.ShizukuComponentStateExecutor
@@ -732,6 +736,18 @@ class ActivityExplorerActivity : Activity() {
         status.text = "Launching ${activity.className} for user $operationUserId..."
         Thread {
             val shizukuState = AndroidShizukuRuntime().probe()
+            val currentUserId = AndroidUserId.fromUid(Process.myUid())
+            val dpm = getSystemService(DevicePolicyManager::class.java)
+            val dpcCanPrepare = operationUserId == currentUserId &&
+                (dpm.isDeviceOwnerApp(packageName) || dpm.isProfileOwnerApp(packageName))
+            val policyGateway = if (dpcCanPrepare) {
+                AndroidDevicePolicyGateway(this, AioDeviceAdminReceiver.componentName(this))
+            } else null
+            val packageHiddenByDpc = policyGateway?.isApplicationHidden(activity.packageName)
+                ?.takeIf { it.isSuccess }?.value == true
+            val suspendedByDpc = policyGateway?.isPackageSuspended(activity.packageName)
+                ?.takeIf { it.isSuccess }?.value == true
+
             val input = ActivityAccessInput(
                 packageName = activity.packageName,
                 className = activity.className,
@@ -740,14 +756,49 @@ class ActivityExplorerActivity : Activity() {
                 launcherVisible = activity.launcherVisible,
                 sameUid = activity.sameUid,
                 userAccessible = activity.userAccessible,
+                packageHiddenByDpc = packageHiddenByDpc,
+                suspendedByDpc = suspendedByDpc,
+                dpcCanPrepare = dpcCanPrepare,
                 shizukuAccessible = shizukuState.binderAlive && shizukuState.permissionGranted,
             )
+            val dpcPrepareExecutor = ActivityRouteExecutor { route, prepareInput ->
+                if (route != ActivityRoute.DPC_PREPARE_RETRY || !dpcCanPrepare || policyGateway == null) {
+                    ActivityRouteResult(route, false, "DPC prepare unavailable for target user")
+                } else {
+                    val details = mutableListOf<String>()
+                    var verified = true
+                    if (prepareInput.packageHiddenByDpc) {
+                        val mutation = policyGateway.setApplicationHidden(input.packageName, false)
+                        val observed = policyGateway.isApplicationHidden(input.packageName)
+                        val stepVerified = mutation.isSuccess && observed.isSuccess && observed.value == false
+                        verified = verified && stepVerified
+                        details += "unhide requested success=${mutation.isSuccess} observedHidden=${observed.value} verified=$stepVerified"
+                    }
+                    if (prepareInput.suspendedByDpc) {
+                        val mutation = policyGateway.setPackagesSuspended(setOf(input.packageName), false)
+                        val observed = policyGateway.isPackageSuspended(input.packageName)
+                        val stepVerified = mutation.isSuccess &&
+                            mutation.value?.contains(input.packageName) != true &&
+                            observed.isSuccess && observed.value == false
+                        verified = verified && stepVerified
+                        details += "unsuspend requested success=${mutation.isSuccess} failures=${mutation.value.orEmpty()} observedSuspended=${observed.value} verified=$stepVerified"
+                    }
+                    ActivityRouteResult(
+                        route,
+                        verified && (prepareInput.packageHiddenByDpc || prepareInput.suspendedByDpc),
+                        details.joinToString("; ").ifBlank { "Nothing to prepare" },
+                    )
+                }
+            }
             val executor = ActivityExecutorRouter(
                 AndroidActivityRouteExecutor(
                     this,
                     UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(operationUserId)),
                 ),
-                mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, operationUserId)),
+                mapOf(
+                    ActivityRoute.DPC_PREPARE_RETRY to dpcPrepareExecutor,
+                    ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, operationUserId),
+                ),
             )
             val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
             val report = buildString {
