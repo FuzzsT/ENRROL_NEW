@@ -29,6 +29,8 @@ class KnoxEnterpriseCenterActivity : Activity() {
         val retryScheduled = KnoxLicenseRetryCoordinator(this).isScheduled()
         val activationHistory = KnoxLicenseHistoryStore(this).readRecent(10, historyFilter)
         val historySummary = KnoxLicenseHistoryStore(this).summary()
+        val statusCounts = historySummary.statusCounts.entries.joinToString(", ") { "${it.key.name}=${it.value}" }
+        val sourceCounts = historySummary.sourceCounts.entries.joinToString(", ") { "${it.key.name}=${it.value}" }
         val root = ModernUi.page(this)
 
         root.addView(
@@ -70,7 +72,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@KnoxEnterpriseCenterActivity,
-                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled\nAttempts=${historySummary.totalAttempts}\nLastSuccess=${formatHistoryTime(historySummary.lastSuccessEpochMs)}\nLastFailure=${formatHistoryTime(historySummary.lastFailureEpochMs)}",
+                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled\nAttempts=${historySummary.totalAttempts}\nLastSuccess=${formatHistoryTime(historySummary.lastSuccessEpochMs)}\nLastFailure=${formatHistoryTime(historySummary.lastFailureEpochMs)}\nStatusCounts=$statusCounts\nSourceCounts=$sourceCounts",
                     )
                 )
                 addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))

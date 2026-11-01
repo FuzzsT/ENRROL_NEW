@@ -31,6 +31,8 @@ data class KnoxLicenseHistorySummary(
     val totalAttempts: Int,
     val lastSuccessEpochMs: Long?,
     val lastFailureEpochMs: Long?,
+    val statusCounts: Map<KnoxLicenseActivationStatus, Int>,
+    val sourceCounts: Map<KnoxLicenseAttemptSource, Int>,
 )
 
 class KnoxLicenseHistoryStore(context: Context) {
@@ -81,6 +83,12 @@ class KnoxLicenseHistoryStore(context: Context) {
             totalAttempts = items.size,
             lastSuccessEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.ACTIVE }?.timestampEpochMs,
             lastFailureEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.FAILED }?.timestampEpochMs,
+            statusCounts = KnoxLicenseActivationStatus.entries.associateWith { status ->
+                items.count { it.newStatus == status }
+            },
+            sourceCounts = KnoxLicenseAttemptSource.entries.associateWith { source ->
+                items.count { it.source == source }
+            },
         )
     }
 
@@ -89,6 +97,10 @@ class KnoxLicenseHistoryStore(context: Context) {
         val summary = summary()
         val entries = JSONArray()
         items.forEach { entries.put(it.toJson()) }
+        val statusCounts = JSONObject()
+        summary.statusCounts.forEach { (status, count) -> statusCounts.put(status.name, count) }
+        val sourceCounts = JSONObject()
+        summary.sourceCounts.forEach { (source, count) -> sourceCounts.put(source.name, count) }
         return JSONObject()
             .put("schema", "dpc-aio.knox-kpe-history.v1")
             .put(
@@ -97,6 +109,8 @@ class KnoxLicenseHistoryStore(context: Context) {
                     .put("totalAttempts", summary.totalAttempts)
                     .put("lastSuccessEpochMs", summary.lastSuccessEpochMs ?: JSONObject.NULL)
                     .put("lastFailureEpochMs", summary.lastFailureEpochMs ?: JSONObject.NULL)
+                    .put("statusCounts", statusCounts)
+                    .put("sourceCounts", sourceCounts)
             )
             .put("entries", entries)
             .toString(2)
