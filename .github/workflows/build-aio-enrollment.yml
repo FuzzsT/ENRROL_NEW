@@ -119,30 +119,26 @@ jobs:
           [[ "$HAS_RELEASE_KEY_ALIAS" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_ALIAS")
           [[ "$HAS_RELEASE_KEY_PASSWORD" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_PASSWORD")
           [[ "$HAS_EXPECTED_SIGNING_CERT" == "true" ]] || missing+=("DPC_AIO_EXPECTED_SIGNING_CERT_SHA256")
-          if (( ${#missing[@]} > 0 )); then
-            echo "Stable signing unavailable; missing configuration: ${missing[*]}"
-          fi
 
           if [[ "$requested" == "auto" ]]; then
-            if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-              mode="stable"
-            elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              mode="stable" # manual auto repair/publish path
-            else
-              if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then
-                mode="stable" # automatic main self-update publish when stable signer configured
-              elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-                mode="emergency"
-              else
-                mode="stable"
-              fi
-            fi
+            mode="stable"
           else
             mode="$requested"
           fi
 
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then
+            echo "Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch." >&2
+            exit 1
+          fi
+
           if [[ "$GITHUB_REF_TYPE" == "tag" && "$mode" != "stable" ]]; then
             echo "Tag builds must use stable signing." >&2
+            exit 1
+          fi
+
+          if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
+            echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
+            echo "Missing stable signing configuration: ${missing[*]}" >&2
             exit 1
           fi
 
@@ -359,6 +355,7 @@ jobs:
           python3 tools/tests/test_non_sdk_api_scan.py
           python3 tools/tests/test_release_secret_scan.py
           python3 tools/tests/test_self_update_release_manifest.py
+          python3 tools/tests/test_main_stable_signing_policy_contract.py
 
       - name: Build signed enterpriseRelease
         env:

@@ -124,23 +124,27 @@ def main():
     assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
     assert 'channel="continuous"' in workflow, "rolling release must produce continuous self-update channel"
     assert 'stable_alias="dpc-aio-stable"' in workflow, "stable self-update must use deterministic alias"
-    assert 'if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then' in workflow, (
-        "manual auto runs must be detected before the main-branch emergency fallback"
+    assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in workflow, (
+        "workflow must resolve signing_mode explicitly"
     )
-    assert 'mode="stable" # manual auto repair/publish path' in workflow, (
-        "workflow_dispatch with signing_mode=auto must select stable signing for continuous self-update publishing"
+    auto_block = workflow.split('if [[ "$requested" == "auto" ]]; then', 1)[1].split("fi", 1)[0]
+    assert 'mode="stable"' in auto_block and 'mode="emergency"' not in auto_block, (
+        "auto signing mode must resolve directly to stable without emergency fallback"
     )
-    assert "STABLE_SIGNING_CONFIGURED" in workflow, (
-        "automatic main self-update publishing must be gated by a stable-signing readiness flag"
+    assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow, (
+        "stable mode must fail closed when release signing material is incomplete"
     )
-    assert 'if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then' in workflow, (
-        "main auto mode must prefer stable signing only when the full stable signer is configured"
+    assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.' in workflow, (
+        "missing stable signing configuration must produce an actionable error"
     )
-    assert 'mode="stable" # automatic main self-update publish when stable signer configured' in workflow, (
-        "configured main pushes must publish the continuous self-update channel"
+    assert 'if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then' in workflow, (
+        "emergency signing must be limited to explicit workflow_dispatch runs"
     )
-    assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' in workflow, (
-        "main must retain an emergency fallback when stable signing is not configured"
+    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow, (
+        "automatic emergency signing must be rejected explicitly"
+    )
+    assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' not in workflow, (
+        "main must not retain the legacy automatic emergency fallback"
     )
     assert 'if [[ "$mode" == "stable" && "$GITHUB_REF" == "refs/heads/main" && -z "${{ inputs.apk_url }}" ]]; then' in workflow, (
         "stable main builds must publish dpc-aio-continuous when they build their own APK"

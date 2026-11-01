@@ -17,8 +17,9 @@ required = [
     "HAS_RELEASE_KEY_ALIAS",
     "HAS_RELEASE_KEY_PASSWORD",
     "HAS_EXPECTED_SIGNING_CERT",
-    "Stable signing unavailable; missing configuration:",
+    "Missing stable signing configuration:",
     "Prepare stable signer",
+    "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.",
     "STABLE_SIGNING_KEY_REQUIRED: $name is not configured",
     "DPC_AIO_RELEASE_KEYSTORE_B64",
     "DPC_AIO_RELEASE_STORE_PASSWORD",
@@ -30,8 +31,12 @@ required = [
 for token in required:
     assert token in workflow, f"stable signing diagnostic contract missing: {token}"
 
-assert 'if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then' in workflow, (
-    "automatic stable publishing must remain gated by complete stable-signing readiness"
+assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow, (
+    "normal/stable builds must fail closed when complete stable signing material is unavailable"
+)
+assert 'mode="stable"' in workflow, "auto/default signing path must resolve to stable"
+assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' not in workflow, (
+    "main must not retain an automatic emergency signing fallback"
 )
 
 for forbidden in [
