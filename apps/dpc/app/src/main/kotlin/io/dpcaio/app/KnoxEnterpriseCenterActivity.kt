@@ -4,8 +4,12 @@ import android.app.Activity
 import android.os.Bundle
 import io.dpcaio.core.model.OwnershipMode
 import io.dpcaio.knox.license.KnoxPublicCapability
+import java.text.DateFormat
+import java.util.Date
 
 class KnoxEnterpriseCenterActivity : Activity() {
+    private var historyFilter = KnoxLicenseHistoryFilter.ALL
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Samsung Enterprise Center"
@@ -17,7 +21,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
         val ownerSatisfied = management.ownership != OwnershipMode.NONE
         val licenseSnapshot = KnoxLicenseRuntimeStore(this).read()
         val retryScheduled = KnoxLicenseRetryCoordinator(this).isScheduled()
-        val activationHistory = KnoxLicenseHistoryStore(this).readRecent(10)
+        val activationHistory = KnoxLicenseHistoryStore(this).readRecent(10, historyFilter)
         val root = ModernUi.page(this)
 
         root.addView(
@@ -76,20 +80,48 @@ class KnoxEnterpriseCenterActivity : Activity() {
         )
 
         root.addView(ModernUi.section(this, "KPE activation history"))
+        root.addView(
+            ModernUi.card(this).apply {
+                addView(ModernUi.title(this@KnoxEnterpriseCenterActivity, "History controls"))
+                fun filterAction(label: String, filter: KnoxLicenseHistoryFilter) {
+                    addView(
+                        ModernUi.action(this@KnoxEnterpriseCenterActivity, label) {
+                            historyFilter = filter
+                            render()
+                        }
+                    )
+                }
+                filterAction("Filter: ALL", KnoxLicenseHistoryFilter.ALL)
+                filterAction("Filter: FAILED", KnoxLicenseHistoryFilter.FAILED)
+                filterAction("Filter: RETRYABLE", KnoxLicenseHistoryFilter.RETRYABLE)
+                filterAction("Filter: MANUAL", KnoxLicenseHistoryFilter.MANUAL)
+                addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
+                addView(
+                    ModernUi.action(this@KnoxEnterpriseCenterActivity, "Clear history") {
+                        KnoxLicenseHistoryStore(this@KnoxEnterpriseCenterActivity).clear()
+                        render()
+                    }
+                )
+            }
+        )
         if (activationHistory.isEmpty()) {
             root.addView(
                 ModernUi.card(this).apply {
-                    addView(ModernUi.body(this@KnoxEnterpriseCenterActivity, "No activation attempts recorded."))
+                    addView(ModernUi.body(this@KnoxEnterpriseCenterActivity, "No activation attempts recorded for ${historyFilter.name}."))
                 }
             )
         } else {
             activationHistory.forEach { entry ->
                 root.addView(
                     ModernUi.card(this).apply {
+                        val formattedTime = DateFormat.getDateTimeInstance(
+                            DateFormat.MEDIUM,
+                            DateFormat.MEDIUM,
+                        ).format(Date(entry.timestampEpochMs))
                         addView(
                             ModernUi.body(
                                 this@KnoxEnterpriseCenterActivity,
-                                "Time=${entry.timestampEpochMs}\nSource=${entry.source.name}\nPrevious=${entry.previousStatus?.name ?: "NONE"} • New=${entry.newStatus.name}\nDetail=${entry.detail} • ErrorCode=${entry.errorCode ?: "NONE"}",
+                                "Time=$formattedTime\nSource=${entry.source.name}\nPrevious=${entry.previousStatus?.name ?: "NONE"} • New=${entry.newStatus.name}\nDetail=${entry.detail} • ErrorCode=${entry.errorCode ?: "NONE"}",
                             )
                         )
                     }
