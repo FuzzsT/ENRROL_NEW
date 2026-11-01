@@ -66,7 +66,7 @@ class ActivityExplorerActivity : Activity() {
     private var pendingBatchState: ComponentOverrideState? = null
     private var pendingBatchTargetUserId: Int? = null
     private var scanGeneration = 0L
-    private var mutationGeneration = 0L
+    private var operationGeneration = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -498,7 +498,7 @@ class ActivityExplorerActivity : Activity() {
             status.text = "${decision.status}\n${decision.detail}\nRisk=${decision.risk}\nPROTECTED_DPC_COMPONENT=${decision.status == ComponentControlStatus.PROTECTED_DPC_COMPONENT}"
             return
         }
-        val generation = ++mutationGeneration
+        val generation = ++operationGeneration
         snapshotStore.save(
             ComponentStateSnapshot(
                 operationUserId,
@@ -545,7 +545,7 @@ class ActivityExplorerActivity : Activity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (generation != mutationGeneration) return@runOnUiThread
+                if (generation != operationGeneration) return@runOnUiThread
                 if (operationUserId != targetUserId()) return@runOnUiThread
                 status.text = detail
                 if (launchAfter && desired == ComponentOverrideState.ENABLED &&
@@ -598,7 +598,7 @@ class ActivityExplorerActivity : Activity() {
             status.text = "Apply batch\nNo supported component changes"
             return
         }
-        val generation = ++mutationGeneration
+        val generation = ++operationGeneration
         val plan = ComponentBatchPlanner().plan(android.os.Build.VERSION.SDK_INT, batch.map { it.second })
         allowed.forEach { (activity, _) ->
             snapshotStore.save(
@@ -664,7 +664,7 @@ class ActivityExplorerActivity : Activity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (generation != mutationGeneration) return@runOnUiThread
+                if (generation != operationGeneration) return@runOnUiThread
                 if (operationUserId != targetUserId()) return@runOnUiThread
                 status.text = "Apply batch\n${results.joinToString("\n")}"
                 scan()
@@ -722,8 +722,10 @@ class ActivityExplorerActivity : Activity() {
         scan()
     }
 
-    private fun launch(activity: DiscoveredActivity, targetUserId: Int = targetUserId()) {
-        status.text = "Launching ${activity.className} for user $targetUserId..."
+    private fun launch(activity: DiscoveredActivity, requestedUserId: Int = targetUserId()) {
+        val operationUserId = requestedUserId
+        val generation = ++operationGeneration
+        status.text = "Launching ${activity.className} for user $operationUserId..."
         Thread {
             val shizukuState = AndroidShizukuRuntime().probe()
             val input = ActivityAccessInput(
@@ -739,9 +741,9 @@ class ActivityExplorerActivity : Activity() {
             val executor = ActivityExecutorRouter(
                 AndroidActivityRouteExecutor(
                     this,
-                    UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(targetUserId)),
+                    UserHandle.getUserHandleForUid(AndroidUserId.representativeUid(operationUserId)),
                 ),
-                mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, targetUserId)),
+                mapOf(ActivityRoute.SHIZUKU to ShizukuActivityRouteExecutor(shizuku, operationUserId)),
             )
             val result = ActivityLaunchCoordinator(ActivityAccessPlanner(), executor).launch(input)
             val report = buildString {
@@ -754,6 +756,8 @@ class ActivityExplorerActivity : Activity() {
             }.trimEnd()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != operationGeneration) return@runOnUiThread
+                if (operationUserId != targetUserId()) return@runOnUiThread
                 status.text = report
                 if (result.selectedRoute != null) scan()
             }
