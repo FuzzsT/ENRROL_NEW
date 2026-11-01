@@ -21,6 +21,21 @@ for n in ['Activity Launcher','Target user ID','Manifest','Override','Effective'
     assert n in t,n
 assert 'SUBMITTED, cross-user readback not claimed' not in t
 assert 'readback via rescan' not in t
+
+restore_start=t.index('private fun restoreSnapshot()')
+restore_end=t.index('\n    private fun launch(', restore_start)
+restore=t[restore_start:restore_end]
+for n in [
+    'val operationUserId = targetUserId()',
+    'snapshotStore.list(pkg, operationUserId)',
+    'decision(activity, snapshot.previousOverrideState, operationUserId)',
+    'userId = operationUserId',
+    'snapshotStore.clear(pkg, operationUserId)',
+]:
+    assert n in restore,f'Activity Explorer snapshot restore missing stable-user guard: {n}'
+assert restore.count('targetUserId()') == 1, \
+    'Activity Explorer snapshot restore must capture target user exactly once per restore operation'
+
 for n in [
     'AppSort { NAME, PACKAGE, INSTALL_DATE, UPDATE_DATE }',
     'SortDirection { ASCENDING, DESCENDING }',
