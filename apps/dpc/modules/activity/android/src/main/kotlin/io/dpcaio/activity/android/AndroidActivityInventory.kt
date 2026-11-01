@@ -17,10 +17,14 @@ class AndroidActivityInventory(context: Context) {
 
     @Suppress("DEPRECATION")
     fun list(packageName: String, user: UserHandle): List<DiscoveredActivity> {
-        val packageInfo = packageManager.getPackageInfo(
-            packageName,
-            PackageManager.GET_ACTIVITIES or PackageManager.MATCH_DISABLED_COMPONENTS
-        )
+        val packageInfo = try {
+            packageManager.getPackageInfo(
+                packageName,
+                PackageManager.GET_ACTIVITIES or PackageManager.MATCH_DISABLED_COMPONENTS
+            )
+        } catch (_: PackageManager.NameNotFoundException) {
+            return launcherFallback(packageName, user)
+        }
         val launcherComponents = launcherApps.getActivityList(packageName, user)
             .map { it.componentName }
             .toSet()
@@ -49,6 +53,27 @@ class AndroidActivityInventory(context: Context) {
                 userAccessible = userAccessible,
                 manifestEnabled = manifestEnabled,
                 overrideState = overrideState,
+                effectiveEnabled = effectiveEnabled
+            )
+        }
+    }
+
+    private fun launcherFallback(packageName: String, user: UserHandle): List<DiscoveredActivity> {
+        val userAccessible = launcherApps.profiles.contains(user)
+        return launcherApps.getActivityList(packageName, user).map { launcherInfo ->
+            val component = launcherInfo.componentName
+            val effectiveEnabled = runCatching { launcherApps.isActivityEnabled(component, user) }.getOrDefault(true)
+            DiscoveredActivity(
+                packageName = component.packageName,
+                className = component.className,
+                enabled = effectiveEnabled,
+                exported = true,
+                launcherVisible = true,
+                requiredPermission = null,
+                sameUid = launcherInfo.applicationInfo.uid == Process.myUid(),
+                userAccessible = userAccessible,
+                manifestEnabled = true,
+                overrideState = ComponentOverrideState.DEFAULT,
                 effectiveEnabled = effectiveEnabled
             )
         }
