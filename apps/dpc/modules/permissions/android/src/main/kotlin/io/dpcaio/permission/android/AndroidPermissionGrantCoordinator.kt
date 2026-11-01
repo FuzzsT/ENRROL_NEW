@@ -97,7 +97,7 @@ class AndroidPermissionGrantCoordinator(
         }
         PermissionGrantRoute.SHIZUKU_RUNTIME_GRANT -> {
             val exit = shizuku?.grantRuntimePermission(packageName, entry.name, userId)
-            val observed = if (exit == 0) shizuku?.getRuntimePermissionState(packageName, entry.name, userId) else null
+            val observed = if (exit == 0) shizuku.getRuntimePermissionState(packageName, entry.name, userId) else null
             val verified = exit == 0 && observed == "GRANTED"
             PermissionGrantExecution(
                 entry.name,
@@ -112,7 +112,7 @@ class AndroidPermissionGrantCoordinator(
             if (pair == null) PermissionGrantExecution(entry.name, route, false, "NO_APPOP_MAPPING")
             else {
                 val exit = shizuku?.setAppOp(packageName, pair.commandName, "allow", userId)
-                val snapshot = if (exit == 0) shizuku?.getAppOp(packageName, pair.commandName, userId) else null
+                val snapshot = if (exit == 0) shizuku.getAppOp(packageName, pair.commandName, userId) else null
                 val observed = AppOpReadbackParser.parse(snapshot)
                 val verified = exit == 0 && observed?.effectiveMode == "allow"
                 PermissionGrantExecution(
