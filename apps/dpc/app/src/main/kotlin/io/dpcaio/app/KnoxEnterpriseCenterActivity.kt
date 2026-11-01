@@ -72,7 +72,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@KnoxEnterpriseCenterActivity,
-                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled\nAttempts=${historySummary.totalAttempts}\nLastSuccess=${formatHistoryTime(historySummary.lastSuccessEpochMs)}\nLastFailure=${formatHistoryTime(historySummary.lastFailureEpochMs)}\nStatusCounts=$statusCounts\nSourceCounts=$sourceCounts",
+                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled\nAttempts=${historySummary.totalAttempts}\nLastSuccess=${formatHistoryTime(historySummary.lastSuccessEpochMs)}\nLastFailure=${formatHistoryTime(historySummary.lastFailureEpochMs)}\nStatusCounts=$statusCounts\nSourceCounts=$sourceCounts\nSuccessRate=${"%.1f".format(historySummary.successRate)}%\nConsecutiveProblems=${historySummary.consecutiveProblemAttempts}\nLastStableActive=${formatHistoryTime(historySummary.lastStableActiveEpochMs)}\nHealth=${historySummary.healthVerdict.name}",
                     )
                 )
                 addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
