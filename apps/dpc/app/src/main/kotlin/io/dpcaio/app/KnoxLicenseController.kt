@@ -59,31 +59,31 @@ class KnoxLicenseController(private val context: Context) {
 
     fun activateIfRequested(): KnoxLicenseActivationSnapshot {
         if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
-            return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "NOT_SAMSUNG"))
+            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "NOT_SAMSUNG"))
         }
         if (!KnoxProvisioningSecretCapture.isAutoActivateRequested(context)) {
-            return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "AUTO_ACTIVATE_NOT_REQUESTED"))
+            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "AUTO_ACTIVATE_NOT_REQUESTED"))
         }
 
         val dpm = context.getSystemService(DevicePolicyManager::class.java)
         if (dpm == null || !dpm.isDeviceOwnerApp(context.packageName)) {
-            return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "WAIT_FOR_DEVICE_OWNER"))
+            return persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "WAIT_FOR_DEVICE_OWNER"))
         }
 
         val key = EnrollmentSecretStore(context).get(KnoxProvisioningSecretCapture.KNOX_SECRET_REF)
             ?.knoxLicenseKey
             ?.trim()
             ?.takeIf { it.isNotBlank() }
-            ?: return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.FAILED, "KPE_KEY_MISSING"))
+            ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KPE_KEY_MISSING"))
 
         val managerClass = runCatching { Class.forName(KNOX_MANAGER_CLASS, false, context.classLoader) }
             .getOrElse {
-                return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "KNOX_LICENSE_MANAGER_MISSING"))
+                return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "KNOX_LICENSE_MANAGER_MISSING"))
             }
 
         return try {
             val manager = managerClass.getMethod("getInstance", Context::class.java).invoke(null, context)
-                ?: return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.FAILED, "KNOX_LICENSE_MANAGER_NULL"))
+                ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KNOX_LICENSE_MANAGER_NULL"))
             val methods = managerClass.methods.filter { it.name == "activateLicense" }
             val packageMethod = methods.firstOrNull { method ->
                 val p = method.parameterTypes
@@ -96,14 +96,25 @@ class KnoxLicenseController(private val context: Context) {
             when {
                 packageMethod != null -> packageMethod.invoke(manager, key, context.packageName)
                 simpleMethod != null -> simpleMethod.invoke(manager, key)
-                else -> return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "ACTIVATE_LICENSE_METHOD_MISSING"))
+                else -> return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "ACTIVATE_LICENSE_METHOD_MISSING"))
             }
-            runtimeStore.write(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "ACTIVATION_REQUESTED"))
+            persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "ACTIVATION_REQUESTED"))
         } catch (_: ReflectiveOperationException) {
-            runtimeStore.write(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_INVOCATION_FAILED"))
+            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_INVOCATION_FAILED"))
         } catch (_: RuntimeException) {
-            runtimeStore.write(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_RUNTIME_FAILED"))
+            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_RUNTIME_FAILED"))
         }
+    }
+
+    private fun persist(snapshot: KnoxLicenseActivationSnapshot): KnoxLicenseActivationSnapshot {
+        val stored = runtimeStore.write(snapshot)
+        val retry = KnoxLicenseRetryCoordinator(context)
+        if (stored.status == KnoxLicenseActivationStatus.RETRYABLE) {
+            retry.scheduleForRetry(stored)
+        } else {
+            retry.cancel()
+        }
+        return stored
     }
 
     companion object {
