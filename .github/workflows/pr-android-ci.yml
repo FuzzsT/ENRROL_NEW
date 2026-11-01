@@ -54,6 +54,7 @@ jobs:
           python3 tools/tests/test_migration_secrets_windows_launcher_contract.py
           python3 tools/tests/test_migration_apk_validation_report_contract.py
           python3 tools/tests/test_migration_adb_update_matrix.py
+          python3 tools/tests/test_migration_update_matrix_aggregate.py
 
       - name: Run PIN and app lock contracts
         shell: bash
