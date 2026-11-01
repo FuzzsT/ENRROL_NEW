@@ -3,6 +3,7 @@ package io.dpcaio.shizuku
 import android.app.AppOpsManager
 import android.content.Context
 import android.os.Process
+import io.dpcaio.permission.RuntimePermissionReadbackParser
 import java.util.concurrent.TimeUnit
 
 class AioShizukuUserService : IAioShizukuUserService.Stub {
@@ -63,6 +64,13 @@ class AioShizukuUserService : IAioShizukuUserService.Stub {
     override fun revokeRuntimePermission(packageName: String, permissionName: String, userId: Int): Int {
         if (!validPackage(packageName) || !validPermission(permissionName) || userId < 0) return RESULT_INVALID_ARGUMENT
         return runTyped(listOf("/system/bin/pm", "revoke", "--user", userId.toString(), packageName, permissionName))
+    }
+
+    override fun getRuntimePermissionState(packageName: String, permissionName: String, userId: Int): String {
+        if (!validPackage(packageName) || !validPermission(permissionName) || userId < 0) return "INVALID_ARGUMENT"
+        val dump = runTypedCaptureChecked(listOf("/system/bin/dumpsys", "package", packageName))
+        if (dump == "TIMEOUT" || dump == "EXECUTION_ERROR") return dump
+        return RuntimePermissionReadbackParser.parse(dump, userId, permissionName).name
     }
 
     override fun setAppOp(packageName: String, op: String, mode: String, userId: Int): Int {

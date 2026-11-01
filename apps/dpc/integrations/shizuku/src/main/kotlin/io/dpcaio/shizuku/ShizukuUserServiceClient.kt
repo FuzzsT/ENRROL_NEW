@@ -63,7 +63,7 @@ class ShizukuUserServiceClient(context: Context) {
         .daemon(false)
         .processNameSuffix("aio")
         .debuggable(false)
-        .version(4)
+        .version(5)
 
     fun bind(): Boolean {
         autoRebindEnabled = true
@@ -211,6 +211,9 @@ class ShizukuUserServiceClient(context: Context) {
 
     fun revokeRuntimePermission(packageName: String, permissionName: String, userId: Int): Int? =
         runCatching { connectedRemote()?.revokeRuntimePermission(packageName, permissionName, userId) }.getOrNull()
+
+    fun getRuntimePermissionState(packageName: String, permissionName: String, userId: Int): String? =
+        runCatching { connectedRemote()?.getRuntimePermissionState(packageName, permissionName, userId) }.getOrNull()
 
     fun setAppOp(packageName: String, op: String, mode: String, userId: Int): Int? =
         runCatching { connectedRemote()?.setAppOp(packageName, op, mode, userId) }.getOrNull()

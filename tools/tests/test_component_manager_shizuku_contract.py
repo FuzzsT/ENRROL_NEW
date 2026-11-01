@@ -17,7 +17,7 @@ for token in [
 ]:
     assert token in service, token
 for token in [
-    '.version(4)',
+    '.version(5)',
     'fun setComponentEnabledStateVerified(',
     'connectedRemote()?.setComponentEnabledStateVerified(',
 ]:

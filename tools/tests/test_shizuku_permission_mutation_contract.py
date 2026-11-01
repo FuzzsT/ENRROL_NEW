@@ -4,6 +4,12 @@ aidl=(ROOT/'apps/dpc/integrations/shizuku/src/main/aidl/io/dpcaio/shizuku/IAioSh
 service=(ROOT/'apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/AioShizukuUserService.kt').read_text()
 client=(ROOT/'apps/dpc/integrations/shizuku/src/main/kotlin/io/dpcaio/shizuku/ShizukuUserServiceClient.kt').read_text()
 assert 'revokeRuntimePermission' in aidl
+assert 'String getRuntimePermissionState(String packageName, String permissionName, int userId);' in aidl
 assert '"revoke", "--user"' in service
+assert 'override fun getRuntimePermissionState(' in service
+assert '"/system/bin/dumpsys", "package", packageName' in service
+assert 'RuntimePermissionReadbackParser.parse(' in service
 assert 'revokeRuntimePermission' in client
+assert 'fun getRuntimePermissionState(' in client
+assert 'connectedRemote()?.getRuntimePermissionState(' in client
 print('SHIZUKU_PERMISSION_MUTATION_CONTRACT: PASS')

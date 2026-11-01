@@ -119,15 +119,26 @@ class OfflinePolicyApplier(private val context: Context) {
             val readback = if (targetUserId == currentUser) runCatching {
                 permissionGateway.inspectPermission(rule.packageName, rule.permission, targetUserId, entry?.group, entry?.protection ?: PermissionProtection.UNKNOWN, shizukuAvailable = shizukuAvailable)
             }.getOrNull() else null
+            val shizukuObserved = if (submitted && decision.route == PermissionControlRoute.SHIZUKU) {
+                shizuku.getRuntimePermissionState(rule.packageName, rule.permission, targetUserId)
+            } else null
             val verified = when {
                 !submitted -> false
                 decision.route in setOf(PermissionControlRoute.DPC, PermissionControlRoute.DELEGATED_DPC) -> readback?.dpcState == desired
-                targetUserId != currentUser -> false
-                desired == ManagedPermissionState.GRANTED -> readback?.actualGranted == true
-                desired == ManagedPermissionState.DENIED -> readback?.actualGranted == false
+                decision.route == PermissionControlRoute.SHIZUKU && desired == ManagedPermissionState.GRANTED -> shizukuObserved == "GRANTED"
+                decision.route == PermissionControlRoute.SHIZUKU && desired == ManagedPermissionState.DENIED -> shizukuObserved == "DENIED"
                 else -> false
             }
-            items += OfflinePolicyApplyItem("permission", "${rule.packageName}:${rule.permission}", rule.required, verified, if (verified) "VERIFIED" else "$applyDetail; POLICY_READBACK_MISMATCH")
+            val permissionDetail = if (decision.route == PermissionControlRoute.SHIZUKU) {
+                "$applyDetail; user=$targetUserId requested=$desired observed=${shizukuObserved ?: "UNKNOWN"}"
+            } else applyDetail
+            items += OfflinePolicyApplyItem(
+                "permission",
+                "${rule.packageName}:${rule.permission}",
+                rule.required,
+                verified,
+                if (verified) "VERIFIED; $permissionDetail" else "$permissionDetail; POLICY_READBACK_MISMATCH",
+            )
         }
         store.load()?.let { store.save(it.copy(stage = OfflineStage.PERMISSIONS_APPLIED)) }
 

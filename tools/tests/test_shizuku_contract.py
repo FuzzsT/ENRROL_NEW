@@ -78,9 +78,10 @@ def main():
         'String resolveAppOp(String op);',
         'String queryBroadcastReceivers(String action, int userId);',
         'String setComponentEnabledStateVerified(String packageName, String className, String state, int userId);',
+        'String getRuntimePermissionState(String packageName, String permissionName, int userId);',
     ]:
         if token not in aidl_text:
-            raise AssertionError(f"typed AppOps/inventory/component-state contract missing {token}")
+            raise AssertionError(f"typed AppOps/inventory/component/permission contract missing {token}")
 
     service_text = must(service, 'ProcessBuilder(args)')
     for token in ['"/system/bin/am", "start"', '"/system/bin/am", "broadcast"']:
@@ -99,6 +100,9 @@ def main():
         'if (process.exitValue() == 0) output else "EXECUTION_ERROR"',
         'override fun queryBroadcastReceivers(action: String, userId: Int): String',
         'override fun setComponentEnabledStateVerified(',
+        'override fun getRuntimePermissionState(',
+        '"/system/bin/dumpsys", "package", packageName',
+        'RuntimePermissionReadbackParser.parse(',
         '"/system/bin/pm"',
         '"query-receivers"',
         '"--brief"',
@@ -108,7 +112,7 @@ def main():
         '"0x00000200"',
     ]:
         if token not in service_text:
-            raise AssertionError(f"checked AppOps/cross-user inventory/component-state missing {token}")
+            raise AssertionError(f"checked Shizuku service contract missing {token}")
     for forbidden in ["Runtime.getRuntime().exec", "newProcess(", "HiddenApiBypass", "setHiddenApiExemptions"]:
         if forbidden in service_text:
             raise AssertionError(f"unsafe Shizuku service token: {forbidden}")
@@ -117,7 +121,7 @@ def main():
     for token in [
         "Shizuku.bindUserService",
         ".processNameSuffix(",
-        ".version(4)",
+        ".version(5)",
         "IBinder.DeathRecipient",
         "linkToDeath",
         "unlinkToDeath",
@@ -141,6 +145,8 @@ def main():
         'connectedRemote()?.queryBroadcastReceivers(action, userId)',
         'fun setComponentEnabledStateVerified(packageName: String, className: String, state: String, userId: Int): String?',
         'connectedRemote()?.setComponentEnabledStateVerified(packageName, className, state, userId)',
+        'fun getRuntimePermissionState(packageName: String, permissionName: String, userId: Int): String?',
+        'connectedRemote()?.getRuntimePermissionState(packageName, permissionName, userId)',
     ]:
         if token not in client_text:
             raise AssertionError(f"client missing {token}")
