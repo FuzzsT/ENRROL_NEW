@@ -58,7 +58,7 @@ class AndroidPermissionCatalog(context: Context) {
     }
 
     private fun protectionOf(info: PermissionInfo): PermissionProtection {
-        if (info.name in SPECIAL_ACCESS) return PermissionProtection.SPECIAL_ACCESS
+        if (info.name in USER_SPECIAL_ACCESS) return PermissionProtection.SPECIAL_ACCESS
         val base = PermissionInfoCompat.getProtection(info)
         val flags = PermissionInfoCompat.getProtectionFlags(info)
         val privileged = flags and PermissionInfo.PROTECTION_FLAG_PRIVILEGED != 0
@@ -71,12 +71,11 @@ class AndroidPermissionCatalog(context: Context) {
     }
 
     companion object {
-        private val SPECIAL_ACCESS = setOf(
+        private val USER_SPECIAL_ACCESS = setOf(
             "android.permission.SYSTEM_ALERT_WINDOW",
             "android.permission.WRITE_SETTINGS",
             "android.permission.REQUEST_INSTALL_PACKAGES",
-            "android.permission.PACKAGE_USAGE_STATS",
-            "android.permission.ACCESS_NOTIFICATIONS"
+            "android.permission.PACKAGE_USAGE_STATS"
         )
     }
 }
