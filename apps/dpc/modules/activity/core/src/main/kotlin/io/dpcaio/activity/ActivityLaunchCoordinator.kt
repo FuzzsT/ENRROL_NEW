@@ -26,7 +26,7 @@ class ActivityLaunchCoordinator(
         for (route in plan.routes) {
             val result = executor.execute(route, input)
             attempts += result
-            if (result.success) {
+            if (result.success && route != ActivityRoute.DPC_PREPARE_RETRY) {
                 return ActivityLaunchResult(route, attempts, plan.blockers)
             }
         }
