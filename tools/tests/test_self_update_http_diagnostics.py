@@ -10,8 +10,10 @@ required = [
     "statusCode: Int",
     "requestedUrl: String",
     "HTTP_NOT_FOUND",
-    "Self Update stable channel is not published yet (manifest HTTP 404)",
-    "Self Update continuous channel is not published yet (manifest HTTP 404)",
+    'requestedUrl.contains("/dpc-aio-stable/", ignoreCase = true)',
+    'requestedUrl.contains("/dpc-aio-continuous/", ignoreCase = true)',
+    "channel is not published yet (manifest HTTP 404)",
+    "Self Update manifest was not found (HTTP 404)",
     "Self Update APK asset was not found (HTTP 404)",
 ]
 
