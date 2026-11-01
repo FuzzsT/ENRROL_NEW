@@ -6,6 +6,11 @@ assert p.is_file(),p
 t=p.read_text(); inv=i.read_text()
 for n in ['getComponentEnabledSetting','setComponentEnabledSetting','setComponentEnabledSettings','ComponentEnabledSetting','COMPONENT_STATE_MISMATCH']:
     assert n in t,n
+for n in [
+    'PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER -> ComponentOverrideState.DISABLED',
+    'PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> ComponentOverrideState.DISABLED',
+]:
+    assert n in t, f'component disabled readback mapping missing {n}'
 for n in ['manifestEnabled','overrideState','effectiveEnabled']:
     assert n in inv,n
 for forbidden in ['DevicePolicyManager','enableForeignActivity','disableForeignActivity']:
