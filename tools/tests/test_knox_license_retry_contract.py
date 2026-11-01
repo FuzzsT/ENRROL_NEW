@@ -27,7 +27,7 @@ def main() -> None:
         'JobScheduler',
         'JobInfo.Builder',
         'setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)',
-        'KnoxLicenseController(context).activateIfRequested()',
+        '.activateIfRequested(KnoxLicenseAttemptSource.RETRY_JOB)',
         'class KnoxLicenseRetryJobService',
         'jobFinished(params,',
     ], 'retry coordinator')

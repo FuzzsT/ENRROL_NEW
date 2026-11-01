@@ -57,33 +57,35 @@ class KnoxLicenseRuntimeStore(context: Context) {
 class KnoxLicenseController(private val context: Context) {
     private val runtimeStore = KnoxLicenseRuntimeStore(context)
 
-    fun activateIfRequested(): KnoxLicenseActivationSnapshot {
+    fun activateIfRequested(
+        source: KnoxLicenseAttemptSource = KnoxLicenseAttemptSource.PROVISIONING,
+    ): KnoxLicenseActivationSnapshot {
         if (!Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
-            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "NOT_SAMSUNG"))
+            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "NOT_SAMSUNG"), source)
         }
         if (!KnoxProvisioningSecretCapture.isAutoActivateRequested(context)) {
-            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "AUTO_ACTIVATE_NOT_REQUESTED"))
+            return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "AUTO_ACTIVATE_NOT_REQUESTED"), source)
         }
 
         val dpm = context.getSystemService(DevicePolicyManager::class.java)
         if (dpm == null || !dpm.isDeviceOwnerApp(context.packageName)) {
-            return persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "WAIT_FOR_DEVICE_OWNER"))
+            return persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "WAIT_FOR_DEVICE_OWNER"), source)
         }
 
         val key = EnrollmentSecretStore(context).get(KnoxProvisioningSecretCapture.KNOX_SECRET_REF)
             ?.knoxLicenseKey
             ?.trim()
             ?.takeIf { it.isNotBlank() }
-            ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KPE_KEY_MISSING"))
+            ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KPE_KEY_MISSING"), source)
 
         val managerClass = runCatching { Class.forName(KNOX_MANAGER_CLASS, false, context.classLoader) }
             .getOrElse {
-                return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "KNOX_LICENSE_MANAGER_MISSING"))
+                return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "KNOX_LICENSE_MANAGER_MISSING"), source)
             }
 
         return try {
             val manager = managerClass.getMethod("getInstance", Context::class.java).invoke(null, context)
-                ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KNOX_LICENSE_MANAGER_NULL"))
+                ?: return persist(snapshot(KnoxLicenseActivationStatus.FAILED, "KNOX_LICENSE_MANAGER_NULL"), source)
             val methods = managerClass.methods.filter { it.name == "activateLicense" }
             val packageMethod = methods.firstOrNull { method ->
                 val p = method.parameterTypes
@@ -96,18 +98,27 @@ class KnoxLicenseController(private val context: Context) {
             when {
                 packageMethod != null -> packageMethod.invoke(manager, key, context.packageName)
                 simpleMethod != null -> simpleMethod.invoke(manager, key)
-                else -> return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "ACTIVATE_LICENSE_METHOD_MISSING"))
+                else -> return persist(snapshot(KnoxLicenseActivationStatus.UNSUPPORTED, "ACTIVATE_LICENSE_METHOD_MISSING"), source)
             }
-            persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "ACTIVATION_REQUESTED"))
+            persist(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "ACTIVATION_REQUESTED"), source)
         } catch (_: ReflectiveOperationException) {
-            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_INVOCATION_FAILED"))
+            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_INVOCATION_FAILED"), source)
         } catch (_: RuntimeException) {
-            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_RUNTIME_FAILED"))
+            persist(snapshot(KnoxLicenseActivationStatus.FAILED, "ACTIVATION_RUNTIME_FAILED"), source)
         }
     }
 
-    private fun persist(snapshot: KnoxLicenseActivationSnapshot): KnoxLicenseActivationSnapshot {
+    private fun persist(
+        snapshot: KnoxLicenseActivationSnapshot,
+        source: KnoxLicenseAttemptSource,
+    ): KnoxLicenseActivationSnapshot {
+        val previous = runtimeStore.read()
         val stored = runtimeStore.write(snapshot)
+        KnoxLicenseHistoryStore(context).append(
+            source = source,
+            previous = previous,
+            current = stored,
+        )
         if (stored.status == KnoxLicenseActivationStatus.RETRYABLE) {
             KnoxLicenseRetryCoordinator(context).scheduleForRetry(stored)
         } else {
