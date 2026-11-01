@@ -34,6 +34,14 @@ for n in [
     'userActionAvailable = localTarget && special',
 ]:
     assert n in at,f'cross-user local-only route guard missing {n}'
+for n in [
+    'val appOp = APP_OPS[entry.name]',
+    'if (appOp != null)',
+    'return verifyAppOp(packageName, appOp.opStr)',
+    'shizuku?.getAppOp(packageName, appOp.commandName, userId)',
+    'AppOpReadbackParser.parse(snapshot)?.effectiveMode == "allow"',
+]:
+    assert n in at,f'AppOp-aware alreadyGranted readback missing {n}'
 assert 'val already = pm.checkPermission(entry.name, packageName) == PackageManager.PERMISSION_GRANTED' not in at,'AUTO planner must not use current-user PackageManager as target-user alreadyGranted state'
 assert 'val dpcCanGrant = entry.protection == PermissionProtection.DANGEROUS &&' not in at,'cross-user AUTO planner must not expose local DPC runtime grant route'
 assert 'samsungKnoxSpecialAvailable = special && knox?.supports(entry.name) == true' not in at,'cross-user AUTO planner must not expose local Knox special route'
