@@ -29,7 +29,11 @@ def parse_args() -> argparse.Namespace:
         )
     )
     p.add_argument("--repo", required=True, help="GitHub repository in owner/name form")
-    p.add_argument("--run-id", required=True, type=int, help="Exact GitHub Actions database ID")
+    p.add_argument(
+        "--run-id",
+        type=int,
+        help="Exact GitHub Actions database ID; omit to select the newest successful manual matrix run",
+    )
     p.add_argument("--output-dir", required=True, type=Path)
     p.add_argument(
         "--no-wait",
@@ -70,11 +74,62 @@ def inspect_run(gh: str, repo: str, run_id: int) -> dict:
     return data
 
 
+def resolve_latest_successful_run(gh: str, repo: str) -> int:
+    cp = run_gh(
+        [
+            gh,
+            "run",
+            "list",
+            "--repo",
+            repo,
+            "--workflow",
+            WORKFLOW,
+            "--event",
+            "workflow_dispatch",
+            "--status",
+            "completed",
+            "--limit",
+            "20",
+            "--json",
+            "databaseId,status,conclusion,event,workflowName,createdAt,headBranch,url",
+        ]
+    )
+    if cp.returncode != 0:
+        detail = (cp.stderr or cp.stdout or "gh run list failed").strip()
+        fail(f"MIGRATION_UPDATE_MATRIX_RUN_LIST_FAILED: {detail}")
+    try:
+        rows = json.loads(cp.stdout)
+    except Exception as exc:
+        fail(f"MIGRATION_UPDATE_MATRIX_RUN_LIST_INVALID_JSON: {exc}")
+    if not isinstance(rows, list):
+        fail("MIGRATION_UPDATE_MATRIX_RUN_LIST_INVALID")
+
+    candidates = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") != "completed" or row.get("conclusion") != "success":
+            continue
+        if row.get("event") != "workflow_dispatch":
+            continue
+        if row.get("workflowName") not in (WORKFLOW_NAME, WORKFLOW):
+            continue
+        run_id = int(row.get("databaseId") or 0)
+        if run_id <= 0:
+            continue
+        candidates.append((str(row.get("createdAt") or ""), run_id))
+
+    if not candidates:
+        fail("MIGRATION_UPDATE_MATRIX_NO_SUCCESSFUL_MANUAL_RUN")
+    candidates.sort(reverse=True)
+    return candidates[0][1]
+
+
 def main() -> int:
     args = parse_args()
     if args.repo.count("/") != 1 or any(not part for part in args.repo.split("/")):
         fail("MIGRATION_UPDATE_MATRIX_REPO_INVALID")
-    if args.run_id <= 0:
+    if args.run_id is not None and args.run_id <= 0:
         fail("MIGRATION_UPDATE_MATRIX_RUN_ID_INVALID")
     if args.interval < 1:
         fail("MIGRATION_UPDATE_MATRIX_INTERVAL_INVALID")
@@ -83,7 +138,11 @@ def main() -> int:
     if not gh:
         fail("MIGRATION_UPDATE_MATRIX_GH_NOT_FOUND")
 
-    data = inspect_run(gh, args.repo, args.run_id)
+    run_id = args.run_id if args.run_id is not None else resolve_latest_successful_run(gh, args.repo)
+    data = inspect_run(gh, args.repo, run_id)
+    if data.get("event") != "workflow_dispatch":
+        fail(f"MIGRATION_UPDATE_MATRIX_EVENT_MISMATCH: {data.get('event')}")
+
     if data.get("status") != "completed":
         if args.no_wait:
             fail(f"MIGRATION_UPDATE_MATRIX_RUN_NOT_COMPLETED: {data.get('status')}")
@@ -92,7 +151,7 @@ def main() -> int:
                 gh,
                 "run",
                 "watch",
-                str(args.run_id),
+                str(run_id),
                 "--repo",
                 args.repo,
                 "--exit-status",
@@ -103,7 +162,7 @@ def main() -> int:
         if watch.returncode != 0:
             detail = (watch.stderr or watch.stdout or "gh run watch failed").strip()
             fail(f"MIGRATION_UPDATE_MATRIX_RUN_FAILED: {detail}")
-        data = inspect_run(gh, args.repo, args.run_id)
+        data = inspect_run(gh, args.repo, run_id)
 
     if data.get("status") != "completed" or data.get("conclusion") != "success":
         fail(
@@ -117,7 +176,7 @@ def main() -> int:
             gh,
             "run",
             "download",
-            str(args.run_id),
+            str(run_id),
             "--repo",
             args.repo,
             "--name",
@@ -132,7 +191,7 @@ def main() -> int:
 
     print("MIGRATION_UPDATE_MATRIX_ARTIFACT_READY: PASS")
     print(f"Workflow: {WORKFLOW}")
-    print(f"Run ID: {args.run_id}")
+    print(f"Run ID: {run_id}")
     print(f"Artifact: {ARTIFACT}")
     print(f"Output: {args.output_dir}")
     if data.get("url"):

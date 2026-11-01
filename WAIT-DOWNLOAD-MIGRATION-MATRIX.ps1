@@ -1,6 +1,5 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [long]$RunId,
+    [long]$RunId = 0,
 
     [Parameter(Mandatory = $true)]
     [string]$OutputDir,
@@ -32,17 +31,19 @@ if (-not $python) {
 $argsList = @(
     $tool,
     '--repo', $Repo,
-    '--run-id', $RunId,
     '--output-dir', $OutputDir
 )
 
+if ($RunId -gt 0) {
+    $argsList += @('--run-id', $RunId)
+}
 if ($NoWait) {
     $argsList += '--no-wait'
 }
 
 Write-Host 'MIGRATION_UPDATE_MATRIX_ARTIFACT_WINDOWS_LAUNCHER'
 Write-Host ("Repository: {0}" -f $Repo)
-Write-Host ("Run ID: {0}" -f $RunId)
+Write-Host ("Run ID: {0}" -f ($(if ($RunId -gt 0) { $RunId } else { 'AUTO-LATEST-SUCCESS' })))
 Write-Host ("Output: {0}" -f $OutputDir)
 Write-Host ("Wait: {0}" -f ($(if ($NoWait) { 'NO' } else { 'YES' })))
 

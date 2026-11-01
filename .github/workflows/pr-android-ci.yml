@@ -61,6 +61,7 @@ jobs:
           python3 tools/tests/test_migration_update_matrix_artifact_fetcher.py
           python3 tools/tests/test_migration_update_matrix_artifact_windows_launcher_contract.py
           python3 tools/tests/test_migration_update_matrix_aio_windows_launcher_contract.py
+          python3 tools/tests/test_migration_update_matrix_artifact_auto_runid.py
 
       - name: Run PIN and app lock contracts
         shell: bash

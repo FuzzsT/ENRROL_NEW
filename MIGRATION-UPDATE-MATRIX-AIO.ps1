@@ -31,19 +31,19 @@ if ($Fetch -and $Dispatch) {
 }
 
 if ($Fetch) {
-    if ($RunId -le 0) {
-        throw 'MIGRATION_UPDATE_MATRIX_AIO_WINDOWS_LAUNCHER: Fetch requires RunId > 0'
-    }
     if ([string]::IsNullOrWhiteSpace($OutputDir)) {
         throw 'MIGRATION_UPDATE_MATRIX_AIO_WINDOWS_LAUNCHER: Fetch requires OutputDir'
     }
 
     Write-Host 'Mode: FETCH'
+    Write-Host ("Run ID: {0}" -f ($(if ($RunId -gt 0) { $RunId } else { 'AUTO-LATEST-SUCCESS' })))
     $fetchArgs = @(
-        '-RunId', $RunId,
         '-OutputDir', $OutputDir,
         '-Repo', $Repo
     )
+    if ($RunId -gt 0) {
+        $fetchArgs += @('-RunId', $RunId)
+    }
     if ($NoWait) {
         $fetchArgs += '-NoWait'
     }
