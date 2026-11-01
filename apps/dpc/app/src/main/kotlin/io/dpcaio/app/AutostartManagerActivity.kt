@@ -224,7 +224,11 @@ class AutostartManagerActivity : Activity() {
             listRoot.addView(ModernUi.card(this, emphasized = readback?.effectiveEnabled == true || submitted == ComponentOverrideState.ENABLED).apply {
                 addView(ModernUi.title(this@AutostartManagerActivity, row.label))
                 val stateText = if (selectedUser == currentUser) {
-                    "CURRENT_USER_READBACK user=$selectedUser • source=${row.inventorySource} • Manifest=${row.manifestEnabled ?: "unknown"} Override=${readback?.overrideState ?: "unknown"} Effective=${readback?.effectiveEnabled ?: "unknown"}"
+                    if (readback != null) {
+                        "CURRENT_USER_READBACK user=$selectedUser • source=${row.inventorySource} • Manifest=${row.manifestEnabled} Override=${readback.overrideState} Effective=${readback.effectiveEnabled}"
+                    } else {
+                        "CURRENT_USER_SHIZUKU_STATE user=$selectedUser • source=${row.inventorySource} • lastVerified=${submitted?.name ?: "none"} • Manifest=unknown • liveReadback=mutation-only"
+                    }
                 } else {
                     "TARGET_USER_INVENTORY user=$selectedUser • source=${row.inventorySource} • lastVerified=${submitted?.name ?: "none"} • Manifest=unknown • liveReadback=mutation-only"
                 }
