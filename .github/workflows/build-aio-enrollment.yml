@@ -101,6 +101,8 @@ jobs:
 
       - name: Resolve pipeline mode
         id: mode
+        env:
+          STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -111,10 +113,14 @@ jobs:
               mode="stable"
             elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
               mode="stable" # manual auto repair/publish path
-            elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-              mode="emergency"
             else
-              mode="stable"
+              if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then
+                mode="stable" # automatic main self-update publish when stable signer configured
+              elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+                mode="emergency"
+              else
+                mode="stable"
+              fi
             fi
           else
             mode="$requested"
@@ -136,7 +142,9 @@ jobs:
               should_publish="true"
             else
               release_tag="dpc-aio-continuous"
-              if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.apk_url }}" ]]; then
+              if [[ "$mode" == "stable" && "$GITHUB_REF" == "refs/heads/main" && -z "${{ inputs.apk_url }}" ]]; then
+                should_publish="true"
+              elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.apk_url }}" ]]; then
                 should_publish="true"
               else
                 should_publish="false"
