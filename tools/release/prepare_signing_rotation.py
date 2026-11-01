@@ -247,6 +247,7 @@ def main() -> int:
                 "oldCertificateSha256": old_fingerprint,
                 "newCertificateSha256": new_fingerprint,
                 "rotationMinSdkVersion": args.rotation_min_sdk_version,
+                "rotation-min-sdk-version": args.rotation_min_sdk_version,
                 "newKeystore": new_keystore.name,
                 "lineage": lineage.name,
                 "securityStatus": "historical signer treated as potentially compromised; use only to authorize migration",
