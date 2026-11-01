@@ -108,11 +108,10 @@ class KnoxLicenseController(private val context: Context) {
 
     private fun persist(snapshot: KnoxLicenseActivationSnapshot): KnoxLicenseActivationSnapshot {
         val stored = runtimeStore.write(snapshot)
-        val retry = KnoxLicenseRetryCoordinator(context)
         if (stored.status == KnoxLicenseActivationStatus.RETRYABLE) {
-            retry.scheduleForRetry(stored)
+            KnoxLicenseRetryCoordinator(context).scheduleForRetry(stored)
         } else {
-            retry.cancel()
+            KnoxLicenseRetryCoordinator(context).cancel()
         }
         return stored
     }
