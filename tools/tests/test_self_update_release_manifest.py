@@ -127,11 +127,11 @@ def main():
     assert "STABLE_SIGNING_CONFIGURED" in workflow, (
         "automatic main self-update publishing must be gated by a stable-signing readiness flag"
     )
-    assert 'if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then' in workflow, (
-        "main auto mode must prefer stable signing only when the full stable signer is configured"
+    assert '"$STABLE_SIGNING_CONFIGURED" == "true" || "$RECOVERY_SIGNING_CONFIGURED" == "true"' in workflow, (
+        "main auto mode must require either the configured stable signer or verified persisted-signer recovery"
     )
     assert 'mode="stable" # automatic main self-update publish when stable signer configured' in workflow, (
-        "configured main pushes must publish the continuous self-update channel"
+        "authorized stable signer paths on main must publish the continuous self-update channel"
     )
     assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' in workflow, (
         "main must retain an emergency fallback when stable signing is not configured"
