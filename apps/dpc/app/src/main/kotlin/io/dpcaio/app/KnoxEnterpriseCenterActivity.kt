@@ -15,6 +15,8 @@ class KnoxEnterpriseCenterActivity : Activity() {
     private fun render() {
         val management = ManagementContextFactory.create(this)
         val ownerSatisfied = management.ownership != OwnershipMode.NONE
+        val licenseSnapshot = KnoxLicenseRuntimeStore(this).read()
+        val retryScheduled = KnoxLicenseRetryCoordinator(this).isScheduled()
         val root = ModernUi.page(this)
 
         root.addView(
@@ -42,6 +44,31 @@ class KnoxEnterpriseCenterActivity : Activity() {
                         if (management.knoxLicenseActive) "KNOX ACTIVE" else "KNOX LIMITED",
                         if (management.knoxLicenseActive) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
                     )
+                )
+            }
+        )
+
+        root.addView(ModernUi.section(this, "KPE license diagnostics"))
+        root.addView(
+            ModernUi.card(this, emphasized = true).apply {
+                val status = licenseSnapshot?.status?.name ?: "UNKNOWN"
+                val detail = licenseSnapshot?.detail ?: "NO_RUNTIME_STATE"
+                val errorCode = licenseSnapshot?.errorCode?.toString() ?: "NONE"
+                addView(ModernUi.title(this@KnoxEnterpriseCenterActivity, "KPE license diagnostics"))
+                addView(
+                    ModernUi.body(
+                        this@KnoxEnterpriseCenterActivity,
+                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled",
+                    )
+                )
+                addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
+                addView(
+                    ModernUi.action(this@KnoxEnterpriseCenterActivity, "Retry now") {
+                        Thread {
+                            KnoxLicenseController(this@KnoxEnterpriseCenterActivity).activateIfRequested()
+                            runOnUiThread { render() }
+                        }.start()
+                    }
                 )
             }
         )

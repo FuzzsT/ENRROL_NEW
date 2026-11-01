@@ -27,6 +27,8 @@ class KnoxLicenseRetryCoordinator(private val context: Context) {
         return jobs.schedule(info) == JobScheduler.RESULT_SUCCESS
     }
 
+    fun isScheduled(): Boolean = scheduler?.getPendingJob(JOB_ID) != null
+
     fun onBootOrPackageReplace(): Boolean {
         val snapshot = KnoxLicenseRuntimeStore(context).read() ?: return false
         return scheduleForRetry(snapshot)
