@@ -63,6 +63,27 @@ assert "SUBMITTED, cross-user readback not claimed" not in explorer
 assert "readback via rescan" not in explorer
 
 require(
+    explorer,
+    [
+        "DevicePolicyManager::class.java",
+        "isDeviceOwnerApp(packageName)",
+        "isProfileOwnerApp(packageName)",
+        "AndroidDevicePolicyGateway(",
+        "isApplicationHidden(activity.packageName)",
+        "isPackageSuspended(activity.packageName)",
+        "packageHiddenByDpc = packageHiddenByDpc",
+        "suspendedByDpc = suspendedByDpc",
+        "dpcCanPrepare = dpcCanPrepare",
+        "ActivityRoute.DPC_PREPARE_RETRY to",
+        "setApplicationHidden(input.packageName, false)",
+        "setPackagesSuspended(setOf(input.packageName), false)",
+        "isApplicationHidden(input.packageName)",
+        "isPackageSuspended(input.packageName)",
+    ],
+    "ActivityExplorer verified DPC prepare",
+)
+
+require(
     autostart,
     [
         '"Choose user"',
