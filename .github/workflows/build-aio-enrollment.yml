@@ -676,3 +676,64 @@ jobs:
             verify_release_asset "dpc-aio-stable"
           fi
           echo "Published APK asset(s) are public and byte-identical to the QR-bound build."
+
+      - name: Verify published self-update manifest
+        if: needs.build.outputs.mode == 'stable'
+        env:
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            manifest_tag="dpc-aio-stable"
+            expected_channel="stable"
+          else
+            manifest_tag="$RELEASE_TAG"
+            expected_channel="continuous"
+          fi
+
+          manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${manifest_tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json; then
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED manifest_fetch tag=$manifest_tag" >&2
+            exit 1
+          fi
+
+          manifest_channel="$(python3 -c 'import json; print(json.load(open("public-self-update.json", encoding="utf-8"))["channel"])')"
+          manifest_package="$(python3 -c 'import json; print(json.load(open("public-self-update.json", encoding="utf-8"))["packageName"])')"
+          manifest_declared_apk_url="$(python3 -c 'import json; print(json.load(open("public-self-update.json", encoding="utf-8"))["apkUrl"])')"
+          manifest_apk_sha="$(python3 -c 'import json; print(json.load(open("public-self-update.json", encoding="utf-8"))["apkSha256"])')"
+          manifest_apk_size="$(python3 -c 'import json; print(json.load(open("public-self-update.json", encoding="utf-8"))["apkSize"])')"
+          expected_apk_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${manifest_tag}/DPC-AIO-enterprise-release.apk"
+          local_apk_sha="$(sha256sum dist/DPC-AIO-enterprise-release.apk | awk '{print $1}')"
+          local_apk_size="$(stat -c '%s' dist/DPC-AIO-enterprise-release.apk)"
+
+          [[ "$manifest_channel" == "$expected_channel" ]] || {
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED channel expected=$expected_channel observed=$manifest_channel" >&2
+            exit 1
+          }
+          [[ "$manifest_package" == "io.dpcaio.app" ]] || {
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED package=$manifest_package" >&2
+            exit 1
+          }
+          [[ "$manifest_declared_apk_url" == "$expected_apk_url" ]] || {
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED apk_url expected=$expected_apk_url observed=$manifest_declared_apk_url" >&2
+            exit 1
+          }
+          [[ "$manifest_apk_size" == "$local_apk_size" ]] || {
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED apk_size expected=$local_apk_size observed=$manifest_apk_size" >&2
+            exit 1
+          }
+
+          manifest_apk_url="${manifest_declared_apk_url}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if ! curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk; then
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED apk_fetch tag=$manifest_tag" >&2
+            exit 1
+          fi
+          public_apk_sha="$(sha256sum public-self-update.apk | awk '{print $1}')"
+          [[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]] || {
+            echo "PUBLIC_SELF_UPDATE_VERIFY_FAILED sha manifest=$manifest_apk_sha public=$public_apk_sha local=$local_apk_sha" >&2
+            exit 1
+          }
+
+          echo "Published self-update manifest and APK are public, consistent, and byte-identical to the local stable build."
