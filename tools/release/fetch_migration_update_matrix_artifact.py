@@ -24,17 +24,17 @@ def run_gh(command: list[str]) -> subprocess.CompletedProcess[str]:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            "Read-only verifier/downloader for one migration-update-matrix workflow run. "
+            "Read-only verifier/downloader for one migration-update-matrix Actions execution. "
             "It never dispatches workflows or modifies devices/releases."
         )
     )
     p.add_argument("--repo", required=True, help="GitHub repository in owner/name form")
-    p.add_argument("--run-id", required=True, type=int, help="Exact GitHub Actions run database ID")
+    p.add_argument("--run-id", required=True, type=int, help="Exact GitHub Actions database ID")
     p.add_argument("--output-dir", required=True, type=Path)
     p.add_argument(
         "--no-wait",
         action="store_true",
-        help="Do not wait for the run; fail unless it is already completed successfully",
+        help="Do not wait; fail unless the selected execution is already completed successfully",
     )
     p.add_argument("--interval", type=int, default=5, help="Polling interval used by gh run watch")
     return p.parse_args()
