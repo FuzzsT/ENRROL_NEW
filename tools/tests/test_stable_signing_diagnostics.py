@@ -101,14 +101,21 @@ for token in [
     "stable_signing_setup.py",
     "--apply",
     "TemporaryDirectory",
+    "DEFAULT_PROVISIONING_METADATA",
+    "certificateSha256Hex",
+    "verify_historical_lineage",
+    "Historical signing lineage: MATCH",
+    "--metadata",
 ]:
     assert token in recovery_source, f"stable signer recovery tool missing contract token: {token}"
 
 for forbidden in [
     "print(password)",
     "--pass", "password=" + "{password}",
+    "--skip-lineage",
+    "--no-lineage",
 ]:
-    assert forbidden not in recovery_source, f"stable signer recovery tool must not expose passwords: {forbidden}"
+    assert forbidden not in recovery_source, f"stable signer recovery tool must not expose passwords or bypass lineage validation: {forbidden}"
 
 recovery_help = subprocess.run(
     [sys.executable, str(RECOVERY_TOOL), "--help"],
@@ -117,7 +124,7 @@ recovery_help = subprocess.run(
     stderr=subprocess.STDOUT,
 )
 assert recovery_help.returncode == 0, recovery_help.stdout
-for token in ["--encrypted", "--alias", "--repo", "--apply"]:
+for token in ["--encrypted", "--metadata", "--alias", "--repo", "--apply"]:
     assert token in recovery_help.stdout, f"recovery help missing: {token}"
 
 print("STABLE_SIGNING_DIAGNOSTICS: PASS")
