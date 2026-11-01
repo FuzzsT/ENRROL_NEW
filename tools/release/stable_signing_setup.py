@@ -2,9 +2,11 @@
 """Audit and optionally configure DPC-AIO stable signing for GitHub Actions.
 
 This tool intentionally never generates or rotates a signing key. It validates an
-existing keystore, derives its certificate SHA-256 fingerprint, and can configure
-the repository Actions secrets/variable through an authenticated GitHub CLI.
-Secret values are passed over stdin and are never printed.
+existing keystore, derives its certificate SHA-256 fingerprint, verifies private
+key access before applying configuration, and can configure the repository
+Actions secrets/variable through an authenticated GitHub CLI.
+Secret values are passed via environment/stdin and are never printed or placed
+in keytool argv.
 """
 
 from __future__ import annotations
@@ -14,9 +16,11 @@ import base64
 import getpass
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DEFAULT_REPO = "FuzzsT/ENRROL_NEW"
@@ -28,6 +32,9 @@ SECRET_NAMES = (
 )
 CERT_NAME = "DPC_AIO_EXPECTED_SIGNING_CERT_SHA256"
 ALL_CONFIG_NAMES = (*SECRET_NAMES, CERT_NAME)
+STORE_PASSWORD_ENV = "DPC_AIO_SETUP_STORE_PASSWORD"
+KEY_PASSWORD_ENV = "DPC_AIO_SETUP_KEY_PASSWORD"
+VERIFY_PASSWORD_ENV = "DPC_AIO_SETUP_VERIFY_PASSWORD"
 
 
 def fail(message: str) -> "NoReturn":
@@ -47,14 +54,22 @@ def prompt_secret(env_name: str, prompt: str) -> str:
         value = getpass.getpass(prompt)
     if not value:
         fail(f"{env_name} cannot be empty")
+    if "\n" in value or "\r" in value:
+        fail(f"{env_name} must not contain line breaks")
     return value
 
 
-def run_checked(command: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+def run_checked(
+    command: list[str],
+    *,
+    input_text: str | None = None,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             command,
             input=input_text,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -63,6 +78,14 @@ def run_checked(command: list[str], *, input_text: str | None = None) -> subproc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "command failed").strip()
         fail(f"command failed: {command[0]} ({detail})")
+
+
+def password_env(store_password: str, key_password: str | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    env[STORE_PASSWORD_ENV] = store_password
+    if key_password is not None:
+        env[KEY_PASSWORD_ENV] = key_password
+    return env
 
 
 def inspect_keystore(
@@ -78,11 +101,12 @@ def inspect_keystore(
             "-v",
             "-keystore",
             str(keystore),
-            "-storepass",
-            store_password,
+            "-storepass:env",
+            STORE_PASSWORD_ENV,
             "-alias",
             alias,
-        ]
+        ],
+        env=password_env(store_password),
     )
     combined = f"{proc.stdout}\n{proc.stderr}"
     match = re.search(r"SHA256:\s*([0-9A-Fa-f:]{32,})", combined)
@@ -92,6 +116,67 @@ def inspect_keystore(
     if len(fingerprint) != 64:
         fail(f"unexpected SHA-256 fingerprint length: {len(fingerprint)}")
     return fingerprint
+
+
+def verify_private_key_password(
+    keytool: str,
+    keystore: Path,
+    store_password: str,
+    alias: str,
+    key_password: str,
+) -> None:
+    """Prove private-key access without modifying the source keystore.
+
+    keytool importkeystore must decrypt the selected private-key entry to copy it
+    into a temporary PKCS12 keystore. A wrong key password therefore fails before
+    any GitHub secret is written. The temporary copy is deleted automatically.
+    """
+    with tempfile.TemporaryDirectory(prefix="dpc-aio-key-verify-") as temp_dir:
+        destination = Path(temp_dir) / "private-key-check.p12"
+        verify_password = secrets.token_urlsafe(32)
+        env = password_env(store_password, key_password)
+        env[VERIFY_PASSWORD_ENV] = verify_password
+
+        run_checked(
+            [
+                keytool,
+                "-importkeystore",
+                "-noprompt",
+                "-srckeystore",
+                str(keystore),
+                "-srcalias",
+                alias,
+                "-srcstorepass:env",
+                STORE_PASSWORD_ENV,
+                "-srckeypass:env",
+                KEY_PASSWORD_ENV,
+                "-destkeystore",
+                str(destination),
+                "-deststoretype",
+                "PKCS12",
+                "-deststorepass:env",
+                VERIFY_PASSWORD_ENV,
+                "-destkeypass:env",
+                VERIFY_PASSWORD_ENV,
+            ],
+            env=env,
+        )
+        if not destination.is_file() or destination.stat().st_size <= 0:
+            fail("private key validation did not produce a temporary keystore")
+
+        run_checked(
+            [
+                keytool,
+                "-list",
+                "-keystore",
+                str(destination),
+                "-alias",
+                alias,
+                "-storepass:env",
+                VERIFY_PASSWORD_ENV,
+            ],
+            env=env,
+        )
 
 
 def set_secret(gh: str, repo: str, name: str, value: str) -> None:
@@ -119,7 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Configure GitHub Actions using the authenticated gh CLI; default is audit-only",
+        help="Validate private-key access, then configure GitHub Actions using authenticated gh; default is audit-only",
     )
     return parser
 
@@ -161,18 +246,20 @@ def main() -> int:
         print(f"  - {name}")
 
     if not args.apply:
-        print("Mode: audit-only (use --apply to configure GitHub Actions)")
+        print("Mode: audit-only (use --apply to validate private-key access and configure GitHub Actions)")
         return 0
-
-    gh = require_tool("gh")
-    run_checked([gh, "auth", "status"])
 
     key_password = prompt_secret(
         "DPC_AIO_RELEASE_KEY_PASSWORD",
         "Private key password: ",
     )
-    keystore_b64 = base64.b64encode(keystore.read_bytes()).decode("ascii")
+    verify_private_key_password(keytool, keystore, store_password, alias, key_password)
+    print("Private key access validation: OK")
 
+    gh = require_tool("gh")
+    run_checked([gh, "auth", "status"])
+
+    keystore_b64 = base64.b64encode(keystore.read_bytes()).decode("ascii")
     values = {
         "DPC_AIO_RELEASE_KEYSTORE_B64": keystore_b64,
         "DPC_AIO_RELEASE_STORE_PASSWORD": store_password,
