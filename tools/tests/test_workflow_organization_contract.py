@@ -6,11 +6,12 @@ WORKFLOWS = ROOT / '.github' / 'workflows'
 PR = WORKFLOWS / 'pr-android-ci.yml'
 RELEASE = WORKFLOWS / 'build-aio-enrollment.yml'
 MIGRATION = WORKFLOWS / 'migration-signing.yml'
+MIGRATION_MATRIX = WORKFLOWS / 'migration-update-matrix.yml'
 
 
 def main():
     workflow_files = sorted(p.name for p in WORKFLOWS.glob('*.yml')) + sorted(p.name for p in WORKFLOWS.glob('*.yaml'))
-    assert workflow_files == ['build-aio-enrollment.yml', 'migration-signing.yml', 'pr-android-ci.yml'], workflow_files
+    assert workflow_files == ['build-aio-enrollment.yml', 'migration-signing.yml', 'migration-update-matrix.yml', 'pr-android-ci.yml'], workflow_files
 
     text = PR.read_text(encoding='utf-8')
     assert 'cancel-in-progress: true' in text
@@ -27,6 +28,7 @@ def main():
     assert text.count('test_signature_code_derivation_contract.py') == 1
     assert text.count('test_signature_code_android_contract.py') == 1
     assert text.count('test_signature_code_lab_ui_contract.py') == 1
+    assert text.count('test_migration_update_matrix_workflow_contract.py') == 1
     assert 'name: Run app security contracts' not in text
 
     release = RELEASE.read_text(encoding='utf-8')
@@ -43,6 +45,17 @@ def main():
     assert 'DPC_AIO_MIGRATION_NEW_KEYSTORE_B64' in migration
     assert 'DPC_AIO_MIGRATION_LINEAGE_B64' in migration
     assert 'dpc-aio-migration' in migration
+
+    matrix = MIGRATION_MATRIX.read_text(encoding='utf-8')
+    assert 'workflow_dispatch' in matrix
+    assert 'report_le27_b64:' in matrix
+    assert 'report_28_32_b64:' in matrix
+    assert 'report_33_plus_b64:' in matrix
+    assert 'aggregate_migration_update_matrix.py' in matrix
+    assert 'migration-update-matrix-report' in matrix
+    assert 'contents: read' in matrix
+    assert 'workflow_run:' not in matrix
+    assert 'schedule:' not in matrix
 
     print('test_workflow_organization_contract: PASS')
 
