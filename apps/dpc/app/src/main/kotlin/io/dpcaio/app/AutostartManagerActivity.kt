@@ -110,7 +110,7 @@ class AutostartManagerActivity : Activity() {
         output.text = "Scanning boot receivers for target user $selectedUser..."
         Thread {
             val inventory = if (selectedUser == currentUser) {
-                ReceiverInventory(queryLocalBootReceivers(), LOCAL_PACKAGE_MANAGER)
+                queryCurrentUserBootReceivers(selectedUser)
             } else {
                 queryCrossUserBootReceivers(selectedUser)
             }
@@ -126,6 +126,21 @@ class AutostartManagerActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun queryCurrentUserBootReceivers(userId: Int): ReceiverInventory {
+        val local = queryLocalBootReceivers()
+        val privileged = queryCrossUserBootReceivers(userId)
+        if (privileged.error != null) {
+            return ReceiverInventory(local, LOCAL_PACKAGE_MANAGER)
+        }
+        val localByComponent = local.associateBy { it.component.flattenToString() }
+        val shizukuOnly = privileged.rows.filterNot { it.component.flattenToString() in localByComponent }
+            .map { it.copy(inventorySource = CURRENT_USER_SHIZUKU_AUGMENTED) }
+        return ReceiverInventory(
+            sortRows(local + shizukuOnly),
+            if (shizukuOnly.isEmpty()) LOCAL_PACKAGE_MANAGER else CURRENT_USER_SHIZUKU_AUGMENTED,
+        )
     }
 
     private fun queryLocalBootReceivers(): List<BootReceiver> = sortRows(
@@ -294,6 +309,7 @@ class AutostartManagerActivity : Activity() {
 
     companion object {
         private const val LOCAL_PACKAGE_MANAGER = "LOCAL_PACKAGE_MANAGER"
+        private const val CURRENT_USER_SHIZUKU_AUGMENTED = "CURRENT_USER_SHIZUKU_AUGMENTED"
         private const val CROSS_USER_SHIZUKU = "CROSS_USER_SHIZUKU"
         private val BOOT_ACTIONS = listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED)
         private val QUERY_FAILURE_MARKERS = setOf("INVALID_ARGUMENT", "EXECUTION_ERROR", "TIMEOUT")
