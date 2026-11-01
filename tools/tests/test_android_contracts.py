@@ -183,7 +183,8 @@ def main():
     assert_true("notifyStateChanged()" in download_body, "Self Update download completion must notify recreated activities after gate release")
     assert_true(self_update_activity.count("store.clearCandidate()") >= 2, "changing Self Update channel must invalidate the cached candidate")
     submit_body = self_update_activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
-    assert_true("planner.evaluate" in submit_body and "selectedChannel" in submit_body, "Self Update install must revalidate cached candidate against the selected channel")
+    assert_true("planner.evaluate" in submit_body and "candidate.manifest.channel" in submit_body, "Self Update install must revalidate cached candidate against its verified manifest channel")
+    assert_true("selectedChannel" not in submit_body, "Self Update install must not reject a verified fallback candidate merely because the user preference remains STABLE")
     assert_true("operations.tryStartInstall()" in submit_body, "Self Update install staging must use the lifecycle-independent operation gate")
     assert_true("operations.finishInstall()" in submit_body, "Self Update install gate must be released after staging")
     assert_true("notifyStateChanged()" in submit_body, "Self Update install staging completion must notify recreated activities after gate release")
