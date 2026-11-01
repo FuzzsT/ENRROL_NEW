@@ -127,19 +127,20 @@ def main():
     assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in workflow, (
         "workflow must resolve signing_mode explicitly"
     )
-    assert 'mode="stable" # auto is intentionally fail-closed: normal builds never fall back to emergency signing' in workflow, (
-        "auto signing mode must resolve directly to stable"
+    auto_block = workflow.split('if [[ "$requested" == "auto" ]]; then', 1)[1].split("fi", 1)[0]
+    assert 'mode="stable"' in auto_block and 'mode="emergency"' not in auto_block, (
+        "auto signing mode must resolve directly to stable without emergency fallback"
     )
     assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow, (
         "stable mode must fail closed when release signing material is incomplete"
     )
-    assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable enrollment requires configured release signing material' in workflow, (
+    assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.' in workflow, (
         "missing stable signing configuration must produce an actionable error"
     )
-    assert 'if [[ "$mode" == "emergency" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then' in workflow, (
+    assert 'if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then' in workflow, (
         "emergency signing must be limited to explicit workflow_dispatch runs"
     )
-    assert 'EMERGENCY_SIGNING_EXPLICIT_ONLY' in workflow, (
+    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow, (
         "automatic emergency signing must be rejected explicitly"
     )
     assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' not in workflow, (
