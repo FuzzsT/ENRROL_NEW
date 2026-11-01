@@ -41,6 +41,7 @@ class AutostartManagerActivity : Activity() {
     private val localGateway by lazy { AndroidComponentStateGateway(this) }
     private val submittedTargetStates = mutableMapOf<String, ComponentOverrideState>()
     private var scanGeneration = 0L
+    private var mutationGeneration = 0L
 
     private val protectedComponents by lazy {
         setOf(
@@ -239,6 +240,7 @@ class AutostartManagerActivity : Activity() {
             return
         }
         val userId = targetUserId()
+        val generation = ++mutationGeneration
         val currentUser = AndroidUserId.fromUid(Process.myUid())
         output.text = "Applying ${state.name} to ${row.component.flattenToShortString()} for target user $userId..."
         Thread {
@@ -279,6 +281,8 @@ class AutostartManagerActivity : Activity() {
             }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                if (generation != mutationGeneration) return@runOnUiThread
+                if (userId != targetUserId()) return@runOnUiThread
                 if (detail.startsWith("TARGET_USER_VERIFIED")) {
                     submittedTargetStates[stateKey(userId, row.component)] = state
                 }
