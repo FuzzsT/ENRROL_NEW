@@ -11,6 +11,12 @@ workflow = WORKFLOW.read_text(encoding="utf-8")
 
 required = [
     "STABLE_SIGNING_CONFIGURED",
+    "HAS_RELEASE_KEYSTORE",
+    "HAS_RELEASE_STORE_PASSWORD",
+    "HAS_RELEASE_KEY_ALIAS",
+    "HAS_RELEASE_KEY_PASSWORD",
+    "HAS_EXPECTED_SIGNING_CERT",
+    "Stable signing unavailable; missing configuration:",
     "Prepare stable signer",
     "STABLE_SIGNING_KEY_REQUIRED: $name is not configured",
     "DPC_AIO_RELEASE_KEYSTORE_B64",

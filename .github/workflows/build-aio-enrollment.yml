@@ -102,11 +102,26 @@ jobs:
       - name: Resolve pipeline mode
         id: mode
         env:
+          HAS_RELEASE_KEYSTORE: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' }}
+          HAS_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' }}
+          HAS_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' }}
+          HAS_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' }}
+          HAS_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' }}
           STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
         shell: bash
         run: |
           set -euo pipefail
           requested="${{ inputs.signing_mode || 'auto' }}"
+
+          missing=()
+          [[ "$HAS_RELEASE_KEYSTORE" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEYSTORE_B64")
+          [[ "$HAS_RELEASE_STORE_PASSWORD" == "true" ]] || missing+=("DPC_AIO_RELEASE_STORE_PASSWORD")
+          [[ "$HAS_RELEASE_KEY_ALIAS" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_ALIAS")
+          [[ "$HAS_RELEASE_KEY_PASSWORD" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_PASSWORD")
+          [[ "$HAS_EXPECTED_SIGNING_CERT" == "true" ]] || missing+=("DPC_AIO_EXPECTED_SIGNING_CERT_SHA256")
+          if (( ${#missing[@]} > 0 )); then
+            echo "Stable signing unavailable; missing configuration: ${missing[*]}"
+          fi
 
           if [[ "$requested" == "auto" ]]; then
             if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
