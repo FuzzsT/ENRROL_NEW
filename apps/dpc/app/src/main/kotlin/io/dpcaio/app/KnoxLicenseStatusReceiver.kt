@@ -33,9 +33,8 @@ class KnoxLicenseStatusReceiver : BroadcastReceiver() {
             KnoxLicenseActivationStatus.FAILED
         }
 
-        val runtimeStore = KnoxLicenseRuntimeStore(context)
-        val previous = runtimeStore.read()
-        val stored = runtimeStore.write(
+        val previous = KnoxLicenseRuntimeStore(context).read()
+        val stored = KnoxLicenseRuntimeStore(context).write(
             KnoxLicenseActivationSnapshot(
                 status = normalized,
                 detail = when (normalized) {
