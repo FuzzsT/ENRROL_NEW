@@ -59,8 +59,9 @@ class AndroidPermissionGrantCoordinator(
         systemPrivilegedAvailable: Boolean,
         shizukuReady: Boolean,
     ): PermissionGrantExecution {
+        val localTarget = userId == currentUserId
         val already = isAlreadyGranted(packageName, userId, entry, shizukuReady)
-        val dpcCanGrant = entry.protection == PermissionProtection.DANGEROUS &&
+        val dpcCanGrant = localTarget && entry.protection == PermissionProtection.DANGEROUS &&
             (dpm.isDeviceOwnerApp(appContext.packageName) || dpm.isProfileOwnerApp(appContext.packageName))
         val special = entry.name in APP_OPS || entry.protection == PermissionProtection.SPECIAL_ACCESS
         val plan = planner.plan(
@@ -69,9 +70,9 @@ class AndroidPermissionGrantCoordinator(
                 alreadyGranted = already,
                 dpcCanGrantRuntime = dpcCanGrant,
                 shizukuAvailable = shizukuReady,
-                samsungKnoxSpecialAvailable = special && knox?.supports(entry.name) == true,
-                systemPrivilegedAvailable = systemPrivilegedAvailable,
-                userActionAvailable = special,
+                samsungKnoxSpecialAvailable = localTarget && special && knox?.supports(entry.name) == true,
+                systemPrivilegedAvailable = localTarget && systemPrivilegedAvailable,
+                userActionAvailable = localTarget && special,
                 alternateCapabilityRouteAvailable = false
             )
         )

@@ -26,7 +26,19 @@ for n in [
     'user=$userId',
 ]:
     assert n in at,f'target-user AUTO permission readback missing {n}'
+for n in [
+    'val localTarget = userId == currentUserId',
+    'localTarget && entry.protection == PermissionProtection.DANGEROUS',
+    'samsungKnoxSpecialAvailable = localTarget && special && knox?.supports(entry.name) == true',
+    'systemPrivilegedAvailable = localTarget && systemPrivilegedAvailable',
+    'userActionAvailable = localTarget && special',
+]:
+    assert n in at,f'cross-user local-only route guard missing {n}'
 assert 'val already = pm.checkPermission(entry.name, packageName) == PackageManager.PERMISSION_GRANTED' not in at,'AUTO planner must not use current-user PackageManager as target-user alreadyGranted state'
+assert 'val dpcCanGrant = entry.protection == PermissionProtection.DANGEROUS &&' not in at,'cross-user AUTO planner must not expose local DPC runtime grant route'
+assert 'samsungKnoxSpecialAvailable = special && knox?.supports(entry.name) == true' not in at,'cross-user AUTO planner must not expose local Knox special route'
+assert 'systemPrivilegedAvailable = systemPrivilegedAvailable' not in at,'cross-user AUTO planner must not expose local system-privileged route'
+assert 'userActionAvailable = special' not in at,'cross-user AUTO planner must not advertise current-user settings as target-user action'
 assert 'exit == 0 && isGranted(packageName, entry.name)' not in at,'Shizuku runtime grant must not verify through current-user PackageManager'
 assert 'exit == 0 && verifyAppOp(packageName, pair.opStr)' not in at,'Shizuku AppOp grant must not verify through current-user uid/AppOpsManager'
 assert 'shizuku?.identity() != null' not in at,'AUTO permissions must not race on immediate identity() readback'
