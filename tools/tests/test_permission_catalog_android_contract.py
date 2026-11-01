@@ -21,6 +21,16 @@ def main():
     assert 'info.protectionLevel' not in catalog, 'permission catalog must not read deprecated PermissionInfo.protectionLevel directly'
     assert '@Suppress("DEPRECATION")' not in catalog, 'permission catalog must not need broad deprecation suppression'
     assert 'rawProtectionLevel = PermissionInfoCompat.getProtection(info) or PermissionInfoCompat.getProtectionFlags(info)' in catalog, 'raw permission protection diagnostics must be reconstructed from compat base and flags'
+
+    # User-facing Settings grants and hidden platform ACCESS_NOTIFICATIONS are distinct mechanisms.
+    assert 'if (info.name in USER_SPECIAL_ACCESS)' in catalog, 'catalog must explicitly separate user-grantable special access from platform protection flags'
+    marker='private val USER_SPECIAL_ACCESS = setOf('
+    assert marker in catalog, 'USER_SPECIAL_ACCESS set missing'
+    special_block=catalog.split(marker,1)[1].split(')',1)[0]
+    assert 'android.permission.ACCESS_NOTIFICATIONS' not in special_block, 'ACCESS_NOTIFICATIONS is signature|privileged|appop, not notification-listener/user special access'
+    hints=(ROOT/'apps/dpc/modules/permissions/core/src/main/kotlin/io/dpcaio/permission/PermissionCatalog.kt').read_text(encoding='utf-8')
+    assert 'android.permission.ACCESS_NOTIFICATIONS' in hints, 'ACCESS_NOTIFICATIONS should remain discoverable as a platform permission hint'
+
     need('apps/dpc/modules/permissions/android/src/main/kotlin/io/dpcaio/permission/android/SpecialAccessInspector.kt', [
         'OPSTR_GET_USAGE_STATS', 'canRequestPackageInstalls(', 'getEnabledListenerPackages('
     ])
