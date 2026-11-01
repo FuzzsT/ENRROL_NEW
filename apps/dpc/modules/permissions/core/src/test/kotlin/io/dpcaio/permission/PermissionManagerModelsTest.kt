@@ -128,5 +128,27 @@ fun main(){
         "malformed dump is unknown",
     )
 
+    val appOpAllowed = AppOpReadbackParser.parse(
+        """
+        GET_USAGE_STATS: allow; time=+1m2s
+        Default mode: default
+        """.trimIndent()
+    )
+    pmAssert(appOpAllowed?.effectiveMode == "allow", "package-level allow must verify")
+
+    val appOpUidOverride = AppOpReadbackParser.parse(
+        """
+        Uid mode: GET_USAGE_STATS: ignore
+        GET_USAGE_STATS: allow
+        Default mode: allow
+        """.trimIndent()
+    )
+    pmAssert(appOpUidOverride?.uidMode == "ignore", "uid mode must be parsed")
+    pmAssert(appOpUidOverride?.effectiveMode == "ignore", "uid mode must override package/default mode")
+
+    val appOpDefault = AppOpReadbackParser.parse("Default mode: allow")
+    pmAssert(appOpDefault?.effectiveMode == "allow", "default allow must be observable")
+    pmAssert(AppOpReadbackParser.parse("EXECUTION_ERROR") == null, "unreadable AppOps must fail closed")
+
     println("PermissionManagerModelsTest: PASS")
 }
