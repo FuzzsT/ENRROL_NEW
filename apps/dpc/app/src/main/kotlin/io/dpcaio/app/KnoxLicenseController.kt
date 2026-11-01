@@ -70,8 +70,7 @@ class KnoxLicenseController(private val context: Context) {
             return runtimeStore.write(snapshot(KnoxLicenseActivationStatus.RETRYABLE, "WAIT_FOR_DEVICE_OWNER"))
         }
 
-        val key = EnrollmentSecretStore(context)
-            .get(KnoxProvisioningSecretCapture.KNOX_SECRET_REF)
+        val key = EnrollmentSecretStore(context).get(KnoxProvisioningSecretCapture.KNOX_SECRET_REF)
             ?.knoxLicenseKey
             ?.trim()
             ?.takeIf { it.isNotBlank() }
