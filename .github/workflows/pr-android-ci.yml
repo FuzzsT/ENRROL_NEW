@@ -69,6 +69,7 @@ jobs:
           python3 tools/tests/test_knox_license_ui_diagnostics_contract.py
           python3 tools/tests/test_knox_license_history_contract.py
           python3 tools/tests/test_knox_license_history_ui_controls_contract.py
+          python3 tools/tests/test_knox_license_history_summary_export_contract.py
 
       - name: Run PIN and app lock contracts
         shell: bash

@@ -1,6 +1,7 @@
 package io.dpcaio.app
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import io.dpcaio.core.model.OwnershipMode
 import io.dpcaio.knox.license.KnoxPublicCapability
@@ -16,12 +17,18 @@ class KnoxEnterpriseCenterActivity : Activity() {
         render()
     }
 
+    private fun formatHistoryTime(timestampEpochMs: Long?): String =
+        timestampEpochMs?.let {
+            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM).format(Date(it))
+        } ?: "NONE"
+
     private fun render() {
         val management = ManagementContextFactory.create(this)
         val ownerSatisfied = management.ownership != OwnershipMode.NONE
         val licenseSnapshot = KnoxLicenseRuntimeStore(this).read()
         val retryScheduled = KnoxLicenseRetryCoordinator(this).isScheduled()
         val activationHistory = KnoxLicenseHistoryStore(this).readRecent(10, historyFilter)
+        val historySummary = KnoxLicenseHistoryStore(this).summary()
         val root = ModernUi.page(this)
 
         root.addView(
@@ -63,7 +70,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
                 addView(
                     ModernUi.body(
                         this@KnoxEnterpriseCenterActivity,
-                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled",
+                        "Status=$status\nDetail=$detail\nErrorCode=$errorCode\nRetryScheduled=$retryScheduled\nAttempts=${historySummary.totalAttempts}\nLastSuccess=${formatHistoryTime(historySummary.lastSuccessEpochMs)}\nLastFailure=${formatHistoryTime(historySummary.lastFailureEpochMs)}",
                     )
                 )
                 addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
@@ -96,6 +103,16 @@ class KnoxEnterpriseCenterActivity : Activity() {
                 filterAction("Filter: RETRYABLE", KnoxLicenseHistoryFilter.RETRYABLE)
                 filterAction("Filter: MANUAL", KnoxLicenseHistoryFilter.MANUAL)
                 addView(ModernUi.spacer(this@KnoxEnterpriseCenterActivity, 8))
+                addView(
+                    ModernUi.action(this@KnoxEnterpriseCenterActivity, "Export history JSON") {
+                        val json = KnoxLicenseHistoryStore(this@KnoxEnterpriseCenterActivity).exportJson()
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_TEXT, json)
+                        }
+                        startActivity(Intent.createChooser(share, "Export KPE history JSON"))
+                    }
+                )
                 addView(
                     ModernUi.action(this@KnoxEnterpriseCenterActivity, "Clear history") {
                         KnoxLicenseHistoryStore(this@KnoxEnterpriseCenterActivity).clear()
