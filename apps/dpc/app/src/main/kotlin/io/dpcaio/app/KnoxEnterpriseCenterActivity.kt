@@ -131,10 +131,14 @@ class KnoxEnterpriseCenterActivity : Activity() {
             activationHistory.forEach { entry ->
                 root.addView(
                     ModernUi.card(this).apply {
+                        val formattedTime = DateFormat.getDateTimeInstance(
+                            DateFormat.MEDIUM,
+                            DateFormat.MEDIUM,
+                        ).format(Date(entry.timestampEpochMs))
                         addView(
                             ModernUi.body(
                                 this@KnoxEnterpriseCenterActivity,
-                                "Time=${formatHistoryTime(entry.timestampEpochMs)}\nSource=${entry.source.name}\nPrevious=${entry.previousStatus?.name ?: "NONE"} • New=${entry.newStatus.name}\nDetail=${entry.detail} • ErrorCode=${entry.errorCode ?: "NONE"}",
+                                "Time=$formattedTime\nSource=${entry.source.name}\nPrevious=${entry.previousStatus?.name ?: "NONE"} • New=${entry.newStatus.name}\nDetail=${entry.detail} • ErrorCode=${entry.errorCode ?: "NONE"}",
                             )
                         )
                     }
