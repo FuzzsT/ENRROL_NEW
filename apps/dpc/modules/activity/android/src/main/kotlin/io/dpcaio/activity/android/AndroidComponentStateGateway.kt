@@ -92,6 +92,8 @@ class AndroidComponentStateGateway(context: Context) {
     private fun Int.fromPlatform(): ComponentOverrideState = when (this) {
         PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> ComponentOverrideState.ENABLED
         PackageManager.COMPONENT_ENABLED_STATE_DISABLED -> ComponentOverrideState.DISABLED
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER -> ComponentOverrideState.DISABLED
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> ComponentOverrideState.DISABLED
         else -> ComponentOverrideState.DEFAULT
     }
 }
