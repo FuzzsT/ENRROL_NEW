@@ -25,6 +25,17 @@ assert 'private var operationGeneration = 0L' in explorer, \
 assert 'private var mutationGeneration = 0L' not in explorer, \
     'ActivityExplorerActivity.kt must use one shared operation generation instead of mutation-only generation'
 
+scan_start = explorer.index('private fun scan()')
+scan_end = explorer.index('\n    private fun renderFilterBar()', scan_start)
+scan_body = explorer[scan_start:scan_end]
+for needle in [
+    'val operationGenerationAtStart = ++operationGeneration',
+    'val scanUserId = targetUserId()',
+    'if (operationGenerationAtStart != operationGeneration) return@runOnUiThread',
+    'if (scanUserId != targetUserId()) return@runOnUiThread',
+]:
+    assert needle in scan_body, f'Activity Explorer scan missing shared-operation stale-result guard: {needle}'
+
 change_start = explorer.index('private fun changeState(')
 change_end = explorer.index('\n    private fun batchPreviewFiltered(', change_start)
 change_body = explorer[change_start:change_end]
@@ -46,6 +57,14 @@ for needle in [
     'if (operationUserId != targetUserId()) return@runOnUiThread',
 ]:
     assert needle in batch_body, f'Activity Explorer batch mutation missing shared-operation guard: {needle}'
+
+restore_start = explorer.index('private fun restoreSnapshot()')
+restore_end = explorer.index('\n    private fun launch(', restore_start)
+restore_body = explorer[restore_start:restore_end]
+assert '++operationGeneration' in restore_body, \
+    'Activity Explorer restore must invalidate older async operations before restore work'
+assert restore_body.index('++operationGeneration') < restore_body.index('snapshotStore.list('), \
+    'Activity Explorer restore must invalidate older operations before reading/applying snapshots'
 
 launch_start = explorer.index('private fun launch(')
 launch_body = explorer[launch_start:]
