@@ -145,6 +145,9 @@ for n in [
     'lastVerified=',
     'Cross-user inventory unavailable',
     'manifestEnabled = null',
+    'private var scanGeneration = 0L',
+    'val generation = ++scanGeneration',
+    'if (generation != scanGeneration) return@runOnUiThread',
 ]:
     assert n in aut,f'Autostart Manager missing {n}'
 assert 'TARGET_USER_SUBMITTED' not in aut
