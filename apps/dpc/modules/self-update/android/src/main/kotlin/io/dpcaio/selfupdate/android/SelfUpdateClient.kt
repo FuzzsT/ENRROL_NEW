@@ -18,7 +18,7 @@ class SelfUpdateClient(
     fun fetchManifest(url: String): SelfUpdateManifest {
         val connection = openHttps(url)
         return try {
-            ensureSuccess(connection)
+            ensureSuccess(connection, url, ResourceKind.MANIFEST)
             val expectedLength = connection.contentLengthLong.takeIf { it >= 0L }
             if (expectedLength != null && expectedLength > MAX_MANIFEST_BYTES) {
                 throw IOException("Manifest exceeds size limit")
@@ -41,7 +41,7 @@ class SelfUpdateClient(
         require(maxBytes in 1..MAX_APK_BYTES) { "APK download limit out of range" }
         val connection = openHttps(url)
         try {
-            ensureSuccess(connection)
+            ensureSuccess(connection, url, ResourceKind.APK)
             destination.parentFile?.mkdirs()
             val expectedLength = connection.contentLengthLong.takeIf { it >= 0L }
             if (expectedLength != null && expectedLength > maxBytes) {
@@ -113,10 +113,30 @@ class SelfUpdateClient(
         return connection
     }
 
-    private fun ensureSuccess(connection: HttpURLConnection) {
-        if (connection.responseCode !in 200..299) {
-            throw IOException("HTTP ${connection.responseCode}")
+    private fun ensureSuccess(connection: HttpURLConnection, requestedUrl: String, kind: ResourceKind) {
+        val status = connection.responseCode
+        if (status in 200..299) return
+
+        if (status == HttpURLConnection.HTTP_NOT_FOUND) {
+            val channel = when {
+                requestedUrl.contains("/dpc-aio-stable/", ignoreCase = true) -> "stable"
+                requestedUrl.contains("/dpc-aio-continuous/", ignoreCase = true) -> "continuous"
+                else -> null
+            }
+            val detail = when (kind) {
+                ResourceKind.MANIFEST -> channel?.let {
+                    "Self Update $it channel is not published yet (manifest HTTP 404)"
+                } ?: "Self Update manifest was not found (HTTP 404)"
+                ResourceKind.APK -> "Self Update APK asset was not found (HTTP 404)"
+            }
+            throw SelfUpdateHttpException(status, requestedUrl, detail)
         }
+
+        throw SelfUpdateHttpException(
+            statusCode = status,
+            requestedUrl = requestedUrl,
+            message = "Self Update HTTP $status",
+        )
     }
 
     private fun readLimited(input: InputStream, maxBytes: Long): ByteArray {
@@ -136,6 +156,17 @@ class SelfUpdateClient(
         }
         return output.toByteArray()
     }
+
+    private enum class ResourceKind {
+        MANIFEST,
+        APK,
+    }
+
+    class SelfUpdateHttpException(
+        val statusCode: Int,
+        val requestedUrl: String,
+        message: String,
+    ) : IOException(message)
 
     companion object {
         const val MAX_MANIFEST_BYTES: Long = 256L * 1024L
