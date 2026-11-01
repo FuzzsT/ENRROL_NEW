@@ -50,7 +50,7 @@ for needle in [
 launch_start = explorer.index('private fun launch(')
 launch_body = explorer[launch_start:]
 for needle in [
-    'val operationUserId = targetUserId',
+    'val operationUserId = requestedUserId',
     'val generation = ++operationGeneration',
     'if (generation != operationGeneration) return@runOnUiThread',
     'if (operationUserId != targetUserId()) return@runOnUiThread',
