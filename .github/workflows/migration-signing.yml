@@ -1,0 +1,212 @@
+name: Migration signing validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_migration:
+        description: "Publish verified migration APK to dpc-aio-migration prerelease"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-signing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools'
+
+      - name: Install Android 17 SDK + native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_CLI="$(command -v android)"
+          test -x "$ANDROID_CLI"
+          SDK_LIST="$RUNNER_TEMP/android-sdk-packages.txt"
+          "$ANDROID_CLI" sdk list --all --all-versions --canary > "$SDK_LIST"
+
+          has_package() {
+            awk -v wanted="$1" '$1 == wanted { found=1 } END { exit(found ? 0 : 1) }' "$SDK_LIST"
+          }
+
+          platform_pkg="$(awk '$1 ~ /^platforms\/android-37\.[0-9]+$/ { print $1 }' "$SDK_LIST" | sort -V | tail -n1)"
+          if [[ -z "$platform_pkg" ]] && has_package "platforms/android-CinnamonBun"; then
+            platform_pkg="platforms/android-CinnamonBun"
+          fi
+          [[ -n "$platform_pkg" ]] || { echo "Android 17 platform not found" >&2; exit 1; }
+
+          build_tools_pkg="$(awk '$1 ~ /^build-tools\/37\./ { print $1 }' "$SDK_LIST" | sort -V | tail -n1)"
+          [[ -n "$build_tools_pkg" ]] || build_tools_pkg="build-tools/36.0.0"
+
+          "$ANDROID_CLI" sdk install --canary \
+            "$platform_pkg" \
+            "$build_tools_pkg" \
+            "ndk/28.2.13676358" \
+            "cmake/3.22.1"
+
+      - name: Prepare migration signers
+        env:
+          OLD_KEYSTORE_B64: ${{ secrets.DPC_AIO_MIGRATION_OLD_KEYSTORE_B64 }}
+          OLD_STORE_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_STORE_PASSWORD }}
+          OLD_KEY_ALIAS: ${{ secrets.DPC_AIO_MIGRATION_OLD_KEY_ALIAS }}
+          OLD_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_KEY_PASSWORD }}
+          NEW_KEYSTORE_B64: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEYSTORE_B64 }}
+          NEW_STORE_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_NEW_STORE_PASSWORD }}
+          NEW_KEY_ALIAS: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEY_ALIAS }}
+          NEW_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEY_PASSWORD }}
+          LINEAGE_B64: ${{ secrets.DPC_AIO_MIGRATION_LINEAGE_B64 }}
+          OLD_CERT_SHA256: ${{ vars.DPC_AIO_MIGRATION_OLD_CERT_SHA256 || secrets.DPC_AIO_MIGRATION_OLD_CERT_SHA256 }}
+          NEW_CERT_SHA256: ${{ vars.DPC_AIO_MIGRATION_NEW_CERT_SHA256 || secrets.DPC_AIO_MIGRATION_NEW_CERT_SHA256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in OLD_KEYSTORE_B64 OLD_STORE_PASSWORD OLD_KEY_ALIAS OLD_KEY_PASSWORD NEW_KEYSTORE_B64 NEW_STORE_PASSWORD NEW_KEY_ALIAS NEW_KEY_PASSWORD LINEAGE_B64 OLD_CERT_SHA256 NEW_CERT_SHA256; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          MIGRATION_SIGNING_CONFIGURED="false"
+          if (( ${#missing[@]} == 0 )); then MIGRATION_SIGNING_CONFIGURED="true"; fi
+          [[ "$MIGRATION_SIGNING_CONFIGURED" == "true" ]] || {
+            echo "MIGRATION_SIGNING_KEY_REQUIRED: missing ${missing[*]}" >&2
+            exit 1
+          }
+
+          echo "::add-mask::$OLD_STORE_PASSWORD"
+          echo "::add-mask::$OLD_KEY_PASSWORD"
+          echo "::add-mask::$NEW_STORE_PASSWORD"
+          echo "::add-mask::$NEW_KEY_PASSWORD"
+
+          umask 077
+          old_ks="$RUNNER_TEMP/dpc-aio-migration-old.p12"
+          new_ks="$RUNNER_TEMP/dpc-aio-migration-new.p12"
+          lineage="$RUNNER_TEMP/dpc-aio-signing-lineage.bin"
+          printf '%s' "$OLD_KEYSTORE_B64" | base64 --decode > "$old_ks"
+          printf '%s' "$NEW_KEYSTORE_B64" | base64 --decode > "$new_ks"
+          printf '%s' "$LINEAGE_B64" | base64 --decode > "$lineage"
+          test -s "$old_ks" && test -s "$new_ks" && test -s "$lineage"
+
+          {
+            echo "DPC_AIO_MIGRATION_OLD_KEYSTORE=$old_ks"
+            echo "DPC_AIO_MIGRATION_NEW_KEYSTORE=$new_ks"
+            echo "DPC_AIO_MIGRATION_LINEAGE=$lineage"
+            echo "DPC_AIO_MIGRATION_OLD_KEY_ALIAS=$OLD_KEY_ALIAS"
+            echo "DPC_AIO_MIGRATION_NEW_KEY_ALIAS=$NEW_KEY_ALIAS"
+            echo "DPC_AIO_MIGRATION_OLD_CERT_SHA256=$OLD_CERT_SHA256"
+            echo "DPC_AIO_MIGRATION_NEW_CERT_SHA256=$NEW_CERT_SHA256"
+            echo "DPC_AIO_RELEASE_KEYSTORE_PATH=$old_ks"
+            echo "DPC_AIO_RELEASE_STORE_PASSWORD=$OLD_STORE_PASSWORD"
+            echo "DPC_AIO_RELEASE_KEY_ALIAS=$OLD_KEY_ALIAS"
+            echo "DPC_AIO_RELEASE_KEY_PASSWORD=$OLD_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build compatibility APK with historical signer
+        env:
+          DPC_AIO_MIGRATION_OLD_STORE_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_STORE_PASSWORD }}
+          DPC_AIO_MIGRATION_OLD_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app-dpc:assembleEnterpriseRelease
+
+      - name: Sign migration APK with lineage
+        env:
+          DPC_AIO_MIGRATION_OLD_STORE_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_STORE_PASSWORD }}
+          DPC_AIO_MIGRATION_OLD_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_OLD_KEY_PASSWORD }}
+          DPC_AIO_MIGRATION_NEW_STORE_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_NEW_STORE_PASSWORD }}
+          DPC_AIO_MIGRATION_NEW_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          source_apk="$(find apps/dpc/app/build/outputs/apk/enterprise/release -type f -name '*.apk' | head -n1)"
+          test -s "$source_apk"
+          apksigner_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          test -x "$apksigner_bin"
+          echo "$(dirname "$apksigner_bin")" >> "$GITHUB_PATH"
+          export PATH="$(dirname "$apksigner_bin"):$PATH"
+
+          python3 tools/release/sign_migration_apk.py \
+            --input-apk "$source_apk" \
+            --output-apk dist/DPC-AIO-enterprise-migration.apk \
+            --old-keystore "$DPC_AIO_MIGRATION_OLD_KEYSTORE" \
+            --old-alias "$DPC_AIO_MIGRATION_OLD_KEY_ALIAS" \
+            --new-keystore "$DPC_AIO_MIGRATION_NEW_KEYSTORE" \
+            --new-alias "$DPC_AIO_MIGRATION_NEW_KEY_ALIAS" \
+            --lineage "$DPC_AIO_MIGRATION_LINEAGE" \
+            --old-cert-sha256 "$DPC_AIO_MIGRATION_OLD_CERT_SHA256" \
+            --new-cert-sha256 "$DPC_AIO_MIGRATION_NEW_CERT_SHA256" \
+            --rotation-min-sdk-version 33 \
+            --metadata dist/migration-signing-metadata.json
+
+          apksigner verify --verbose --print-certs dist/DPC-AIO-enterprise-migration.apk
+          grep -q 'MIGRATION_SIGNING_VERIFIED' dist/migration-signing-metadata.json
+          sha256sum dist/DPC-AIO-enterprise-migration.apk > dist/DPC-AIO-enterprise-migration.apk.sha256
+
+      - name: Upload migration validation artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DPC-AIO-migration-signing
+          path: dist/
+
+      - name: Cleanup migration signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/dpc-aio-migration-old.p12" "$RUNNER_TEMP/dpc-aio-migration-new.p12" "$RUNNER_TEMP/dpc-aio-signing-lineage.bin" || true
+
+  publish:
+    needs: build
+    if: needs.build.result == 'success' && inputs.publish_migration == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download migration artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: DPC-AIO-migration-signing
+          path: dist
+
+      - name: Publish migration prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="dpc-aio-migration"
+          title="DPC-AIO Signing Migration Validation"
+          notes="Controlled signing-key migration build from commit $GITHUB_SHA. Uses APK signing lineage with rotation targeting API 33+. This channel is separate from normal stable releases."
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease
+          fi
+          gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"
