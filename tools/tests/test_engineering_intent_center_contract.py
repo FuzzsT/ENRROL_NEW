@@ -25,7 +25,7 @@ broadcast = need(ENG / 'BroadcastIntentBuilder.kt', [
     'val normalizedPackage = request.packageName?.trim()?.takeIf { it.isNotEmpty() }',
     'PACKAGE_PATTERN.matches(normalizedPackage)',
     'Broadcast target package is invalid',
-    'request.component?.packageName != normalizedPackage',
+    'request.component.packageName != normalizedPackage',
     'Broadcast component package must match target package',
     'private val PACKAGE_PATTERN = Regex(',
 ])
