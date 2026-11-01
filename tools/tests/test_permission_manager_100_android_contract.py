@@ -16,6 +16,8 @@ for n in ['fun awaitConnected(timeoutMs: Long','SystemClock.elapsedRealtime()','
 for n in ['val shizukuReady = shizuku?.awaitConnected(','shizukuAvailable = shizukuReady']:
     assert n in at,f'AUTO permission readiness missing {n}'
 for n in [
+    'private fun isAlreadyGranted(',
+    'AndroidUserId.fromUid(Process.myUid())',
     'shizuku?.getRuntimePermissionState(packageName, entry.name, userId)',
     'shizuku?.getAppOp(packageName, pair.commandName, userId)',
     'AppOpReadbackParser.parse(',
@@ -24,6 +26,7 @@ for n in [
     'user=$userId',
 ]:
     assert n in at,f'target-user AUTO permission readback missing {n}'
+assert 'val already = pm.checkPermission(entry.name, packageName) == PackageManager.PERMISSION_GRANTED' not in at,'AUTO planner must not use current-user PackageManager as target-user alreadyGranted state'
 assert 'exit == 0 && isGranted(packageName, entry.name)' not in at,'Shizuku runtime grant must not verify through current-user PackageManager'
 assert 'exit == 0 && verifyAppOp(packageName, pair.opStr)' not in at,'Shizuku AppOp grant must not verify through current-user uid/AppOpsManager'
 assert 'shizuku?.identity() != null' not in at,'AUTO permissions must not race on immediate identity() readback'
