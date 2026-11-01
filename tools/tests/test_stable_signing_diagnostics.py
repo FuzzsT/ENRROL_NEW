@@ -7,13 +7,9 @@ WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
 workflow = WORKFLOW.read_text(encoding="utf-8")
 
 required = [
-    "HAS_RELEASE_KEYSTORE",
-    "HAS_STORE_PASSWORD",
-    "HAS_KEY_ALIAS",
-    "HAS_KEY_PASSWORD",
-    "HAS_EXPECTED_CERT",
-    "Stable signer not configured; automatic self-update publish disabled.",
-    "Missing stable signing configuration:",
+    "STABLE_SIGNING_CONFIGURED",
+    "Prepare stable signer",
+    "STABLE_SIGNING_KEY_REQUIRED: $name is not configured",
     "DPC_AIO_RELEASE_KEYSTORE_B64",
     "DPC_AIO_RELEASE_STORE_PASSWORD",
     "DPC_AIO_RELEASE_KEY_ALIAS",
@@ -24,7 +20,14 @@ required = [
 for token in required:
     assert token in workflow, f"stable signing diagnostic contract missing: {token}"
 
+assert 'if [[ "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" == "true" ]]; then' in workflow, (
+    "automatic stable publishing must remain gated by complete stable-signing readiness"
+)
+
 for forbidden in [
+    'echo "$KEYSTORE_B64"',
+    'echo "$STORE_PASSWORD"',
+    'echo "$KEY_PASSWORD"',
     'echo "$DPC_AIO_RELEASE_KEYSTORE_B64"',
     'echo "$DPC_AIO_RELEASE_STORE_PASSWORD"',
     'echo "$DPC_AIO_RELEASE_KEY_PASSWORD"',
