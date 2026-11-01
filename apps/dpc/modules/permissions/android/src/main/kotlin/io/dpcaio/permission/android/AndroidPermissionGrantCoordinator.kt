@@ -139,6 +139,13 @@ class AndroidPermissionGrantCoordinator(
         entry: PermissionCatalogEntry,
         shizukuReady: Boolean,
     ): Boolean {
+        val appOp = APP_OPS[entry.name]
+        if (appOp != null) {
+            if (userId == currentUserId) return verifyAppOp(packageName, appOp.opStr)
+            if (!shizukuReady) return false
+            val snapshot = shizuku?.getAppOp(packageName, appOp.commandName, userId)
+            return AppOpReadbackParser.parse(snapshot)?.effectiveMode == "allow"
+        }
         if (userId == currentUserId) return isGranted(packageName, entry.name)
         if (!shizukuReady) return false
         return shizuku?.getRuntimePermissionState(packageName, entry.name, userId) == "GRANTED"
