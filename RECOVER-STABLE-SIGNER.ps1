@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$tool = Join-Path $root 'tools\release\recover_persisted_signing_keystore.py'
+$tool = Join-Path $root 'tools\release\recover_stable_signer_verified.py'
 
 if (-not (Test-Path -LiteralPath $tool)) {
     throw "Recovery tool not found: $tool"
@@ -25,6 +25,7 @@ if (-not $python) {
 
 Write-Host 'DPC-AIO stable signer recovery'
 Write-Host 'This recovers the existing historical signer. It does not generate or rotate a key.'
+Write-Host 'Historical encrypted signer and APK hashes are verified before decryption.'
 Write-Host 'Use the same value that was entered as release_signing_password in the historical workflow (minimum 12 characters).'
 Write-Host 'The password prompt is handled by Python getpass and is not passed on the command line.'
 
