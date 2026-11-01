@@ -51,6 +51,7 @@ jobs:
           python3 tools/tests/test_stable_signer_rotation_contract.py
           python3 tools/tests/test_migration_signing_workflow_contract.py
           python3 tools/tests/test_migration_secrets_configurator.py
+          python3 tools/tests/test_migration_secrets_windows_launcher_contract.py
 
       - name: Run PIN and app lock contracts
         shell: bash
