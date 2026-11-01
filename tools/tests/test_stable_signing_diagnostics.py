@@ -58,6 +58,11 @@ for token in [
     "variable",
     "getpass",
     "--apply",
+    "verify_private_key_password",
+    "-storepass:env",
+    "-srcstorepass:env",
+    "-srckeypass:env",
+    "TemporaryDirectory",
 ]:
     assert token in setup_source, f"stable signing setup tool missing contract token: {token}"
 
@@ -65,8 +70,12 @@ for forbidden in [
     "print(store_password)",
     "print(key_password)",
     "print(keystore_b64)",
+    '"-storepass", store_password',
+    '"-keypass", key_password',
+    '"-srcstorepass", store_password',
+    '"-srckeypass", key_password',
 ]:
-    assert forbidden not in setup_source, f"stable signing setup tool must not print secret values: {forbidden}"
+    assert forbidden not in setup_source, f"stable signing setup tool must not expose secret values via output/argv: {forbidden}"
 
 help_proc = subprocess.run(
     [sys.executable, str(SETUP_TOOL), "--help"],
