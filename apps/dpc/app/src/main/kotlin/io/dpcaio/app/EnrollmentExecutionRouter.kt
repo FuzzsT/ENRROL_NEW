@@ -13,6 +13,7 @@ class EnrollmentExecutionRouter(private val context: Context) {
     fun execute(intent: Intent): EnrollmentExecutionOutcome {
         val extras = extractAdminExtras(intent)
         KnoxProvisioningSecretCapture.capture(context, extras)
+        KnoxLicenseController(context).activateIfRequested()
         val config = EnrollmentConfigParser.parse(extras).config
         return when (config.offlineMode) {
             "FULL_OFFLINE", "OFFLINE_THEN_SYNC" -> when (val result = OfflineEnrollmentCoordinator(context).resumeOrCreate(intent, config)) {
