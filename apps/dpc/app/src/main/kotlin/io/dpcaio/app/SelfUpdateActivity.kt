@@ -287,14 +287,24 @@ class SelfUpdateActivity : Activity() {
         setState(SelfUpdateState.CHECKING, "Checking ${channel.name.lowercase(Locale.ROOT)} channel…")
         Thread {
             try {
-                val manifest = client.fetchManifest(manifestUrl(channel))
+                val (effectiveChannel, manifest) = fetchManifestWithFallback(channel)
                 val installed = installedVersion().second
-                val decision = planner.evaluate(packageName, installed, channel, manifest)
+                val decision = planner.evaluate(packageName, installed, effectiveChannel, manifest)
                 store.saveCheckedManifest(manifest)
                 runOnUiThread {
+                    if (effectiveChannel != channel) {
+                        store.clearCandidate()
+                        selectedChannel = effectiveChannel
+                        preferences.edit().putString(KEY_CHANNEL, effectiveChannel.name).apply()
+                    }
                     currentManifest = manifest
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
-                    setState(decision.state, decision.reason.replace('_', ' '))
+                    val detail = if (effectiveChannel != channel) {
+                        "Stable channel unavailable; using continuous manifest • ${decision.reason.replace('_', ' ')}"
+                    } else {
+                        decision.reason.replace('_', ' ')
+                    }
+                    setState(decision.state, detail)
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -527,6 +537,18 @@ class SelfUpdateActivity : Activity() {
         SelfUpdateState.ERROR -> ModernUi.Tone.DANGER
         SelfUpdateState.UPDATE_AVAILABLE, SelfUpdateState.WAITING_USER -> ModernUi.Tone.WARNING
         else -> ModernUi.Tone.NEUTRAL
+    }
+
+    private fun fetchManifestWithFallback(channel: UpdateChannel): Pair<UpdateChannel, SelfUpdateManifest> {
+        return try {
+            channel to client.fetchManifest(manifestUrl(channel))
+        } catch (error: SelfUpdateClient.SelfUpdateHttpException) {
+            if (channel == UpdateChannel.STABLE && error.statusCode == 404) {
+                UpdateChannel.CONTINUOUS to client.fetchManifest(CONTINUOUS_MANIFEST_URL)
+            } else {
+                throw error
+            }
+        }
     }
 
     private fun manifestUrl(channel: UpdateChannel): String = when (channel) {
