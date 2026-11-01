@@ -17,6 +17,7 @@ class KnoxEnterpriseCenterActivity : Activity() {
         val ownerSatisfied = management.ownership != OwnershipMode.NONE
         val licenseSnapshot = KnoxLicenseRuntimeStore(this).read()
         val retryScheduled = KnoxLicenseRetryCoordinator(this).isScheduled()
+        val activationHistory = KnoxLicenseHistoryStore(this).readRecent(10)
         val root = ModernUi.page(this)
 
         root.addView(
@@ -65,13 +66,36 @@ class KnoxEnterpriseCenterActivity : Activity() {
                 addView(
                     ModernUi.action(this@KnoxEnterpriseCenterActivity, "Retry now") {
                         Thread {
-                            KnoxLicenseController(this@KnoxEnterpriseCenterActivity).activateIfRequested()
+                            KnoxLicenseController(this@KnoxEnterpriseCenterActivity)
+                                .activateIfRequested(KnoxLicenseAttemptSource.MANUAL)
                             runOnUiThread { render() }
                         }.start()
                     }
                 )
             }
         )
+
+        root.addView(ModernUi.section(this, "KPE activation history"))
+        if (activationHistory.isEmpty()) {
+            root.addView(
+                ModernUi.card(this).apply {
+                    addView(ModernUi.body(this@KnoxEnterpriseCenterActivity, "No activation attempts recorded."))
+                }
+            )
+        } else {
+            activationHistory.forEach { entry ->
+                root.addView(
+                    ModernUi.card(this).apply {
+                        addView(
+                            ModernUi.body(
+                                this@KnoxEnterpriseCenterActivity,
+                                "Time=${entry.timestampEpochMs}\nSource=${entry.source.name}\nPrevious=${entry.previousStatus?.name ?: "NONE"} • New=${entry.newStatus.name}\nDetail=${entry.detail} • ErrorCode=${entry.errorCode ?: "NONE"}",
+                            )
+                        )
+                    }
+                )
+            }
+        }
 
         root.addView(ModernUi.section(this, "Capabilities"))
 
