@@ -27,6 +27,12 @@ data class KnoxLicenseHistoryEntry(
     val errorCode: Int?,
 )
 
+data class KnoxLicenseHistorySummary(
+    val totalAttempts: Int,
+    val lastSuccessEpochMs: Long?,
+    val lastFailureEpochMs: Long?,
+)
+
 class KnoxLicenseHistoryStore(context: Context) {
     private val prefs = context.createDeviceProtectedStorageContext()
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -51,15 +57,7 @@ class KnoxLicenseHistoryStore(context: Context) {
         val bounded = items.takeLast(MAX_ENTRIES)
         val array = JSONArray()
         bounded.forEach { item ->
-            array.put(
-                JSONObject()
-                    .put("timestampEpochMs", item.timestampEpochMs)
-                    .put("source", item.source.name)
-                    .put("previousStatus", item.previousStatus?.name ?: JSONObject.NULL)
-                    .put("newStatus", item.newStatus.name)
-                    .put("detail", item.detail)
-                    .put("errorCode", item.errorCode ?: JSONObject.NULL)
-            )
+            array.put(item.toJson())
         }
         prefs.edit().putString(KEY_HISTORY, array.toString()).apply()
         return entry
@@ -77,10 +75,46 @@ class KnoxLicenseHistoryStore(context: Context) {
         return filtered.takeLast(limit.coerceIn(0, MAX_ENTRIES)).asReversed()
     }
 
+    fun summary(): KnoxLicenseHistorySummary {
+        val items = readAll()
+        return KnoxLicenseHistorySummary(
+            totalAttempts = items.size,
+            lastSuccessEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.ACTIVE }?.timestampEpochMs,
+            lastFailureEpochMs = items.lastOrNull { it.newStatus == KnoxLicenseActivationStatus.FAILED }?.timestampEpochMs,
+        )
+    }
+
+    fun exportJson(): String {
+        val items = readAll()
+        val summary = summary()
+        val entries = JSONArray()
+        items.forEach { entries.put(it.toJson()) }
+        return JSONObject()
+            .put("schema", "dpc-aio.knox-kpe-history.v1")
+            .put(
+                "summary",
+                JSONObject()
+                    .put("totalAttempts", summary.totalAttempts)
+                    .put("lastSuccessEpochMs", summary.lastSuccessEpochMs ?: JSONObject.NULL)
+                    .put("lastFailureEpochMs", summary.lastFailureEpochMs ?: JSONObject.NULL)
+            )
+            .put("entries", entries)
+            .toString(2)
+    }
+
     @Synchronized
     fun clear() {
         prefs.edit().remove(KEY_HISTORY).apply()
     }
+
+    private fun KnoxLicenseHistoryEntry.toJson(): JSONObject =
+        JSONObject()
+            .put("timestampEpochMs", timestampEpochMs)
+            .put("source", source.name)
+            .put("previousStatus", previousStatus?.name ?: JSONObject.NULL)
+            .put("newStatus", newStatus.name)
+            .put("detail", detail)
+            .put("errorCode", errorCode ?: JSONObject.NULL)
 
     private fun readAll(): List<KnoxLicenseHistoryEntry> {
         val raw = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
