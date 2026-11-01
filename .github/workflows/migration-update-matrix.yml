@@ -1,0 +1,86 @@
+name: Migration Update Compatibility Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_le27_b64:
+        description: Base64 JSON report for an API <=27 device
+        required: true
+        type: string
+      report_28_32_b64:
+        description: Base64 JSON report for an API 28-32 device
+        required: true
+        type: string
+      report_33_plus_b64:
+        description: Base64 JSON report for an API 33+ device
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  aggregate:
+    name: Aggregate migration update reports
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Decode supplied reports
+        shell: bash
+        env:
+          REPORT_LE27_B64: ${{ inputs.report_le27_b64 }}
+          REPORT_28_32_B64: ${{ inputs.report_28_32_b64 }}
+          REPORT_33_PLUS_B64: ${{ inputs.report_33_plus_b64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p matrix-input matrix-output
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          reports = {
+              'report-le27.json': os.environ['REPORT_LE27_B64'],
+              'report-28-32.json': os.environ['REPORT_28_32_B64'],
+              'report-33-plus.json': os.environ['REPORT_33_PLUS_B64'],
+          }
+          root = Path('matrix-input')
+          for name, value in reports.items():
+              try:
+                  raw = base64.b64decode(value, validate=True)
+              except Exception as exc:
+                  raise SystemExit(f'MIGRATION_UPDATE_MATRIX_INPUT_INVALID: {name}: {exc}')
+              if not raw:
+                  raise SystemExit(f'MIGRATION_UPDATE_MATRIX_INPUT_EMPTY: {name}')
+              (root / name).write_bytes(raw)
+          PY
+
+      - name: Aggregate compatibility matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/release/aggregate_migration_update_matrix.py \
+            --report matrix-input/report-le27.json \
+            matrix-input/report-28-32.json \
+            matrix-input/report-33-plus.json \
+            --output matrix-output/migration-update-matrix.json \
+            | tee matrix-output/aggregate.log
+          grep -q 'MIGRATION_UPDATE_MATRIX_PASS' matrix-output/aggregate.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('matrix-output/migration-update-matrix.json').read_text(encoding='utf-8'))
+          if report.get('status') != 'MIGRATION_UPDATE_MATRIX_PASS':
+              raise SystemExit('MIGRATION_UPDATE_MATRIX_STATUS_INVALID')
+          PY
+
+      - name: Upload matrix artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migration-update-matrix-report
+          path: matrix-output/
+          if-no-files-found: error
+          retention-days: 14
