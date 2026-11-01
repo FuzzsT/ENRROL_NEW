@@ -48,7 +48,8 @@ class KnoxLicenseRetryJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         val context = applicationContext
         Thread {
-            val outcome = KnoxLicenseController(context).activateIfRequested()
+            val outcome = KnoxLicenseController(context)
+                .activateIfRequested(KnoxLicenseAttemptSource.RETRY_JOB)
             jobFinished(params, outcome.status == KnoxLicenseActivationStatus.RETRYABLE)
         }.start()
         return true
