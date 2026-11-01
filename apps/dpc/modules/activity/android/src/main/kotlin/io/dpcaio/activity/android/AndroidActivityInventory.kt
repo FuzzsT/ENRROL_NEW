@@ -18,6 +18,7 @@ class AndroidActivityInventory(context: Context) {
     @Suppress("DEPRECATION")
     fun list(packageName: String, user: UserHandle): List<DiscoveredActivity> {
         val currentUser = UserHandle.getUserHandleForUid(Process.myUid())
+        if (!targetPackageAvailable(packageName, user, currentUser)) return emptyList()
         val packageInfo = try {
             packageManager.getPackageInfo(
                 packageName,
@@ -57,6 +58,14 @@ class AndroidActivityInventory(context: Context) {
                 effectiveEnabled = effectiveEnabled
             )
         }
+    }
+
+    private fun targetPackageAvailable(packageName: String, user: UserHandle, currentUser: UserHandle): Boolean {
+        if (user == currentUser) return true
+        if (user !in launcherApps.profiles) return false
+        return runCatching {
+            launcherApps.getApplicationInfo(packageName, 0, user)
+        }.getOrNull() != null
     }
 
     private fun launcherFallback(packageName: String, user: UserHandle): List<DiscoveredActivity> {
