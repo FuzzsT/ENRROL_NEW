@@ -66,6 +66,9 @@ class AioDashboardActivity : Activity() {
         if (preferences.showAdvancedHome || preferences.developerMode) {
             addSection(body, "Advanced")
             add(body, "Self Update • detailed updater") { SelfUpdateActivity::class.java }
+            if (preferences.nativeJarCallingEnabled && native.jarCallingAvailable) {
+                add(body, "Native JAR Runner • app_process") { NativeJarRunnerActivity::class.java }
+            }
             add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
             add(body, "File Manager") { FileManagerActivity::class.java }
             add(body, "Autostart Manager") { AutostartManagerActivity::class.java }
