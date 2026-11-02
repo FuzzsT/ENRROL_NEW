@@ -21,6 +21,7 @@ def main():
     assert text.count('test_pin_guard_contract.py') == 1
     assert text.count('test_app_lock_pin_contract.py') == 1
     assert text.count('test_install_pin_guard_contract.py') == 1
+    assert text.count('test_normal_mode_settings_native_jar_contract.py') == 1, 'normal/native/JAR security contract must run in Android CI'
     assert text.count('test_package_export_contract.py') == 1
     assert text.count('test_package_export_ui_contract.py') == 1
     assert text.count('test_secret_code_inventory_contract.py') == 1
