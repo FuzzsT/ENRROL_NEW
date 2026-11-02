@@ -19,8 +19,8 @@ def https_url(value: str, field: str) -> str:
 
 def normalize_channel(value: str) -> str:
     channel = value.strip().lower()
-    if channel not in {"stable", "continuous"}:
-        raise ValueError("channel must be stable or continuous")
+    if channel not in {"stable", "continuous", "emergency"}:
+        raise ValueError("channel must be stable, continuous, or emergency")
     return channel
 
 
