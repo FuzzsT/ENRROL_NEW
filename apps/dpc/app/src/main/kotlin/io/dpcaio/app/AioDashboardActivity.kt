@@ -29,8 +29,16 @@ class AioDashboardActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = "DPC-AIO",
-                subtitle = "v$versionName • ${native.summary()}",
+                subtitle = "v$versionName • Device Owner / policy / research toolkit",
                 eyebrow = "Normal control center",
+            )
+        )
+        body.addView(
+            ModernUi.statusCard(
+                this,
+                "Runtime capabilities",
+                native.summary(),
+                if (native.hasPolicyOwner || native.hasBinderBridge) ModernUi.Tone.SUCCESS else ModernUi.Tone.NEUTRAL,
             )
         )
 
