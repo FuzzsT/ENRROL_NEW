@@ -1,15 +1,28 @@
 package io.dpcaio.app
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.widget.CheckBox
 import io.dpcaio.selfupdate.SelfUpdateState
+import io.dpcaio.selfupdate.android.SelfUpdateOperationCoordinator
 import io.dpcaio.selfupdate.android.SelfUpdateStore
 
 class SelfUpdateCenterActivity : Activity() {
     private val store by lazy { SelfUpdateStore(this) }
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
+    private val operations = SelfUpdateOperationCoordinator
+    private var registered = false
+
+    private val stateChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            render()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -17,14 +30,36 @@ class SelfUpdateCenterActivity : Activity() {
         render()
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (!registered) {
+            val filter = IntentFilter(SelfUpdateStatusReceiver.ACTION_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(stateChangedReceiver, filter, RECEIVER_NOT_EXPORTED)
+            else {
+                @Suppress("DEPRECATION")
+                registerReceiver(stateChangedReceiver, filter)
+            }
+            registered = true
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         render()
     }
 
+    override fun onStop() {
+        if (registered) {
+            runCatching { unregisterReceiver(stateChangedReceiver) }
+            registered = false
+        }
+        super.onStop()
+    }
+
     private fun render() {
         val snapshot = SelfUpdateUiStateStore.read(this)
         val candidate = store.loadCandidate()
+        val busy = operations.isBusy()
         val body = ModernUi.page(this)
 
         body.addView(
@@ -59,6 +94,7 @@ class SelfUpdateCenterActivity : Activity() {
                 addView(CheckBox(this@SelfUpdateCenterActivity).apply {
                     text = "Automatically install a verified update when silent install is supported"
                     isChecked = prefs.getBoolean(KEY_AUTO_SILENT, false)
+                    isEnabled = !busy
                     setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(KEY_AUTO_SILENT, checked).apply() }
                 })
                 addView(
@@ -84,10 +120,12 @@ class SelfUpdateCenterActivity : Activity() {
                     openUpdater(checkNow = true)
                 })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Discard cached candidate", destructive = true) {
-                    store.clearCandidate()
-                    SelfUpdateUiStateStore.write(this@SelfUpdateCenterActivity, SelfUpdateState.IDLE, "Cached update discarded; ready for a fresh check")
+                    if (!operations.isBusy()) {
+                        store.clearCandidate()
+                        SelfUpdateUiStateStore.write(this@SelfUpdateCenterActivity, SelfUpdateState.IDLE, "Cached update discarded; ready for a fresh check")
+                    }
                     render()
-                }.apply { isEnabled = candidate != null })
+                }.apply { isEnabled = candidate != null && !busy })
             }
         )
 
