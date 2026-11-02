@@ -21,12 +21,14 @@ assert 'Prepare emergency ephemeral signer' in workflow, (
 )
 
 assert 'push:\n    branches:\n      - main' in normal_ci, (
-    'normal Android CI must also run on pushes to main so a usable APK is produced independently of stable release signing'
+    'Android CI must also run on pushes to main so a CI/debug APK is produced independently of stable release signing'
 )
-assert ':app-dpc:assembleEnterpriseDebug' in normal_ci, 'normal main CI must build enterpriseDebug'
-assert 'Package APK artifact' in normal_ci, 'normal main CI must package the APK'
-assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' in normal_ci, 'normal main CI must upload a versioned APK artifact'
-assert 'actions/upload-artifact@' in normal_ci, 'normal main CI must upload the APK artifact'
-assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in normal_ci, 'normal main CI must not require stable release signing secrets'
+assert ':app-dpc:assembleEnterpriseDebug' in normal_ci, 'main CI must build enterpriseDebug'
+assert 'Package APK artifact' in normal_ci, 'main CI must package the CI/debug APK'
+assert 'DPC-AIO-ci-debug-${{ github.run_number }}' in normal_ci, 'main CI must clearly label the versioned artifact as CI/debug'
+assert 'CI-DEBUG-NOT-FOR-SELF-UPDATE.txt' in normal_ci, 'CI/debug artifact must carry an explicit self-update continuity warning'
+assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' not in normal_ci, 'ephemeral CI/debug artifact must not look like the updateable normal release channel'
+assert 'actions/upload-artifact@' in normal_ci, 'main CI must upload the APK artifact'
+assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in normal_ci, 'CI/debug artifact must not require stable release signing secrets'
 
 print('MAIN_STABLE_SIGNING_POLICY_CONTRACT: PASS')
