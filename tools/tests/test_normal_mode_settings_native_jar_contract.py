@@ -55,11 +55,14 @@ for token in [
     'selected.jar.part',
     'temp.renameTo(target)',
     'temp.delete()',
-    'expectedSha256 = digest',
+    'Trusted SHA-256 from release/source (64 hex)',
+    'trustedDigest != observedDigest',
+    'expectedSha256 = trustedDigest',
     'Arguments — one argument per line',
     'io.dpcaio.jar.*',
 ]:
     assert token in runner, token
+assert 'expectedSha256 = digest' not in runner, 'runner must not auto-trust the digest of the just-imported JAR'
 assert 'sh -c' not in runner and 'su -c' not in runner, 'runner must not expose arbitrary shell execution'
 
 for token in [
