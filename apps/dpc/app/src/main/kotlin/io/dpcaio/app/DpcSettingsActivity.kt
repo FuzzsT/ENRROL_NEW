@@ -39,8 +39,17 @@ class DpcSettingsActivity : Activity() {
                 addView(CheckBox(this@DpcSettingsActivity).apply {
                     text = "Require PIN before installing packages"
                     isChecked = installAuthorization.isEnabled()
-                    setOnCheckedChangeListener { _, checked ->
-                        installAuthorization.setEnabled(checked)
+                    setOnCheckedChangeListener { button, checked ->
+                        if (checked) {
+                            installAuthorization.setEnabled(true)
+                            render()
+                        } else {
+                            button.isEnabled = false
+                            val started = installAuthorization.requestDisableWithPin(this@DpcSettingsActivity) {
+                                render()
+                            }
+                            if (!started) render()
+                        }
                     }
                 })
                 addView(
@@ -90,6 +99,7 @@ class DpcSettingsActivity : Activity() {
                     isEnabled = native.jarCallingAvailable
                     setOnCheckedChangeListener { _, checked ->
                         DpcUiPreferences.setNativeJarCallingEnabled(this@DpcSettingsActivity, checked)
+                        render()
                     }
                 })
                 addView(ModernUi.action(this@DpcSettingsActivity, "Open Native JAR Runner") {
