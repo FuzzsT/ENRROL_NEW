@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import runpy
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / '.github' / 'workflows'
@@ -21,7 +22,6 @@ def main():
     assert text.count('test_pin_guard_contract.py') == 1
     assert text.count('test_app_lock_pin_contract.py') == 1
     assert text.count('test_install_pin_guard_contract.py') == 1
-    assert text.count('test_normal_mode_settings_native_jar_contract.py') == 1, 'normal/native/JAR security contract must run in Android CI'
     assert text.count('test_package_export_contract.py') == 1
     assert text.count('test_package_export_ui_contract.py') == 1
     assert text.count('test_secret_code_inventory_contract.py') == 1
@@ -66,6 +66,9 @@ def main():
     assert 'contents: read' in matrix
     assert 'workflow_run:' not in matrix
     assert 'schedule:' not in matrix
+
+    # Keep the native/JAR safety contract on an actually executed CI path.
+    runpy.run_path(str(ROOT / 'tools/tests/test_normal_mode_settings_native_jar_contract.py'), run_name='__main__')
 
     print('test_workflow_organization_contract: PASS')
 
