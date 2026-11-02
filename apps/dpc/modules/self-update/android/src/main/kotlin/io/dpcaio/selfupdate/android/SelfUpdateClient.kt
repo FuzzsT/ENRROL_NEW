@@ -79,6 +79,7 @@ class SelfUpdateClient(
         channel = when (json.getString("channel").trim().lowercase(Locale.ROOT)) {
             "stable" -> UpdateChannel.STABLE
             "continuous" -> UpdateChannel.CONTINUOUS
+            "emergency" -> UpdateChannel.EMERGENCY
             else -> throw IllegalArgumentException("Unsupported update channel")
         },
         packageName = json.getString("packageName"),
@@ -121,6 +122,7 @@ class SelfUpdateClient(
             val channel = when {
                 requestedUrl.contains("/dpc-aio-stable/", ignoreCase = true) -> "stable"
                 requestedUrl.contains("/dpc-aio-continuous/", ignoreCase = true) -> "continuous"
+                requestedUrl.contains("/dpc-aio-emergency-enrollment/", ignoreCase = true) -> "emergency"
                 else -> null
             }
             val detail = when (kind) {
