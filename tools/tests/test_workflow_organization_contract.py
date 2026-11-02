@@ -31,6 +31,15 @@ def main():
     assert text.count('test_migration_update_matrix_workflow_contract.py') == 1
     assert 'name: Run app security contracts' not in text
 
+    # The same workflow must produce a normal enterprise debug artifact after a
+    # real push to main, not only for pull_request events. Keep the concurrency
+    # expression push-safe by falling back to github.ref when no PR exists.
+    assert 'on:\n  push:\n    branches:\n      - main\n  pull_request:' in text
+    assert 'group: android-ci-${{ github.event.pull_request.number || github.ref }}' in text
+    assert 'assembleEnterpriseDebug' in text
+    assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' in text
+    assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in text, 'normal Android CI artifact must not depend on release signing secrets'
+
     release = RELEASE.read_text(encoding='utf-8')
     assert 'AOSP Device Owner runtime smoke' in release
     assert 'Publish release assets' in release
