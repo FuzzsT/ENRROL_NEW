@@ -54,7 +54,8 @@ for token in [
     'StreamCollector(process.errorStream',
     'MAX_OUTPUT_CHARS',
     'NativeJarOperationCoordinator.tryStartExecution()',
-    'NativeJarOperationCoordinator.finishExecution()',
+    'NativeJarOperationCoordinator.finishExecution(',
+    'executeReserved(',
 ]:
     assert token in jar, token
 assert 'Runtime.getRuntime().exec("' not in jar, 'jar caller must not build a shell command string'
@@ -66,6 +67,7 @@ for token in [
     'finishImport',
     'tryStartExecution',
     'finishExecution',
+    'isExecutionReservation',
     '@Synchronized',
 ]:
     assert token in coordinator, token
@@ -81,7 +83,9 @@ for token in [
     'executionInProgress = true',
     'executionInProgress = false',
     'NativeJarOperationCoordinator.tryStartImport()',
-    'NativeJarOperationCoordinator.finishImport()',
+    'NativeJarOperationCoordinator.finishImport(',
+    'NativeJarOperationCoordinator.tryStartExecution()',
+    'manager.executeReserved(',
     'setSingleLine(false)',
     'InputType.TYPE_TEXT_FLAG_MULTI_LINE',
     'Trusted SHA-256 from release/source (64 hex)',
