@@ -26,6 +26,11 @@ on:
           - auto
           - stable
           - emergency
+      repair_manifests_only:
+        description: "Repair existing Self Update manifests only; do not rebuild or re-sign APKs"
+        required: false
+        default: false
+        type: boolean
       apk_url:
         description: "Optional public APK URL used by provisioning QR (stable manual runs only)"
         required: false
@@ -84,7 +89,126 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repair-self-update-manifests:
+    name: Repair existing Self Update manifests
+    if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools'
+
+      - name: Install APK metadata tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_CLI="$(command -v android)"
+          test -x "$ANDROID_CLI"
+          "$ANDROID_CLI" sdk install "build-tools/36.0.0"
+          aapt_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -x "$aapt_bin"
+
+      - name: Backfill and verify live manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair
+          aapt_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -x "$aapt_bin"
+          export PATH="$(dirname "$aapt_bin"):$PATH"
+
+          for tag in dpc-aio-continuous dpc-aio-emergency-enrollment; do
+            dir="repair/$tag"
+            rm -rf "$dir"
+            mkdir -p "$dir"
+            (
+              cd "$dir"
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'DPC-AIO-enterprise-release.apk' \
+                --pattern 'DPC-AIO-enterprise-release.apk.sha256' \
+                --clobber
+
+              expected_sha="$(awk 'NR==1 {print $1}' DPC-AIO-enterprise-release.apk.sha256 | tr '[:upper:]' '[:lower:]')"
+              [[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]]
+              printf '%s  DPC-AIO-enterprise-release.apk\n' "$expected_sha" > DPC-AIO-enterprise-release.apk.sha256
+              sha256sum -c DPC-AIO-enterprise-release.apk.sha256
+
+              package_line="$(aapt dump badging DPC-AIO-enterprise-release.apk | head -n1)"
+              package_name="$(printf '%s\n' "$package_line" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+              version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
+              version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+              [[ "$package_name" == "io.dpcaio.app" ]]
+              [[ "$version_code" =~ ^[0-9]+$ ]]
+              [[ -n "$version_name" ]]
+
+              if [[ "$tag" == "dpc-aio-continuous" ]]; then
+                channel="continuous"
+              else
+                channel="emergency"
+              fi
+
+              apk_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/DPC-AIO-enterprise-release.apk"
+              notes_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
+              published_at="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt')"
+              [[ -n "$published_at" && "$published_at" != "null" ]]
+
+              python3 "$GITHUB_WORKSPACE/tools/release/build_self_update_manifest.py" \
+                --apk DPC-AIO-enterprise-release.apk \
+                --out self-update.json \
+                --channel "$channel" \
+                --package "$package_name" \
+                --version-name "$version_name" \
+                --version-code "$version_code" \
+                --apk-url "$apk_url" \
+                --published-at "$published_at" \
+                --release-notes-url "$notes_url"
+
+              test -s self-update.json
+              gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+
+              public_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
+              curl -fL --retry 3 --retry-delay 3 "$public_manifest_url" -o public-self-update.json
+
+              TAG="$tag" CHANNEL="$channel" PACKAGE_NAME="$package_name" VERSION_CODE="$version_code" VERSION_NAME="$version_name" APK_URL="$apk_url" EXPECTED_SHA="$expected_sha" python3 - <<'PY'
+              import json
+              import os
+              from pathlib import Path
+
+              payload = json.loads(Path('public-self-update.json').read_text(encoding='utf-8'))
+              expected = {
+                  'channel': os.environ['CHANNEL'],
+                  'packageName': os.environ['PACKAGE_NAME'],
+                  'versionCode': int(os.environ['VERSION_CODE']),
+                  'versionName': os.environ['VERSION_NAME'],
+                  'apkUrl': os.environ['APK_URL'],
+                  'apkSha256': os.environ['EXPECTED_SHA'],
+              }
+              for key, value in expected.items():
+                  if payload.get(key) != value:
+                      raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field={key} expected={value!r} observed={payload.get(key)!r}')
+              if int(payload.get('apkSize', 0)) != Path('DPC-AIO-enterprise-release.apk').stat().st_size:
+                  raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field=apkSize')
+              PY
+
+              echo "REPAIR_SELF_UPDATE_MANIFEST_OK tag=$tag channel=$channel version=$version_name code=$version_code sha256=$expected_sha"
+            )
+          done
+
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
