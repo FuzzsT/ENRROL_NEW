@@ -112,13 +112,13 @@ class SelfUpdateCenterActivity : Activity() {
             ModernUi.card(this, emphasized = true).apply {
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Check now", primary = true) {
                     openUpdater(checkNow = true)
-                })
+                }.apply { isEnabled = !busy })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Open updater") {
                     openUpdater(checkNow = false)
                 })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Retry / re-check") {
                     openUpdater(checkNow = true)
-                })
+                }.apply { isEnabled = !busy })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Discard cached candidate", destructive = true) {
                     if (!operations.isBusy()) {
                         store.clearCandidate()
@@ -141,6 +141,7 @@ class SelfUpdateCenterActivity : Activity() {
     }
 
     private fun openUpdater(checkNow: Boolean) {
+        if (checkNow && operations.isBusy()) return
         startActivity(
             Intent(this, SelfUpdateActivity::class.java).apply {
                 if (checkNow) putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)
