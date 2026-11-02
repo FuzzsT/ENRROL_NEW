@@ -21,6 +21,7 @@ class NativeJarRunnerActivity : Activity() {
     private var selectedJar: File? = null
     private var selectedSha256: String? = null
     private var importInProgress = false
+    private var executionInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,8 +97,8 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun chooseJar() {
-        if (importInProgress) {
-            output.text = "A JAR import is already in progress"
+        if (importInProgress || executionInProgress) {
+            output.text = if (executionInProgress) "JAR execution is already in progress" else "A JAR import is already in progress"
             return
         }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -118,8 +119,8 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun importJar(uri: Uri) {
-        if (importInProgress) {
-            output.text = "A JAR import is already in progress"
+        if (importInProgress || executionInProgress) {
+            output.text = if (executionInProgress) "JAR execution is already in progress" else "A JAR import is already in progress"
             return
         }
         importInProgress = true
@@ -169,6 +170,10 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun runJar() {
+        if (importInProgress || executionInProgress) {
+            output.text = if (executionInProgress) "JAR execution is already in progress" else "Wait for the current JAR import to finish"
+            return
+        }
         val jar = selectedJar
         val observedDigest = selectedSha256
         if (jar == null || observedDigest == null) {
@@ -187,6 +192,7 @@ class NativeJarRunnerActivity : Activity() {
         val mainClass = mainClassField.text.toString().trim()
         val arguments = argsField.text.toString().lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         val timeout = timeoutField.text.toString().trim().toLongOrNull() ?: 30L
+        executionInProgress = true
         output.text = "Running…"
         Thread {
             val result = manager.execute(
@@ -199,6 +205,7 @@ class NativeJarRunnerActivity : Activity() {
                 )
             )
             runOnUiThread {
+                executionInProgress = false
                 output.text = buildString {
                     appendLine(result.reason)
                     appendLine("started=${result.started} exit=${result.exitCode ?: "—"} timeout=${result.timedOut}")
