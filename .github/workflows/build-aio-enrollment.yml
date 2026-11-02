@@ -145,6 +145,19 @@ jobs:
                 --pattern 'DPC-AIO-enterprise-release.apk.sha256' \
                 --clobber || true
 
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'signing-mode.txt' \
+                --clobber || true
+
+              if [[ "$tag" == "dpc-aio-emergency-enrollment" ]]; then
+                signing_mode="$(tr -d '[:space:]' < signing-mode.txt 2>/dev/null || true)"
+                if [[ "$signing_mode" != "stable" ]]; then
+                  echo "REPAIR_SELF_UPDATE_EMERGENCY_SKIPPED_EPHEMERAL_SIGNER tag=$tag signing_mode=${signing_mode:-missing}"
+                  exit 0
+                fi
+              fi
+
               asset_digest="$(
                 gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
                   --jq '.assets[] | select(.name=="DPC-AIO-enterprise-release.apk") | .digest' \
@@ -252,6 +265,8 @@ jobs:
       release_tag: ${{ steps.mode.outputs.release_tag }}
       artifact_name: ${{ steps.mode.outputs.artifact_name }}
       should_publish: ${{ steps.mode.outputs.should_publish }}
+      stable_signing_configured: ${{ steps.mode.outputs.stable_signing_configured }}
+      self_update_manifest: ${{ steps.self_update_manifest.outputs.available }}
 
     steps:
       - name: Checkout
@@ -326,6 +341,7 @@ jobs:
             echo "release_tag=$release_tag"
             echo "artifact_name=$artifact_name"
             echo "should_publish=$should_publish"
+            echo "stable_signing_configured=$STABLE_SIGNING_CONFIGURED"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -415,7 +431,7 @@ jobs:
           echo "Provisioning APK URL: $url"
 
       - name: Prepare stable signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable'
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
         env:
           KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
@@ -451,7 +467,7 @@ jobs:
           chmod 600 "$DPC_AIO_SIGNING_ENV"
 
       - name: Prepare emergency ephemeral signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'emergency'
+        if: env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -573,10 +589,19 @@ jobs:
           sha256sum dist/DPC-AIO-enterprise-release.apk > dist/DPC-AIO-enterprise-release.apk.sha256
 
       - name: Build self-update manifest
+        id: self_update_manifest
         if: steps.mode.outputs.should_publish == 'true'
         shell: bash
         run: |
           set -euo pipefail
+          signing_mode="$(tr -d '[:space:]' < dist/signing-mode.txt)"
+          if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" && "$signing_mode" != "stable" ]]; then
+            rm -f dist/self-update.json
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "EMERGENCY_SELF_UPDATE_MANIFEST_SKIPPED_EPHEMERAL_SIGNER"
+            exit 0
+          fi
+
           apk="dist/DPC-AIO-enterprise-release.apk"
           test -s "$apk"
 
@@ -614,6 +639,7 @@ jobs:
             --published-at "$published_at" \
             --release-notes-url "$notes_url"
           test -s dist/self-update.json
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Validate QR to exact APK binding
         shell: bash
@@ -738,13 +764,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
-            notes="Run-specific emergency DPC-AIO 1.1.4 enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so independent runs cannot update each other in place."
+            if [[ "$SELF_UPDATE_MANIFEST" == "true" ]]; then
+              notes="Emergency DPC-AIO 1.1.4 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
+            else
+              notes="Run-specific emergency DPC-AIO 1.1.4 recovery build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this release is fresh-install/recovery only and is not advertised through Self Update."
+            fi
             prerelease="--prerelease"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             title="$RELEASE_TAG"
@@ -836,7 +867,7 @@ jobs:
           echo "Published APK asset(s) are public and byte-identical to the QR-bound build."
 
       - name: Verify published self-update manifest
-        if: needs.build.outputs.should_publish == 'true'
+        if: needs.build.outputs.should_publish == 'true' && needs.build.outputs.self_update_manifest == 'true'
         env:
           MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
