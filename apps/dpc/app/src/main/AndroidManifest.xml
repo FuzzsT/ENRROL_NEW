@@ -92,6 +92,7 @@
         <activity android:name=".SelfUpdateActivity" android:exported="false" />
         <activity android:name=".SelfUpdateCenterActivity" android:exported="false" />
         <activity android:name=".DpcSettingsActivity" android:exported="false" />
+        <activity android:name=".NativeJarRunnerActivity" android:exported="false" />
 
         <activity
             android:name=".ProvisioningModeActivity"
