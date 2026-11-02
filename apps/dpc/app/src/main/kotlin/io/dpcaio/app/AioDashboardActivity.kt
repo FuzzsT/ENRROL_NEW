@@ -47,6 +47,7 @@ class AioDashboardActivity : Activity() {
             it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_INSTALLER)
         }
         add(body, "Activity Launcher • apps / favorites / recent") { ActivityLauncherHubActivity::class.java }
+        add(body, "Process Monitor • processes / APK + OBB snapshot") { ProcessMonitorActivity::class.java }
         add(body, "Update Center • check / verify / recover") { SelfUpdateCenterActivity::class.java }
         add(body, "Settings • PIN / interface / native support") { DpcSettingsActivity::class.java }
 
