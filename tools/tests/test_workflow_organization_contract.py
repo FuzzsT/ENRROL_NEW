@@ -71,8 +71,10 @@ def main():
     assert 'workflow_run:' not in matrix
     assert 'schedule:' not in matrix
 
-    # Keep the native/JAR safety contract on an actually executed CI path.
+    # Keep the native/JAR and stable-signing distribution contracts on an
+    # actually executed CI path so they cannot silently drift apart.
     runpy.run_path(str(ROOT / 'tools/tests/test_normal_mode_settings_native_jar_contract.py'), run_name='__main__')
+    runpy.run_path(str(ROOT / 'tools/tests/test_main_stable_signing_policy_contract.py'), run_name='__main__')
 
     print('test_workflow_organization_contract: PASS')
 
