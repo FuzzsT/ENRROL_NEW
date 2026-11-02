@@ -138,13 +138,47 @@ jobs:
               gh release download "$tag" \
                 --repo "$GITHUB_REPOSITORY" \
                 --pattern 'DPC-AIO-enterprise-release.apk' \
-                --pattern 'DPC-AIO-enterprise-release.apk.sha256' \
                 --clobber
 
-              expected_sha="$(awk 'NR==1 {print $1}' DPC-AIO-enterprise-release.apk.sha256 | tr '[:upper:]' '[:lower:]')"
-              [[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]]
-              printf '%s  DPC-AIO-enterprise-release.apk\n' "$expected_sha" > DPC-AIO-enterprise-release.apk.sha256
-              sha256sum -c DPC-AIO-enterprise-release.apk.sha256
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'DPC-AIO-enterprise-release.apk.sha256' \
+                --clobber || true
+
+              asset_digest="$(
+                gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+                  --jq '.assets[] | select(.name=="DPC-AIO-enterprise-release.apk") | .digest' \
+                  | head -n1
+              )"
+              [[ "$asset_digest" == sha256:* ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_MISSING tag=$tag digest=$asset_digest" >&2
+                exit 1
+              }
+              expected_sha="${asset_digest#sha256:}"
+              expected_sha="$(printf '%s' "$expected_sha" | tr '[:upper:]' '[:lower:]')"
+              [[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_INVALID tag=$tag digest=$asset_digest" >&2
+                exit 1
+              }
+              actual_sha="$(sha256sum DPC-AIO-enterprise-release.apk | awk '{print $1}')"
+              [[ "$actual_sha" == "$expected_sha" ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_MISMATCH tag=$tag metadata=$expected_sha actual=$actual_sha" >&2
+                exit 1
+              }
+
+              if [[ -f DPC-AIO-enterprise-release.apk.sha256 ]]; then
+                sidecar_sha="$(awk 'NR==1 {print $1}' DPC-AIO-enterprise-release.apk.sha256 | tr '[:upper:]' '[:lower:]')"
+                [[ "$sidecar_sha" =~ ^[0-9a-f]{64}$ ]] || {
+                  echo "REPAIR_SELF_UPDATE_SIDECAR_INVALID tag=$tag sha=$sidecar_sha" >&2
+                  exit 1
+                }
+                [[ "$sidecar_sha" == "$expected_sha" ]] || {
+                  echo "REPAIR_SELF_UPDATE_SIDECAR_MISMATCH tag=$tag metadata=$expected_sha sidecar=$sidecar_sha" >&2
+                  exit 1
+                }
+                printf '%s  DPC-AIO-enterprise-release.apk\n' "$sidecar_sha" > DPC-AIO-enterprise-release.apk.sha256
+                sha256sum -c DPC-AIO-enterprise-release.apk.sha256
+              fi
 
               package_line="$(aapt dump badging DPC-AIO-enterprise-release.apk | head -n1)"
               package_name="$(printf '%s\n' "$package_line" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
