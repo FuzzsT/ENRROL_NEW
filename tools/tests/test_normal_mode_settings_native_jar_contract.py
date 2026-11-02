@@ -92,8 +92,10 @@ for token in [
     'unregisterReceiver(stateChangedReceiver)',
     'candidate != null && !busy',
     'putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)',
+    'if (checkNow && operations.isBusy()) return',
 ]:
     assert token in updates, token
+assert updates.count('isEnabled = !busy') >= 3, 'auto-check entry points and automation must be disabled while self-update is busy'
 for token in [
     'EXTRA_CHECK_NOW',
     'consumeLaunchAction()',
