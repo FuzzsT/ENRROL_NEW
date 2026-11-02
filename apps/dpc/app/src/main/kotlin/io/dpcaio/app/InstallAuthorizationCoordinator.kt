@@ -30,6 +30,79 @@ class InstallAuthorizationCoordinator(
         if (!enabled) invalidatePendingRequest()
     }
 
+    fun requestDisableWithPin(context: Context, onComplete: (Boolean) -> Unit): Boolean {
+        if (!isEnabled()) {
+            onComplete(true)
+            return true
+        }
+        val activity = context as? Activity ?: return false
+        if (activity.isFinishing || activity.isDestroyed || promptVisible) return false
+        if (!pinGuard.isConfigured()) {
+            setEnabled(false)
+            onComplete(true)
+            return true
+        }
+
+        val field = EditText(activity).apply {
+            hint = "Current PIN"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(InputFilter.LengthFilter(MAX_PIN_LENGTH))
+        }
+        val requestId = requestGeneration.incrementAndGet()
+        promptVisible = true
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle("Disable install PIN protection")
+            .setMessage("Enter the current PIN Guard PIN before disabling package-install protection.")
+            .setView(field)
+            .setPositiveButton("Disable", null)
+            .setNegativeButton("Cancel") { _, _ ->
+                invalidatePendingRequest()
+                onComplete(false)
+            }
+            .setOnCancelListener {
+                invalidatePendingRequest()
+                onComplete(false)
+            }
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val pin = field.text?.toString().orEmpty().toCharArray()
+                field.text?.clear()
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                executor.execute {
+                    val result = try {
+                        pinGuard.verify(pin)
+                    } finally {
+                        pin.fill('\u0000')
+                    }
+                    activity.runOnUiThread {
+                        if (requestGeneration.get() != requestId) return@runOnUiThread
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            invalidatePendingRequest()
+                            return@runOnUiThread
+                        }
+                        if (result == PinGuardResult.SUCCESS) {
+                            setEnabled(false)
+                            dialog.dismiss()
+                            onComplete(true)
+                        } else {
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                            field.error = when (result) {
+                                PinGuardResult.INVALID -> "Invalid PIN"
+                                PinGuardResult.LOCKED_OUT -> "PIN Guard is temporarily locked"
+                                PinGuardResult.NOT_CONFIGURED -> "PIN Guard is not configured"
+                                PinGuardResult.STORE_ERROR -> "PIN Guard storage error"
+                                PinGuardResult.SUCCESS -> null
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+        return true
+    }
+
     private fun verifyPin(pin: CharArray): PinGuardResult {
         if (!isEnabled()) {
             pin.fill('\u0000')
