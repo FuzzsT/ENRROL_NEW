@@ -43,7 +43,7 @@ class AioDashboardActivity : Activity() {
         )
 
         addSection(body, "Start here")
-        add(body, "Apps • install / update / export", { AppPackageManagerActivity::class.java }) {
+        add(body, "APK / APKS Installer • install / update / export", { AppPackageManagerActivity::class.java }) {
             it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_INSTALLER)
         }
         add(body, "Activity Launcher • apps / favorites / recent") { ActivityLauncherHubActivity::class.java }
