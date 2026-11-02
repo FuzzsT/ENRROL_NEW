@@ -63,7 +63,10 @@ for token in [
     'manager.privateJarDirectory()',
     'MAX_JAR_BYTES',
     'importInProgress',
-    'if (importInProgress)',
+    'executionInProgress',
+    'if (importInProgress || executionInProgress)',
+    'executionInProgress = true',
+    'executionInProgress = false',
     'setSingleLine(false)',
     'InputType.TYPE_TEXT_FLAG_MULTI_LINE',
     'Trusted SHA-256 from release/source (64 hex)',
@@ -91,7 +94,15 @@ for token in [
     'putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)',
 ]:
     assert token in updates, token
-for token in ['EXTRA_CHECK_NOW', 'consumeLaunchAction()', 'checkNow()']:
+for token in [
+    'EXTRA_CHECK_NOW',
+    'consumeLaunchAction()',
+    'STATE_LAUNCH_ACTION_CONSUMED',
+    'savedInstanceState?.getBoolean',
+    'outState.putBoolean',
+    'intent?.removeExtra(EXTRA_CHECK_NOW)',
+    'checkNow()',
+]:
     assert token in updater, token
 
 for activity in ['DpcSettingsActivity', 'SelfUpdateCenterActivity', 'NativeJarRunnerActivity']:
