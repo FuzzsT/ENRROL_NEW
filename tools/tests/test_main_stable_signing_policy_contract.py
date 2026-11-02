@@ -19,4 +19,14 @@ assert 'Prepare emergency ephemeral signer' in workflow, (
     'explicit emergency mode should remain available as a separate recovery path'
 )
 
+assert '\n  normal-apk:\n' in workflow, (
+    'main workflow must expose an independent normal APK job even when stable release signing is unavailable'
+)
+normal = workflow.split('\n  normal-apk:\n', 1)[1].split('\n  build:\n', 1)[0]
+assert 'assembleEnterpriseDebug' in normal, 'normal APK job must build enterprise debug'
+assert 'DPC-AIO-enterprise-normal-${{ github.run_number }}' in normal, 'normal APK must be published as a named workflow artifact'
+assert 'actions/upload-artifact@' in normal, 'normal APK job must upload its artifact'
+assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in normal, 'normal APK job must not require stable release signing secrets'
+assert '\n    needs:' not in normal, 'normal APK job must run independently of the stable release job'
+
 print('MAIN_STABLE_SIGNING_POLICY_CONTRACT: PASS')
