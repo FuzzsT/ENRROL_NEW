@@ -36,7 +36,7 @@ class SelfUpdateActivity : Activity() {
     private val preferences by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private val operations = SelfUpdateOperationCoordinator
 
-    private var selectedChannel = UpdateChannel.STABLE
+    private var selectedChannel = UpdateChannel.CONTINUOUS
     private var selectedPolicy = SelfUpdateInstallPolicy.SILENT_IF_ALLOWED
     private var currentManifest: SelfUpdateManifest? = null
     private var state = SelfUpdateState.IDLE
@@ -60,9 +60,16 @@ class SelfUpdateActivity : Activity() {
         super.onCreate(savedInstanceState)
         launchActionConsumed = savedInstanceState?.getBoolean(STATE_LAUNCH_ACTION_CONSUMED, false) ?: false
         title = "DPC-AIO Self Update"
-        selectedChannel = runCatching {
-            UpdateChannel.valueOf(preferences.getString(KEY_CHANNEL, UpdateChannel.STABLE.name) ?: UpdateChannel.STABLE.name)
-        }.getOrDefault(UpdateChannel.STABLE)
+        val restored = runCatching {
+            UpdateChannel.valueOf(
+                preferences.getString(KEY_CHANNEL, UpdateChannel.CONTINUOUS.name)
+                    ?: UpdateChannel.CONTINUOUS.name
+            )
+        }.getOrDefault(UpdateChannel.CONTINUOUS)
+        selectedChannel = if (restored == UpdateChannel.STABLE) UpdateChannel.CONTINUOUS else restored
+        if (restored != selectedChannel) {
+            preferences.edit().putString(KEY_CHANNEL, selectedChannel.name).apply()
+        }
         selectedPolicy = runCatching {
             SelfUpdateInstallPolicy.valueOf(
                 preferences.getString(KEY_POLICY, SelfUpdateInstallPolicy.SILENT_IF_ALLOWED.name)
@@ -181,12 +188,12 @@ class SelfUpdateActivity : Activity() {
         body.addView(
             ModernUi.card(this).apply {
                 val row = LinearLayout(this@SelfUpdateActivity).apply { orientation = LinearLayout.HORIZONTAL }
-                UpdateChannel.entries.forEach { channel ->
+                listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY).forEach { channel ->
                     val pill = ModernUi.pill(
                         this@SelfUpdateActivity,
                         channel.name,
                         channel == selectedChannel,
-                        if (channel == UpdateChannel.STABLE) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
+                        if (channel == UpdateChannel.CONTINUOUS) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
                     ) {
                         if (channel != selectedChannel) {
                             store.clearCandidate()
@@ -204,6 +211,17 @@ class SelfUpdateActivity : Activity() {
                     )
                 }
                 addView(row)
+                if (selectedChannel == UpdateChannel.EMERGENCY) {
+                    addView(ModernUi.spacer(this@SelfUpdateActivity, 8))
+                    addView(
+                        ModernUi.statusCard(
+                            this@SelfUpdateActivity,
+                            "Emergency channel",
+                            "Recovery builds use run-specific signing. Package/signature verification remains mandatory, so an incompatible signer is rejected instead of bypassed.",
+                            ModernUi.Tone.WARNING,
+                        )
+                    )
+                }
             }
         )
 
@@ -553,6 +571,7 @@ class SelfUpdateActivity : Activity() {
     private fun manifestUrl(channel: UpdateChannel): String = when (channel) {
         UpdateChannel.STABLE -> STABLE_MANIFEST_URL
         UpdateChannel.CONTINUOUS -> CONTINUOUS_MANIFEST_URL
+        UpdateChannel.EMERGENCY -> EMERGENCY_MANIFEST_URL
     }
 
     private fun formatBytes(bytes: Long): String = when {
@@ -573,5 +592,7 @@ class SelfUpdateActivity : Activity() {
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-stable/self-update.json"
         private const val CONTINUOUS_MANIFEST_URL =
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/self-update.json"
+        private const val EMERGENCY_MANIFEST_URL =
+            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-emergency-enrollment/self-update.json"
     }
 }
