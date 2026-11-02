@@ -5,7 +5,14 @@ import java.io.File
 enum class PackageExportFormat {
     APK,
     APKS,
-    XAPK,
+    XAPK;
+
+    companion object {
+        // AIO_BUNDLE deliberately reuses the XAPK wire container so existing exhaustive
+        // format handling remains source-compatible. PackageExportPlan.archiveKind
+        // distinguishes the richer snapshot bundle in generated metadata.
+        val AIO_BUNDLE: PackageExportFormat = XAPK
+    }
 }
 
 data class InstalledPackageArtifacts(
@@ -28,12 +35,20 @@ data class PackageExportPlan(
     val versionName: String?,
     val versionCode: Long,
     val entries: List<PackageExportEntry>,
+    val generatedTextEntries: Map<String, String> = emptyMap(),
     val manifestEntryName: String = "manifest.json",
     val checksumsEntryName: String = "SHA256SUMS.txt",
     val obbIncluded: Boolean = false,
+    val archiveKind: String = format.name,
 ) {
     companion object {
-        fun forFormat(format: PackageExportFormat, artifacts: InstalledPackageArtifacts): PackageExportPlan {
+        const val PROCESS_SNAPSHOT_ENTRY = "process-snapshot.json"
+
+        fun forFormat(
+            format: PackageExportFormat,
+            artifacts: InstalledPackageArtifacts,
+            generatedTextEntries: Map<String, String> = emptyMap(),
+        ): PackageExportPlan {
             require(artifacts.packageName.isNotBlank()) { "packageName must not be blank" }
             require(artifacts.baseApk.isNotBlank()) { "baseApk must not be blank" }
 
@@ -47,19 +62,28 @@ data class PackageExportPlan(
             }
 
             entries.forEach { requireSafeEntryName(it.entryName) }
+            generatedTextEntries.keys.forEach(::requireSafeEntryName)
             requireSafeEntryName("manifest.json")
             requireSafeEntryName("SHA256SUMS.txt")
-            require(entries.map { it.entryName }.distinct().size == entries.size) {
+
+            val allNames = entries.map { it.entryName } + generatedTextEntries.keys
+            require(allNames.distinct().size == allNames.size) {
                 "duplicate archive entry names are not allowed"
             }
+            require("manifest.json" !in allNames && "SHA256SUMS.txt" !in allNames) {
+                "generated entries must not replace exporter metadata"
+            }
 
+            val isAioBundle = PROCESS_SNAPSHOT_ENTRY in generatedTextEntries
             return PackageExportPlan(
                 format = format,
                 packageName = artifacts.packageName,
                 versionName = artifacts.versionName,
                 versionCode = artifacts.versionCode,
                 entries = entries,
+                generatedTextEntries = generatedTextEntries.toMap(),
                 obbIncluded = format == PackageExportFormat.XAPK && artifacts.obbFiles.isNotEmpty(),
+                archiveKind = if (isAioBundle) "AIO_BUNDLE" else format.name,
             )
         }
 

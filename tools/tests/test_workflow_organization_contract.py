@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import runpy
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / '.github' / 'workflows'
@@ -31,6 +32,19 @@ def main():
     assert text.count('test_migration_update_matrix_workflow_contract.py') == 1
     assert 'name: Run app security contracts' not in text
 
+    # The same workflow must produce a CI/debug install artifact after a real
+    # push to main, not only for pull_request events. It is intentionally not
+    # the self-update channel because GitHub-hosted runners create ephemeral
+    # debug signing keys. Keep the concurrency expression push-safe by falling
+    # back to github.ref when no PR exists.
+    assert 'on:\n  push:\n    branches:\n      - main\n  pull_request:' in text
+    assert 'group: android-ci-${{ github.event.pull_request.number || github.ref }}' in text
+    assert 'assembleEnterpriseDebug' in text
+    assert 'DPC-AIO-ci-debug-${{ github.run_number }}' in text
+    assert 'CI-DEBUG-NOT-FOR-SELF-UPDATE.txt' in text
+    assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' not in text
+    assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in text, 'normal Android CI artifact must not depend on release signing secrets'
+
     release = RELEASE.read_text(encoding='utf-8')
     assert 'AOSP Device Owner runtime smoke' in release
     assert 'Publish release assets' in release
@@ -56,6 +70,12 @@ def main():
     assert 'contents: read' in matrix
     assert 'workflow_run:' not in matrix
     assert 'schedule:' not in matrix
+
+    # Keep critical distribution/safety contracts on an actually executed CI
+    # path so they cannot silently drift apart.
+    runpy.run_path(str(ROOT / 'tools/tests/test_normal_mode_settings_native_jar_contract.py'), run_name='__main__')
+    runpy.run_path(str(ROOT / 'tools/tests/test_main_stable_signing_policy_contract.py'), run_name='__main__')
+    runpy.run_path(str(ROOT / 'tools/tests/test_self_update_manifest_backfill_digest_contract.py'), run_name='__main__')
 
     print('test_workflow_organization_contract: PASS')
 
