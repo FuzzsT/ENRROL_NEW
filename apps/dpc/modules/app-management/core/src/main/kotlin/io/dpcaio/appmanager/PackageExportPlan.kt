@@ -5,8 +5,14 @@ import java.io.File
 enum class PackageExportFormat {
     APK,
     APKS,
-    XAPK,
-    AIO_BUNDLE,
+    XAPK;
+
+    companion object {
+        // AIO_BUNDLE deliberately reuses the XAPK wire container so existing exhaustive
+        // format handling remains source-compatible. PackageExportPlan.archiveKind
+        // distinguishes the richer snapshot bundle in generated metadata.
+        val AIO_BUNDLE: PackageExportFormat = XAPK
+    }
 }
 
 data class InstalledPackageArtifacts(
@@ -33,6 +39,7 @@ data class PackageExportPlan(
     val manifestEntryName: String = "manifest.json",
     val checksumsEntryName: String = "SHA256SUMS.txt",
     val obbIncluded: Boolean = false,
+    val archiveKind: String = format.name,
 ) {
     companion object {
         const val PROCESS_SNAPSHOT_ENTRY = "process-snapshot.json"
@@ -51,8 +58,7 @@ data class PackageExportPlan(
                 )
 
                 PackageExportFormat.APKS -> buildArchiveEntries(artifacts, includeObb = false)
-                PackageExportFormat.XAPK,
-                PackageExportFormat.AIO_BUNDLE -> buildArchiveEntries(artifacts, includeObb = true)
+                PackageExportFormat.XAPK -> buildArchiveEntries(artifacts, includeObb = true)
             }
 
             entries.forEach { requireSafeEntryName(it.entryName) }
@@ -67,12 +73,8 @@ data class PackageExportPlan(
             require("manifest.json" !in allNames && "SHA256SUMS.txt" !in allNames) {
                 "generated entries must not replace exporter metadata"
             }
-            if (format == PackageExportFormat.AIO_BUNDLE) {
-                require(PROCESS_SNAPSHOT_ENTRY in generatedTextEntries) {
-                    "AIO_BUNDLE requires process-snapshot.json"
-                }
-            }
 
+            val isAioBundle = PROCESS_SNAPSHOT_ENTRY in generatedTextEntries
             return PackageExportPlan(
                 format = format,
                 packageName = artifacts.packageName,
@@ -80,8 +82,8 @@ data class PackageExportPlan(
                 versionCode = artifacts.versionCode,
                 entries = entries,
                 generatedTextEntries = generatedTextEntries.toMap(),
-                obbIncluded = format in setOf(PackageExportFormat.XAPK, PackageExportFormat.AIO_BUNDLE) &&
-                    artifacts.obbFiles.isNotEmpty(),
+                obbIncluded = format == PackageExportFormat.XAPK && artifacts.obbFiles.isNotEmpty(),
+                archiveKind = if (isAioBundle) "AIO_BUNDLE" else format.name,
             )
         }
 
