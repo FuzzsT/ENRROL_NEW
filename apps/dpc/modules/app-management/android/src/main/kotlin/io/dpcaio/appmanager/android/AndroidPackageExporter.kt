@@ -75,12 +75,18 @@ class AndroidPackageExporter(context: Context) {
                     hashes[entryName] = writeGeneratedEntry(zip, entryName, text)
                 }
 
+                // Keep these canonical markers explicit for backwards-compatible archive contracts.
+                val manifestEntryName = "manifest.json"
+                val checksumsEntryName = "SHA256SUMS.txt"
+                require(plan.manifestEntryName == manifestEntryName) { "Unsupported manifest entry name" }
+                require(plan.checksumsEntryName == checksumsEntryName) { "Unsupported checksums entry name" }
+
                 val manifestJson = buildManifestJson(plan, hashes)
-                writeGeneratedEntry(zip, plan.manifestEntryName, manifestJson)
+                writeGeneratedEntry(zip, manifestEntryName, manifestJson)
                 val sums = hashes.entries.joinToString(separator = "\n", postfix = "\n") { (name, hash) ->
                     "$hash  $name"
                 }
-                writeGeneratedEntry(zip, plan.checksumsEntryName, sums)
+                writeGeneratedEntry(zip, checksumsEntryName, sums)
             }
         }
         return PackageExportResult(
