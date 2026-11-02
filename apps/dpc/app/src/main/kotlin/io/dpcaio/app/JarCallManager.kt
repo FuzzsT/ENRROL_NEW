@@ -27,6 +27,23 @@ class JarCallManager(private val context: Context) {
     private val app = context.applicationContext
 
     fun execute(request: JarCallRequest): JarCallResult {
+        val reservation = NativeJarOperationCoordinator.tryStartExecution()
+            ?: return rejected("Another native JAR operation is already in progress")
+        return executeReserved(request, reservation)
+    }
+
+    internal fun executeReserved(request: JarCallRequest, executionReservation: Long): JarCallResult {
+        if (!NativeJarOperationCoordinator.isExecutionReservation(executionReservation)) {
+            return rejected("Native JAR execution reservation is no longer valid")
+        }
+        return try {
+            executeInternal(request)
+        } finally {
+            NativeJarOperationCoordinator.finishExecution(executionReservation)
+        }
+    }
+
+    private fun executeInternal(request: JarCallRequest): JarCallResult {
         if (!DpcUiPreferences.read(app).nativeJarCallingEnabled) {
             return rejected("JAR calling is disabled in Settings")
         }
