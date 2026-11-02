@@ -88,6 +88,7 @@
         <activity android:name=".ScenarioLabActivity" android:exported="false" />
         <activity android:name=".NfcLabActivity" android:exported="false" />
         <activity android:name=".AppPackageManagerActivity" android:exported="false" />
+        <activity android:name=".ProcessMonitorActivity" android:exported="false" />
         <activity android:name=".DualAppWorkspaceActivity" android:exported="false" />
         <activity android:name=".SelfUpdateActivity" android:exported="false" />
         <activity android:name=".SelfUpdateCenterActivity" android:exported="false" />
