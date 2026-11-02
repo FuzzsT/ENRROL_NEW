@@ -97,8 +97,8 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun chooseJar() {
-        if (importInProgress || executionInProgress) {
-            output.text = if (executionInProgress) "JAR execution is already in progress" else "A JAR import is already in progress"
+        if (importInProgress || executionInProgress || NativeJarOperationCoordinator.isBusy()) {
+            output.text = "Another native JAR operation is already in progress"
             return
         }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -123,40 +123,50 @@ class NativeJarRunnerActivity : Activity() {
             output.text = if (executionInProgress) "JAR execution is already in progress" else "A JAR import is already in progress"
             return
         }
+        val importReservation = NativeJarOperationCoordinator.tryStartImport()
+        if (importReservation == null) {
+            output.text = "Another native JAR operation is already in progress"
+            return
+        }
         importInProgress = true
         output.text = "Importing JAR…"
-        Thread {
-            val result = runCatching {
-                val root = manager.privateJarDirectory()
-                val temp = File(root, "selected.jar.part")
-                val target = File(root, "selected.jar")
-                temp.delete()
-                try {
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        temp.outputStream().use { output ->
-                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                            var total = 0L
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read <= 0) break
-                                total += read
-                                require(total <= MAX_JAR_BYTES) { "JAR exceeds 64 MB limit" }
-                                output.write(buffer, 0, read)
-                            }
-                        }
-                    } ?: error("Cannot open selected document")
-                    require(temp.length() > 0L) { "Selected JAR is empty" }
-                    val digest = sha256(temp)
-                    if (target.exists()) require(target.delete()) { "Cannot replace previous JAR" }
-                    require(temp.renameTo(target)) { "Cannot commit imported JAR" }
-                    target to digest
-                } catch (error: Throwable) {
+        val worker = Thread {
+            val result = try {
+                runCatching {
+                    val root = manager.privateJarDirectory()
+                    val temp = File(root, "selected.jar.part")
+                    val target = File(root, "selected.jar")
                     temp.delete()
-                    throw error
+                    try {
+                        contentResolver.openInputStream(uri)?.use { input ->
+                            temp.outputStream().use { output ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                var total = 0L
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read <= 0) break
+                                    total += read
+                                    require(total <= MAX_JAR_BYTES) { "JAR exceeds 64 MB limit" }
+                                    output.write(buffer, 0, read)
+                                }
+                            }
+                        } ?: error("Cannot open selected document")
+                        require(temp.length() > 0L) { "Selected JAR is empty" }
+                        val digest = sha256(temp)
+                        if (target.exists()) require(target.delete()) { "Cannot replace previous JAR" }
+                        require(temp.renameTo(target)) { "Cannot commit imported JAR" }
+                        target to digest
+                    } catch (error: Throwable) {
+                        temp.delete()
+                        throw error
+                    }
                 }
+            } finally {
+                NativeJarOperationCoordinator.finishImport(importReservation)
             }
             runOnUiThread {
                 importInProgress = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 result.onSuccess { (file, digest) ->
                     selectedJar = file
                     selectedSha256 = digest
@@ -166,7 +176,14 @@ class NativeJarRunnerActivity : Activity() {
                     output.text = "Import failed: ${error.message ?: error.javaClass.simpleName}"
                 }
             }
-        }.start()
+        }
+        try {
+            worker.start()
+        } catch (error: Throwable) {
+            NativeJarOperationCoordinator.finishImport(importReservation)
+            importInProgress = false
+            output.text = "Import failed: ${error.message ?: error.javaClass.simpleName}"
+        }
     }
 
     private fun runJar() {
@@ -192,20 +209,25 @@ class NativeJarRunnerActivity : Activity() {
         val mainClass = mainClassField.text.toString().trim()
         val arguments = argsField.text.toString().lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         val timeout = timeoutField.text.toString().trim().toLongOrNull() ?: 30L
+        val executionReservation = NativeJarOperationCoordinator.tryStartExecution()
+        if (executionReservation == null) {
+            output.text = "Another native JAR operation is already in progress"
+            return
+        }
         executionInProgress = true
         output.text = "Running…"
-        Thread {
-            val result = manager.execute(
-                JarCallRequest(
-                    jarFile = jar,
-                    mainClass = mainClass,
-                    arguments = arguments,
-                    expectedSha256 = trustedDigest,
-                    timeoutSeconds = timeout,
-                )
-            )
+        val request = JarCallRequest(
+            jarFile = jar,
+            mainClass = mainClass,
+            arguments = arguments,
+            expectedSha256 = trustedDigest,
+            timeoutSeconds = timeout,
+        )
+        val worker = Thread {
+            val result = manager.executeReserved(request, executionReservation)
             runOnUiThread {
                 executionInProgress = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 output.text = buildString {
                     appendLine(result.reason)
                     appendLine("started=${result.started} exit=${result.exitCode ?: "—"} timeout=${result.timedOut}")
@@ -213,7 +235,14 @@ class NativeJarRunnerActivity : Activity() {
                     if (result.stderr.isNotBlank()) appendLine("\nSTDERR\n${result.stderr}")
                 }.trim()
             }
-        }.start()
+        }
+        try {
+            worker.start()
+        } catch (error: Throwable) {
+            NativeJarOperationCoordinator.finishExecution(executionReservation)
+            executionInProgress = false
+            output.text = "Cannot start JAR worker: ${error.message ?: error.javaClass.simpleName}"
+        }
     }
 
     private fun sha256(file: File): String {
