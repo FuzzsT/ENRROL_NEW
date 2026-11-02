@@ -38,6 +38,9 @@ for token in [
     'environment()["CLASSPATH"]',
     'timeoutSeconds',
     'destroyForcibly',
+    'StreamCollector(process.inputStream',
+    'StreamCollector(process.errorStream',
+    'MAX_OUTPUT_CHARS',
 ]:
     assert token in jar, token
 assert 'Runtime.getRuntime().exec("' not in jar, 'jar caller must not build a shell command string'
