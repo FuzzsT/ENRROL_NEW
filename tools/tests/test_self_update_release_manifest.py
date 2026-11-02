@@ -96,6 +96,15 @@ def main():
         "public-self-update.json",
         'expected_channel="emergency"',
         "PUBLIC_SELF_UPDATE_VERIFY_FAILED",
+        "repair_manifests_only:",
+        "Repair existing Self Update manifests",
+        'for tag in dpc-aio-continuous dpc-aio-emergency-enrollment; do',
+        'gh release download "$tag"',
+        'DPC-AIO-enterprise-release.apk.sha256',
+        'sha256sum -c DPC-AIO-enterprise-release.apk.sha256',
+        'aapt dump badging DPC-AIO-enterprise-release.apk',
+        'gh release upload "$tag" self-update.json --clobber',
+        'REPAIR_SELF_UPDATE_MANIFEST_OK',
     ]:
         assert token in workflow, f"self-update release workflow missing: {token}"
 
@@ -107,6 +116,12 @@ def main():
     )
     assert 'if [[ "$MODE" == "emergency" ]]; then' in workflow, (
         "published emergency self-update manifest must be verified"
+    )
+    assert "if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true" in workflow, (
+        "normal build must be skipped during manifest-only repair"
+    )
+    assert "if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow, (
+        "manifest repair must be explicit workflow_dispatch only"
     )
     assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow
     assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
