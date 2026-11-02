@@ -72,7 +72,7 @@ class AioDashboardActivity : Activity() {
             add(body, "Module Center (${DpcModuleRegistry.modules.size})") { ModuleCenterActivity::class.java }
             add(body, "File Manager") { FileManagerActivity::class.java }
             add(body, "Autostart Manager") { AutostartManagerActivity::class.java }
-            add(body, "APK / APKS Updater", { AppPackageManagerActivity::class.java }) {
+            add(body, "App Updater • APK / APKS", { AppPackageManagerActivity::class.java }) {
                 it.putExtra(AppPackageManagerActivity.EXTRA_MODE, AppPackageManagerActivity.MODE_UPDATER)
             }
             add(body, "Activity Explorer • direct package mode") { ActivityExplorerActivity::class.java }
