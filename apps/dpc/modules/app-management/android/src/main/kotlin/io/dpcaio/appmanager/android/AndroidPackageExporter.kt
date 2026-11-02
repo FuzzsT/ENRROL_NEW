@@ -31,8 +31,7 @@ class AndroidPackageExporter(context: Context) {
         return when (plan.format) {
             PackageExportFormat.APK -> exportApk(plan, destinationUri)
             PackageExportFormat.APKS,
-            PackageExportFormat.XAPK,
-            PackageExportFormat.AIO_BUNDLE -> exportArchive(plan, destinationUri)
+            PackageExportFormat.XAPK -> exportArchive(plan, destinationUri)
         }
     }
 
@@ -104,6 +103,7 @@ class AndroidPackageExporter(context: Context) {
         return JSONObject()
             .put("schemaVersion", 2)
             .put("format", plan.format.name)
+            .put("archiveKind", plan.archiveKind)
             .put("packageName", plan.packageName)
             .put("versionName", plan.versionName ?: JSONObject.NULL)
             .put("versionCode", plan.versionCode)
