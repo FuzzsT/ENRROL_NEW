@@ -90,6 +90,8 @@
         <activity android:name=".AppPackageManagerActivity" android:exported="false" />
         <activity android:name=".DualAppWorkspaceActivity" android:exported="false" />
         <activity android:name=".SelfUpdateActivity" android:exported="false" />
+        <activity android:name=".SelfUpdateCenterActivity" android:exported="false" />
+        <activity android:name=".DpcSettingsActivity" android:exported="false" />
 
         <activity
             android:name=".ProvisioningModeActivity"
