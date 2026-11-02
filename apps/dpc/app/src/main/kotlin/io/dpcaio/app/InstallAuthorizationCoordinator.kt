@@ -71,7 +71,7 @@ class InstallAuthorizationCoordinator(
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 executor.execute {
                     val result = try {
-                        pinGuard.verify(pin)
+                        verifyPin(pin)
                     } finally {
                         pin.fill('\u0000')
                     }
