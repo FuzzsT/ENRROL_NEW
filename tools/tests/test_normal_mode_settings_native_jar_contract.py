@@ -15,14 +15,24 @@ manifest = (root / 'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
 
 for token in [
     'Require PIN before installing packages',
-    'installAuthorization.setEnabled(checked)',
+    'requestDisableWithPin',
     'Enable guarded native JAR calling',
+    'DpcUiPreferences.setNativeJarCallingEnabled',
+    'render()',
     'Open Native JAR Runner',
     'Open Update Center',
 ]:
     assert token in settings, token
 
-for token in ['fun isEnabled(', 'fun setEnabled(', 'if (!isEnabled()) return true']:
+for token in [
+    'fun isEnabled(',
+    'fun setEnabled(',
+    'fun requestDisableWithPin(',
+    'pinGuard.isConfigured()',
+    'pinGuard.verify(pin)',
+    'setEnabled(false)',
+    'if (!isEnabled()) return true',
+]:
     assert token in auth, token
 
 for token in ['nativeJarCallingEnabled', 'setNativeJarCallingEnabled', 'showAdvancedHome', 'setShowAdvancedHome']:
@@ -52,9 +62,10 @@ for token in [
     'Intent.ACTION_OPEN_DOCUMENT',
     'manager.privateJarDirectory()',
     'MAX_JAR_BYTES',
-    'selected.jar.part',
-    'temp.renameTo(target)',
-    'temp.delete()',
+    'importInProgress',
+    'if (importInProgress)',
+    'setSingleLine(false)',
+    'InputType.TYPE_TEXT_FLAG_MULTI_LINE',
     'Trusted SHA-256 from release/source (64 hex)',
     'trustedDigest != observedDigest',
     'expectedSha256 = trustedDigest',
@@ -71,6 +82,12 @@ for token in [
     'Discard cached candidate',
     'SelfUpdateUiStateStore',
     'SelfUpdateStore',
+    'SelfUpdateOperationCoordinator',
+    'operations.isBusy()',
+    'SelfUpdateStatusReceiver.ACTION_STATE_CHANGED',
+    'registerReceiver(stateChangedReceiver',
+    'unregisterReceiver(stateChangedReceiver)',
+    'candidate != null && !busy',
     'putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)',
 ]:
     assert token in updates, token
