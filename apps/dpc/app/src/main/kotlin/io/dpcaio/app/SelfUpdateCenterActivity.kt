@@ -74,11 +74,14 @@ class SelfUpdateCenterActivity : Activity() {
         body.addView(ModernUi.section(this, "Actions"))
         body.addView(
             ModernUi.card(this, emphasized = true).apply {
-                addView(ModernUi.action(this@SelfUpdateCenterActivity, "Open updater", primary = true) {
-                    startActivity(Intent(this@SelfUpdateCenterActivity, SelfUpdateActivity::class.java))
+                addView(ModernUi.action(this@SelfUpdateCenterActivity, "Check now", primary = true) {
+                    openUpdater(checkNow = true)
+                })
+                addView(ModernUi.action(this@SelfUpdateCenterActivity, "Open updater") {
+                    openUpdater(checkNow = false)
                 })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Retry / re-check") {
-                    startActivity(Intent(this@SelfUpdateCenterActivity, SelfUpdateActivity::class.java))
+                    openUpdater(checkNow = true)
                 })
                 addView(ModernUi.action(this@SelfUpdateCenterActivity, "Discard cached candidate", destructive = true) {
                     store.clearCandidate()
@@ -97,6 +100,14 @@ class SelfUpdateCenterActivity : Activity() {
             )
         )
         setContentView(ModernUi.scrollPage(this, body))
+    }
+
+    private fun openUpdater(checkNow: Boolean) {
+        startActivity(
+            Intent(this, SelfUpdateActivity::class.java).apply {
+                if (checkNow) putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)
+            }
+        )
     }
 
     private fun tone(state: SelfUpdateState): ModernUi.Tone = when (state) {
