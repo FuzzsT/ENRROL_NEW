@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.InputType
 import android.widget.EditText
 import android.widget.TextView
 import java.io.File
@@ -19,6 +20,7 @@ class NativeJarRunnerActivity : Activity() {
     private lateinit var output: TextView
     private var selectedJar: File? = null
     private var selectedSha256: String? = null
+    private var importInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,8 +67,13 @@ class NativeJarRunnerActivity : Activity() {
             ModernUi.card(this).apply {
                 trustedShaField = ModernUi.field(this@NativeJarRunnerActivity, "Trusted SHA-256 from release/source (64 hex)")
                 mainClassField = ModernUi.field(this@NativeJarRunnerActivity, "Main class, e.g. io.dpcaio.jar.DiagnosticsMain")
-                argsField = ModernUi.field(this@NativeJarRunnerActivity, "Arguments — one argument per line")
-                argsField.minLines = 3
+                argsField = ModernUi.field(this@NativeJarRunnerActivity, "Arguments — one argument per line").apply {
+                    setSingleLine(false)
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 3
+                    maxLines = 8
+                    isVerticalScrollBarEnabled = true
+                }
                 timeoutField = ModernUi.field(this@NativeJarRunnerActivity, "Timeout seconds (1-120)")
                 timeoutField.setText("30")
                 addView(trustedShaField)
@@ -89,6 +96,10 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun chooseJar() {
+        if (importInProgress) {
+            output.text = "A JAR import is already in progress"
+            return
+        }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
@@ -107,9 +118,14 @@ class NativeJarRunnerActivity : Activity() {
     }
 
     private fun importJar(uri: Uri) {
+        if (importInProgress) {
+            output.text = "A JAR import is already in progress"
+            return
+        }
+        importInProgress = true
         output.text = "Importing JAR…"
         Thread {
-            runCatching {
+            val result = runCatching {
                 val root = manager.privateJarDirectory()
                 val temp = File(root, "selected.jar.part")
                 val target = File(root, "selected.jar")
@@ -137,15 +153,17 @@ class NativeJarRunnerActivity : Activity() {
                     temp.delete()
                     throw error
                 }
-            }.onSuccess { (file, digest) ->
-                runOnUiThread {
+            }
+            runOnUiThread {
+                importInProgress = false
+                result.onSuccess { (file, digest) ->
                     selectedJar = file
                     selectedSha256 = digest
                     selectedJarText.text = "${file.name}\nObserved SHA-256: $digest"
                     output.text = "JAR imported. Compare the observed SHA-256 with a trusted release/source and enter that trusted value before running."
+                }.onFailure { error ->
+                    output.text = "Import failed: ${error.message ?: error.javaClass.simpleName}"
                 }
-            }.onFailure { error ->
-                runOnUiThread { output.text = "Import failed: ${error.message ?: error.javaClass.simpleName}" }
             }
         }.start()
     }
