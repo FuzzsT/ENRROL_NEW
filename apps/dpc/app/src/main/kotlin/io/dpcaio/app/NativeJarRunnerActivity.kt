@@ -14,6 +14,7 @@ class NativeJarRunnerActivity : Activity() {
     private lateinit var mainClassField: EditText
     private lateinit var argsField: EditText
     private lateinit var timeoutField: EditText
+    private lateinit var trustedShaField: EditText
     private lateinit var selectedJarText: TextView
     private lateinit var output: TextView
     private var selectedJar: File? = null
@@ -34,7 +35,7 @@ class NativeJarRunnerActivity : Activity() {
             ModernUi.hero(
                 this,
                 title = "Native JAR Runner",
-                subtitle = "Run allowlisted DPC-AIO JAR entry points through app_process without an arbitrary shell.",
+                subtitle = "Run prefix-restricted DPC-AIO JAR entry points through app_process with an independently pinned SHA-256 and no arbitrary shell.",
                 eyebrow = if (enabled) "Enabled" else "Disabled in Settings",
             )
         )
@@ -51,7 +52,7 @@ class NativeJarRunnerActivity : Activity() {
         body.addView(
             ModernUi.card(this).apply {
                 selectedJarText = TextView(this@NativeJarRunnerActivity).apply {
-                    text = selectedJar?.let { "${it.name}\nSHA-256: ${selectedSha256 ?: "calculating"}" } ?: "No JAR selected"
+                    text = selectedJar?.let { "${it.name}\nObserved SHA-256: ${selectedSha256 ?: "calculating"}" } ?: "No JAR selected"
                     setTextIsSelectable(true)
                 }
                 addView(selectedJarText)
@@ -62,11 +63,13 @@ class NativeJarRunnerActivity : Activity() {
         body.addView(ModernUi.section(this, "Entry point"))
         body.addView(
             ModernUi.card(this).apply {
+                trustedShaField = ModernUi.field(this@NativeJarRunnerActivity, "Trusted SHA-256 from release/source (64 hex)")
                 mainClassField = ModernUi.field(this@NativeJarRunnerActivity, "Main class, e.g. io.dpcaio.jar.DiagnosticsMain")
                 argsField = ModernUi.field(this@NativeJarRunnerActivity, "Arguments — one argument per line")
                 argsField.minLines = 3
                 timeoutField = ModernUi.field(this@NativeJarRunnerActivity, "Timeout seconds (1-120)")
                 timeoutField.setText("30")
+                addView(trustedShaField)
                 addView(mainClassField)
                 addView(argsField)
                 addView(timeoutField)
@@ -79,7 +82,7 @@ class NativeJarRunnerActivity : Activity() {
         )
 
         body.addView(ModernUi.section(this, "Result"))
-        output = ModernUi.outputCard(this, if (enabled) "Ready" else "Enable guarded native JAR calling in Settings first")
+        output = ModernUi.outputCard(this, if (enabled) "Ready — verify the displayed hash against a trusted release/source before running" else "Enable guarded native JAR calling in Settings first")
         output.setTextIsSelectable(true)
         body.addView(output)
         setContentView(ModernUi.scrollPage(this, body))
@@ -138,8 +141,8 @@ class NativeJarRunnerActivity : Activity() {
                 runOnUiThread {
                     selectedJar = file
                     selectedSha256 = digest
-                    selectedJarText.text = "${file.name}\nSHA-256: $digest"
-                    output.text = "JAR imported into private app storage"
+                    selectedJarText.text = "${file.name}\nObserved SHA-256: $digest"
+                    output.text = "JAR imported. Compare the observed SHA-256 with a trusted release/source and enter that trusted value before running."
                 }
             }.onFailure { error ->
                 runOnUiThread { output.text = "Import failed: ${error.message ?: error.javaClass.simpleName}" }
@@ -149,9 +152,18 @@ class NativeJarRunnerActivity : Activity() {
 
     private fun runJar() {
         val jar = selectedJar
-        val digest = selectedSha256
-        if (jar == null || digest == null) {
+        val observedDigest = selectedSha256
+        if (jar == null || observedDigest == null) {
             output.text = "Choose a JAR first"
+            return
+        }
+        val trustedDigest = trustedShaField.text.toString().trim().lowercase()
+        if (!SHA256.matches(trustedDigest)) {
+            output.text = "Enter a trusted SHA-256 (64 lowercase/uppercase hex characters) from an independent release/source"
+            return
+        }
+        if (trustedDigest != observedDigest) {
+            output.text = "SHA-256 mismatch — the selected JAR does not match the trusted digest"
             return
         }
         val mainClass = mainClassField.text.toString().trim()
@@ -164,7 +176,7 @@ class NativeJarRunnerActivity : Activity() {
                     jarFile = jar,
                     mainClass = mainClass,
                     arguments = arguments,
-                    expectedSha256 = digest,
+                    expectedSha256 = trustedDigest,
                     timeoutSeconds = timeout,
                 )
             )
@@ -195,5 +207,6 @@ class NativeJarRunnerActivity : Activity() {
     companion object {
         private const val REQUEST_JAR = 4107
         private const val MAX_JAR_BYTES = 64L * 1024L * 1024L
+        private val SHA256 = Regex("[0-9a-fA-F]{64}")
     }
 }
