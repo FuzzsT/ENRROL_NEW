@@ -2,6 +2,7 @@ package io.dpcaio.app
 
 import android.content.Context
 import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
@@ -56,15 +57,20 @@ class JarCallManager(private val context: Context) {
             return rejected("Cannot start app_process: ${error.message ?: error.javaClass.simpleName}")
         }
 
+        val stdoutCollector = StreamCollector(process.inputStream, "dpc-jar-stdout").also { it.start() }
+        val stderrCollector = StreamCollector(process.errorStream, "dpc-jar-stderr").also { it.start() }
         val finished = runCatching {
             process.waitFor(request.timeoutSeconds.coerceIn(1L, MAX_TIMEOUT_SECONDS), TimeUnit.SECONDS)
         }.getOrDefault(false)
-        if (!finished) process.destroyForcibly()
+        if (!finished) {
+            process.destroyForcibly()
+            runCatching { process.waitFor(STREAM_JOIN_MILLIS, TimeUnit.MILLISECONDS) }
+        }
+        stdoutCollector.join(STREAM_JOIN_MILLIS)
+        stderrCollector.join(STREAM_JOIN_MILLIS)
 
-        val stdout = runCatching { process.inputStream.bufferedReader().readText() }.getOrDefault("")
-            .take(MAX_OUTPUT_CHARS)
-        val stderr = runCatching { process.errorStream.bufferedReader().readText() }.getOrDefault("")
-            .take(MAX_OUTPUT_CHARS)
+        val stdout = stdoutCollector.text()
+        val stderr = stderrCollector.text()
         val exit = if (finished) runCatching { process.exitValue() }.getOrNull() else null
         return JarCallResult(
             started = true,
@@ -112,6 +118,33 @@ class JarCallManager(private val context: Context) {
         reason = reason,
     )
 
+    private class StreamCollector(
+        private val source: InputStream,
+        name: String,
+    ) : Thread(name) {
+        private val buffer = StringBuilder()
+
+        override fun run() {
+            runCatching {
+                source.bufferedReader().use { reader ->
+                    val chars = CharArray(STREAM_BUFFER_CHARS)
+                    while (true) {
+                        val count = reader.read(chars)
+                        if (count <= 0) break
+                        synchronized(buffer) {
+                            if (buffer.length < MAX_OUTPUT_CHARS) {
+                                val remaining = MAX_OUTPUT_CHARS - buffer.length
+                                buffer.append(chars, 0, minOf(count, remaining))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fun text(): String = synchronized(buffer) { buffer.toString() }
+    }
+
     companion object {
         private const val JAR_DIR = "native-jars"
         private const val ALLOWED_MAIN_CLASS_PREFIX = "io.dpcaio.jar."
@@ -119,6 +152,8 @@ class JarCallManager(private val context: Context) {
         private const val MAX_ARG_LENGTH = 4096
         private const val MAX_TIMEOUT_SECONDS = 120L
         private const val MAX_OUTPUT_CHARS = 128 * 1024
+        private const val STREAM_BUFFER_CHARS = 4096
+        private const val STREAM_JOIN_MILLIS = 1_000L
         private val MAIN_CLASS = Regex("[A-Za-z_][A-Za-z0-9_$.]{0,199}")
         private val SHA256 = Regex("[0-9a-f]{64}")
     }
