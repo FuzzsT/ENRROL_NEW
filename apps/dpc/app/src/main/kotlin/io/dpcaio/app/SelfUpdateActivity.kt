@@ -58,6 +58,7 @@ class SelfUpdateActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        launchActionConsumed = savedInstanceState?.getBoolean(STATE_LAUNCH_ACTION_CONSUMED, false) ?: false
         title = "DPC-AIO Self Update"
         selectedChannel = runCatching {
             UpdateChannel.valueOf(preferences.getString(KEY_CHANNEL, UpdateChannel.STABLE.name) ?: UpdateChannel.STABLE.name)
@@ -98,6 +99,11 @@ class SelfUpdateActivity : Activity() {
         render()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_LAUNCH_ACTION_CONSUMED, launchActionConsumed)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onStop() {
         if (registered) {
             runCatching { unregisterReceiver(stateChangedReceiver) }
@@ -109,7 +115,9 @@ class SelfUpdateActivity : Activity() {
     private fun consumeLaunchAction() {
         if (launchActionConsumed) return
         launchActionConsumed = true
-        if (intent?.getBooleanExtra(EXTRA_CHECK_NOW, false) == true) {
+        val shouldCheckNow = intent?.getBooleanExtra(EXTRA_CHECK_NOW, false) == true
+        intent?.removeExtra(EXTRA_CHECK_NOW)
+        if (shouldCheckNow) {
             checkNow()
         }
     }
@@ -573,6 +581,7 @@ class SelfUpdateActivity : Activity() {
 
     companion object {
         const val EXTRA_CHECK_NOW = "self_update_check_now"
+        private const val STATE_LAUNCH_ACTION_CONSUMED = "self_update_launch_action_consumed"
         private const val PREFS = "self_update_preferences"
         private const val KEY_CHANNEL = "channel"
         private const val KEY_POLICY = "install_policy"
