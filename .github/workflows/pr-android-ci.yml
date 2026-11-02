@@ -179,6 +179,26 @@ jobs:
           set -euo pipefail
           find apps/dpc/app/build/outputs/apk/enterprise/debug -type f -name '*.apk' -print -quit | grep -q .
 
+      - name: Package APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find apps/dpc/app/build/outputs/apk/enterprise/debug -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          mkdir -p dist
+          cp "$apk" dist/DPC-AIO-enterprise-debug.apk
+          sha256sum dist/DPC-AIO-enterprise-debug.apk > dist/DPC-AIO-enterprise-debug.apk.sha256
+          test -s dist/DPC-AIO-enterprise-debug.apk
+          test -s dist/DPC-AIO-enterprise-debug.apk.sha256
+
+      - name: Upload enterprise debug APK artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DPC-AIO-enterprise-debug-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
   verify:
     name: verify
     if: always()
