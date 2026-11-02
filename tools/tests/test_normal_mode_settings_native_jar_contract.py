@@ -10,6 +10,7 @@ native = (app / 'NativeSupportManager.kt').read_text()
 jar = (app / 'JarCallManager.kt').read_text()
 runner = (app / 'NativeJarRunnerActivity.kt').read_text()
 updates = (app / 'SelfUpdateCenterActivity.kt').read_text()
+updater = (app / 'SelfUpdateActivity.kt').read_text()
 manifest = (root / 'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
 
 for token in [
@@ -58,8 +59,17 @@ for token in [
     assert token in runner, token
 assert 'sh -c' not in runner and 'su -c' not in runner, 'runner must not expose arbitrary shell execution'
 
-for token in ['Retry / re-check', 'Discard cached candidate', 'SelfUpdateUiStateStore', 'SelfUpdateStore']:
+for token in [
+    'Check now',
+    'Retry / re-check',
+    'Discard cached candidate',
+    'SelfUpdateUiStateStore',
+    'SelfUpdateStore',
+    'putExtra(SelfUpdateActivity.EXTRA_CHECK_NOW, true)',
+]:
     assert token in updates, token
+for token in ['EXTRA_CHECK_NOW', 'consumeLaunchAction()', 'checkNow()']:
+    assert token in updater, token
 
 for activity in ['DpcSettingsActivity', 'SelfUpdateCenterActivity', 'NativeJarRunnerActivity']:
     assert f'.{activity}' in manifest, activity
