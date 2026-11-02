@@ -31,7 +31,8 @@ class AndroidPackageExporter(context: Context) {
         return when (plan.format) {
             PackageExportFormat.APK -> exportApk(plan, destinationUri)
             PackageExportFormat.APKS,
-            PackageExportFormat.XAPK -> exportArchive(plan, destinationUri)
+            PackageExportFormat.XAPK,
+            PackageExportFormat.AIO_BUNDLE -> exportArchive(plan, destinationUri)
         }
     }
 
@@ -70,13 +71,17 @@ class AndroidPackageExporter(context: Context) {
                     zip.closeEntry()
                 }
 
-                // APKS/XAPK metadata entries are deliberately generated, never copied from app-private data.
+                // Generated diagnostics are metadata only. They never copy another app's private data.
+                plan.generatedTextEntries.toSortedMap().forEach { (entryName, text) ->
+                    hashes[entryName] = writeGeneratedEntry(zip, entryName, text)
+                }
+
                 val manifestJson = buildManifestJson(plan, hashes)
-                writeGeneratedEntry(zip, "manifest.json", manifestJson)
+                writeGeneratedEntry(zip, plan.manifestEntryName, manifestJson)
                 val sums = hashes.entries.joinToString(separator = "\n", postfix = "\n") { (name, hash) ->
                     "$hash  $name"
                 }
-                writeGeneratedEntry(zip, "SHA256SUMS.txt", sums)
+                writeGeneratedEntry(zip, plan.checksumsEntryName, sums)
             }
         }
         return PackageExportResult(
@@ -88,15 +93,16 @@ class AndroidPackageExporter(context: Context) {
 
     private fun buildManifestJson(plan: PackageExportPlan, hashes: Map<String, String>): String {
         val entries = JSONArray()
-        plan.entries.forEach { entry ->
+        hashes.forEach { (name, hash) ->
             entries.put(
                 JSONObject()
-                    .put("name", entry.entryName)
-                    .put("sha256", hashes[entry.entryName])
+                    .put("name", name)
+                    .put("sha256", hash)
+                    .put("generated", name in plan.generatedTextEntries)
             )
         }
         return JSONObject()
-            .put("schemaVersion", 1)
+            .put("schemaVersion", 2)
             .put("format", plan.format.name)
             .put("packageName", plan.packageName)
             .put("versionName", plan.versionName ?: JSONObject.NULL)
@@ -106,11 +112,14 @@ class AndroidPackageExporter(context: Context) {
             .toString(2)
     }
 
-    private fun writeGeneratedEntry(zip: ZipOutputStream, entryName: String, text: String) {
+    private fun writeGeneratedEntry(zip: ZipOutputStream, entryName: String, text: String): String {
         PackageExportPlan.requireSafeEntryName(entryName)
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         zip.putNextEntry(ZipEntry(entryName))
-        text.byteInputStream(Charsets.UTF_8).use { input -> input.copyTo(zip) }
+        bytes.inputStream().use { input -> input.copyTo(zip) }
         zip.closeEntry()
+        return digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
     }
 
     private fun requireReadableFile(path: String): File {
