@@ -107,23 +107,33 @@ class NativeJarRunnerActivity : Activity() {
         output.text = "Importing JAR…"
         Thread {
             runCatching {
-                val target = File(manager.privateJarDirectory(), "selected.jar")
-                contentResolver.openInputStream(uri)?.use { input ->
-                    target.outputStream().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var total = 0L
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read <= 0) break
-                            total += read
-                            require(total <= MAX_JAR_BYTES) { "JAR exceeds 64 MB limit" }
-                            output.write(buffer, 0, read)
+                val root = manager.privateJarDirectory()
+                val temp = File(root, "selected.jar.part")
+                val target = File(root, "selected.jar")
+                temp.delete()
+                try {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        temp.outputStream().use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            var total = 0L
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read <= 0) break
+                                total += read
+                                require(total <= MAX_JAR_BYTES) { "JAR exceeds 64 MB limit" }
+                                output.write(buffer, 0, read)
+                            }
                         }
-                    }
-                } ?: error("Cannot open selected document")
-                require(target.length() > 0L) { "Selected JAR is empty" }
-                val digest = sha256(target)
-                target to digest
+                    } ?: error("Cannot open selected document")
+                    require(temp.length() > 0L) { "Selected JAR is empty" }
+                    val digest = sha256(temp)
+                    if (target.exists()) require(target.delete()) { "Cannot replace previous JAR" }
+                    require(temp.renameTo(target)) { "Cannot commit imported JAR" }
+                    target to digest
+                } catch (error: Throwable) {
+                    temp.delete()
+                    throw error
+                }
             }.onSuccess { (file, digest) ->
                 runOnUiThread {
                     selectedJar = file
