@@ -43,6 +43,7 @@ class SelfUpdateActivity : Activity() {
     private var message = "Ready"
     private var progressPercent: Int? = null
     private var registered = false
+    private var launchActionConsumed = false
 
     private val stateChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -72,6 +73,7 @@ class SelfUpdateActivity : Activity() {
         state = snapshot.state
         message = snapshot.message
         render()
+        consumeLaunchAction()
     }
 
     override fun onStart() {
@@ -102,6 +104,14 @@ class SelfUpdateActivity : Activity() {
             registered = false
         }
         super.onStop()
+    }
+
+    private fun consumeLaunchAction() {
+        if (launchActionConsumed) return
+        launchActionConsumed = true
+        if (intent?.getBooleanExtra(EXTRA_CHECK_NOW, false) == true) {
+            checkNow()
+        }
     }
 
     private fun render() {
@@ -562,6 +572,7 @@ class SelfUpdateActivity : Activity() {
     }
 
     companion object {
+        const val EXTRA_CHECK_NOW = "self_update_check_now"
         private const val PREFS = "self_update_preferences"
         private const val KEY_CHANNEL = "channel"
         private const val KEY_POLICY = "install_policy"
