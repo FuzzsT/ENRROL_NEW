@@ -9,6 +9,7 @@ auth = (app / 'InstallAuthorizationCoordinator.kt').read_text()
 native = (app / 'NativeSupportManager.kt').read_text()
 jar = (app / 'JarCallManager.kt').read_text()
 runner = (app / 'NativeJarRunnerActivity.kt').read_text()
+coordinator = (app / 'NativeJarOperationCoordinator.kt').read_text()
 updates = (app / 'SelfUpdateCenterActivity.kt').read_text()
 updater = (app / 'SelfUpdateActivity.kt').read_text()
 manifest = (root / 'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
@@ -52,10 +53,22 @@ for token in [
     'StreamCollector(process.inputStream',
     'StreamCollector(process.errorStream',
     'MAX_OUTPUT_CHARS',
+    'NativeJarOperationCoordinator.tryStartExecution()',
+    'NativeJarOperationCoordinator.finishExecution()',
 ]:
     assert token in jar, token
 assert 'Runtime.getRuntime().exec("' not in jar, 'jar caller must not build a shell command string'
 assert 'sh -c' not in jar and 'su -c' not in jar, 'jar caller must not route through an arbitrary shell'
+
+for token in [
+    'object NativeJarOperationCoordinator',
+    'tryStartImport',
+    'finishImport',
+    'tryStartExecution',
+    'finishExecution',
+    '@Synchronized',
+]:
+    assert token in coordinator, token
 
 for token in [
     'class NativeJarRunnerActivity',
@@ -67,6 +80,8 @@ for token in [
     'if (importInProgress || executionInProgress)',
     'executionInProgress = true',
     'executionInProgress = false',
+    'NativeJarOperationCoordinator.tryStartImport()',
+    'NativeJarOperationCoordinator.finishImport()',
     'setSingleLine(false)',
     'InputType.TYPE_TEXT_FLAG_MULTI_LINE',
     'Trusted SHA-256 from release/source (64 hex)',
