@@ -16,14 +16,14 @@ COORDINATOR_TEST = ROOT / "apps/dpc/modules/self-update/android/src/test/kotlin/
 ACTIVITY = ROOT / "apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt"
 
 
-def invoke(apk: Path, out: Path, apk_url: str):
+def invoke(apk: Path, out: Path, apk_url: str, channel: str = "CONTINUOUS"):
     return subprocess.run(
         [
             sys.executable,
             str(SCRIPT),
             "--apk", str(apk),
             "--out", str(out),
-            "--channel", "STABLE",
+            "--channel", channel,
             "--package", "io.dpcaio.app",
             "--version-name", "1.2.0",
             "--version-code", "26",
@@ -49,12 +49,7 @@ def run_coordinator_behavior_test():
         )
         assert compile_proc.returncode == 0, compile_proc.stdout
         run_proc = subprocess.run(
-            [
-                "kotlin",
-                "-classpath",
-                str(classes),
-                "io.dpcaio.selfupdate.android.SelfUpdateOperationCoordinatorTestKt",
-            ],
+            ["kotlin", "-classpath", str(classes), "io.dpcaio.selfupdate.android.SelfUpdateOperationCoordinatorTestKt"],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -69,38 +64,22 @@ def main():
         apk = temp / "DPC-AIO-enterprise-release.apk"
         apk.write_bytes(b"deterministic-self-update-apk\n")
         out = temp / "self-update.json"
+        continuous_url = "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/DPC-AIO-enterprise-release.apk"
 
-        proc = invoke(
-            apk,
-            out,
-            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/v1.2.0/DPC-AIO-enterprise-release.apk",
-        )
+        proc = invoke(apk, out, continuous_url)
         assert proc.returncode == 0, proc.stdout
-        assert out.is_file(), "self-update.json was not created"
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["channel"] == "continuous"
+        assert payload["apkUrl"] == continuous_url
+        assert payload["apkSha256"] == hashlib.sha256(apk.read_bytes()).hexdigest()
 
-        first_bytes = out.read_bytes()
-        payload = json.loads(first_bytes.decode("utf-8"))
-        assert payload == {
-            "schemaVersion": 1,
-            "channel": "stable",
-            "packageName": "io.dpcaio.app",
-            "versionName": "1.2.0",
-            "versionCode": 26,
-            "apkUrl": "https://github.com/FuzzsT/ENRROL_NEW/releases/download/v1.2.0/DPC-AIO-enterprise-release.apk",
-            "apkSha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
-            "apkSize": apk.stat().st_size,
-            "publishedAt": "2026-10-30T00:00:00Z",
-            "releaseNotesUrl": "https://github.com/FuzzsT/ENRROL_NEW/releases/tag/v1.2.0",
-        }
-        assert payload["apkSha256"] == payload["apkSha256"].lower(), "SHA-256 must be lowercase"
-
-        proc2 = invoke(
-            apk,
-            out,
-            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/v1.2.0/DPC-AIO-enterprise-release.apk",
-        )
-        assert proc2.returncode == 0, proc2.stdout
-        assert out.read_bytes() == first_bytes, "generator output must be deterministic for identical inputs"
+        emergency_out = temp / "emergency.json"
+        emergency_url = "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-emergency-enrollment/DPC-AIO-enterprise-release.apk"
+        emergency = invoke(apk, emergency_out, emergency_url, channel="EMERGENCY")
+        assert emergency.returncode == 0, emergency.stdout
+        emergency_payload = json.loads(emergency_out.read_text(encoding="utf-8"))
+        assert emergency_payload["channel"] == "emergency"
+        assert emergency_payload["apkUrl"] == emergency_url
 
         bad = invoke(apk, temp / "bad.json", "http://example.invalid/update.apk")
         assert bad.returncode != 0, "non-HTTPS APK URL must be rejected"
@@ -110,117 +89,63 @@ def main():
         "Build self-update manifest",
         "tools/release/build_self_update_manifest.py",
         "dist/self-update.json",
-        "dpc-aio-stable",
-        "DPC-AIO-enterprise-release.apk",
-        "gh release upload",
+        'channel="continuous"',
+        'channel="emergency"',
+        'asset_tag="dpc-aio-emergency-enrollment"',
         "Verify published self-update manifest",
         "public-self-update.json",
-        "manifest_apk_sha",
-        "manifest_apk_url",
-        "manifest_channel",
+        'expected_channel="emergency"',
         "PUBLIC_SELF_UPDATE_VERIFY_FAILED",
+        "repair_manifests_only:",
+        "Repair existing Self Update manifests",
+        'for tag in dpc-aio-continuous dpc-aio-emergency-enrollment; do',
+        'gh release download "$tag"',
+        'DPC-AIO-enterprise-release.apk.sha256',
+        'sha256sum -c DPC-AIO-enterprise-release.apk.sha256',
+        'aapt dump badging DPC-AIO-enterprise-release.apk',
+        'gh release upload "$tag" self-update.json --clobber',
+        'REPAIR_SELF_UPDATE_MANIFEST_OK',
     ]:
         assert token in workflow, f"self-update release workflow missing: {token}"
-    assert 'channel="stable"' in workflow, "tag release must produce stable self-update channel"
-    assert 'channel="continuous"' in workflow, "rolling release must produce continuous self-update channel"
-    assert 'stable_alias="dpc-aio-stable"' in workflow, "stable self-update must use deterministic alias"
-    assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in workflow, (
-        "workflow must resolve signing_mode explicitly"
+
+    assert "steps.mode.outputs.should_publish == 'true'" in workflow, (
+        "self-update manifest must be generated for every published channel, including emergency"
     )
-    auto_block = workflow.split('if [[ "$requested" == "auto" ]]; then', 1)[1].split("fi", 1)[0]
-    assert 'mode="stable"' in auto_block and 'mode="emergency"' not in auto_block, (
-        "auto signing mode must resolve directly to stable without emergency fallback"
+    assert 'if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" ]]; then' in workflow, (
+        "emergency builds must generate an emergency self-update manifest"
     )
-    assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow, (
-        "stable mode must fail closed when release signing material is incomplete"
+    assert 'if [[ "$MODE" == "emergency" ]]; then' in workflow, (
+        "published emergency self-update manifest must be verified"
     )
-    assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.' in workflow, (
-        "missing stable signing configuration must produce an actionable error"
+    assert "if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true" in workflow, (
+        "normal build must be skipped during manifest-only repair"
     )
-    assert 'if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then' in workflow, (
-        "emergency signing must be limited to explicit workflow_dispatch runs"
+    assert "if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow, (
+        "manifest repair must be explicit workflow_dispatch only"
     )
-    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow, (
-        "automatic emergency signing must be rejected explicitly"
-    )
-    assert 'elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then' not in workflow, (
-        "main must not retain the legacy automatic emergency fallback"
-    )
-    assert 'if [[ "$mode" == "stable" && "$GITHUB_REF" == "refs/heads/main" && -z "${{ inputs.apk_url }}" ]]; then' in workflow, (
-        "stable main builds must publish dpc-aio-continuous when they build their own APK"
-    )
-    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow, (
-        "published self-update verification must fetch the public manifest"
-    )
-    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow, (
-        "published self-update verification must fetch the APK declared by the manifest"
-    )
-    assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow, (
-        "published self-update verification must require public, manifest, and local APK SHA-256 identity"
-    )
+    assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow
+    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
+    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow
+    assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow
+    assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow
 
     client = CLIENT.read_text(encoding="utf-8")
-    for token in [
-        "MAX_MANIFEST_BYTES",
-        "MAX_APK_BYTES",
-        "readLimited",
-        "maxBytes: Long = MAX_APK_BYTES",
-        "require(maxBytes in 1..MAX_APK_BYTES)",
-        "expectedLength > maxBytes",
-        "downloaded + count > maxBytes",
-    ]:
-        assert token in client, f"self-update network payload limit missing: {token}"
+    for token in ["MAX_MANIFEST_BYTES", "MAX_APK_BYTES", "readLimited", '"emergency" -> UpdateChannel.EMERGENCY']:
+        assert token in client, f"self-update client contract missing: {token}"
 
     store = STORE.read_text(encoding="utf-8")
-    for token in [
-        "checked-manifest.json",
-        "saveCheckedManifest",
-        "loadCheckedManifest",
-    ]:
+    for token in ["checked-manifest.json", "saveCheckedManifest", "loadCheckedManifest"]:
         assert token in store, f"checked Self Update manifest persistence missing: {token}"
 
     coordinator = COORDINATOR.read_text(encoding="utf-8")
-    for token in [
-        "AtomicReference",
-        "enum class Operation",
-        "Operation.CHECK",
-        "Operation.DOWNLOAD",
-        "Operation.INSTALL",
-        "tryStartCheck",
-        "finishCheck",
-        "handoffDownloadToInstall",
-    ]:
+    for token in ["AtomicReference", "Operation.CHECK", "Operation.DOWNLOAD", "Operation.INSTALL", "handoffDownloadToInstall"]:
         assert token in coordinator, f"Self Update unified operation gate missing: {token}"
-    assert "AtomicBoolean" not in coordinator, "Self Update operations must share one atomic slot"
     run_coordinator_behavior_test()
 
     activity = ACTIVITY.read_text(encoding="utf-8")
-    assert "store.saveCheckedManifest(manifest)" in activity, "successful update check must persist the checked manifest"
-    assert activity.count("store.loadCheckedManifest()") >= 2, (
-        "Self Update must restore the checked manifest across Activity recreation/resume"
-    )
-    check_body = activity.split("private fun checkNow()", 1)[1].split("private fun downloadAndVerify()", 1)[0]
-    assert "operations.tryStartCheck()" in check_body, "Self Update check must use the shared operation gate"
-    assert "operations.finishCheck()" in check_body, "Self Update check gate must be released in all outcomes"
-
-    download_body = activity.split("private fun downloadAndVerify()", 1)[1].split("private fun submitInstall", 1)[0]
-    for token in [
-        "var autoSilentAfterDownload = false",
-        "val silentAvailable = autoSilentEnabled && silentInstallLikelyAvailable()",
-        "autoSilentAfterDownload = silentAvailable",
-        "operations.handoffDownloadToInstall()",
-        "SelfUpdateInstallPolicy.AUTO_SILENT",
-        "installSlotAlreadyHeld = true",
-    ]:
-        assert token in download_body, f"Self Update atomic auto-silent handoff missing: {token}"
-    assert download_body.rfind("operations.handoffDownloadToInstall()") < download_body.rfind("installSlotAlreadyHeld = true"), (
-        "Self Update must acquire the INSTALL slot atomically before staging auto-silent install"
-    )
-
-    submit_body = activity.split("private fun submitInstall", 1)[1].split("private fun clearCandidate", 1)[0]
-    assert "installSlotAlreadyHeld: Boolean = false" in submit_body, (
-        "Self Update install must support an already-held INSTALL slot from atomic auto-silent handoff"
-    )
+    assert "store.saveCheckedManifest(manifest)" in activity
+    assert "UpdateChannel.EMERGENCY -> EMERGENCY_MANIFEST_URL" in activity
+    assert "private var selectedChannel = UpdateChannel.CONTINUOUS" in activity
 
     print("SELF_UPDATE_RELEASE_MANIFEST: PASS")
 

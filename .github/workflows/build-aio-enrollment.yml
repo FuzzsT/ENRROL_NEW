@@ -26,6 +26,11 @@ on:
           - auto
           - stable
           - emergency
+      repair_manifests_only:
+        description: "Repair existing Self Update manifests only; do not rebuild or re-sign APKs"
+        required: false
+        default: false
+        type: boolean
       apk_url:
         description: "Optional public APK URL used by provisioning QR (stable manual runs only)"
         required: false
@@ -84,7 +89,173 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repair-self-update-manifests:
+    name: Repair existing Self Update manifests
+    if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Android SDK base tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools'
+
+      - name: Install APK metadata tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_CLI="$(command -v android)"
+          test -x "$ANDROID_CLI"
+          "$ANDROID_CLI" sdk install "build-tools/36.0.0"
+          aapt_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -x "$aapt_bin"
+
+      - name: Backfill and verify live manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair
+          aapt_bin="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -x "$aapt_bin"
+          export PATH="$(dirname "$aapt_bin"):$PATH"
+
+          for tag in dpc-aio-continuous dpc-aio-emergency-enrollment; do
+            dir="repair/$tag"
+            rm -rf "$dir"
+            mkdir -p "$dir"
+            (
+              cd "$dir"
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'DPC-AIO-enterprise-release.apk' \
+                --clobber
+
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'DPC-AIO-enterprise-release.apk.sha256' \
+                --clobber || true
+
+              gh release download "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern 'signing-mode.txt' \
+                --clobber || true
+
+              if [[ "$tag" == "dpc-aio-emergency-enrollment" ]]; then
+                signing_mode="$(tr -d '[:space:]' < signing-mode.txt 2>/dev/null || true)"
+                if [[ "$signing_mode" != "stable" ]]; then
+                  echo "REPAIR_SELF_UPDATE_EMERGENCY_SKIPPED_EPHEMERAL_SIGNER tag=$tag signing_mode=${signing_mode:-missing}"
+                  exit 0
+                fi
+              fi
+
+              asset_digest="$(
+                gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+                  --jq '.assets[] | select(.name=="DPC-AIO-enterprise-release.apk") | .digest' \
+                  | head -n1
+              )"
+              [[ "$asset_digest" == sha256:* ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_MISSING tag=$tag digest=$asset_digest" >&2
+                exit 1
+              }
+              expected_sha="${asset_digest#sha256:}"
+              expected_sha="$(printf '%s' "$expected_sha" | tr '[:upper:]' '[:lower:]')"
+              [[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_INVALID tag=$tag digest=$asset_digest" >&2
+                exit 1
+              }
+              actual_sha="$(sha256sum DPC-AIO-enterprise-release.apk | awk '{print $1}')"
+              [[ "$actual_sha" == "$expected_sha" ]] || {
+                echo "REPAIR_SELF_UPDATE_DIGEST_MISMATCH tag=$tag metadata=$expected_sha actual=$actual_sha" >&2
+                exit 1
+              }
+
+              if [[ -f DPC-AIO-enterprise-release.apk.sha256 ]]; then
+                sidecar_sha="$(awk 'NR==1 {print $1}' DPC-AIO-enterprise-release.apk.sha256 | tr '[:upper:]' '[:lower:]')"
+                [[ "$sidecar_sha" =~ ^[0-9a-f]{64}$ ]] || {
+                  echo "REPAIR_SELF_UPDATE_SIDECAR_INVALID tag=$tag sha=$sidecar_sha" >&2
+                  exit 1
+                }
+                [[ "$sidecar_sha" == "$expected_sha" ]] || {
+                  echo "REPAIR_SELF_UPDATE_SIDECAR_MISMATCH tag=$tag metadata=$expected_sha sidecar=$sidecar_sha" >&2
+                  exit 1
+                }
+                printf '%s  DPC-AIO-enterprise-release.apk\n' "$sidecar_sha" > DPC-AIO-enterprise-release.apk.sha256
+                sha256sum -c DPC-AIO-enterprise-release.apk.sha256
+              fi
+
+              package_line="$(aapt dump badging DPC-AIO-enterprise-release.apk | head -n1)"
+              package_name="$(printf '%s\n' "$package_line" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+              version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
+              version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+              [[ "$package_name" == "io.dpcaio.app" ]]
+              [[ "$version_code" =~ ^[0-9]+$ ]]
+              [[ -n "$version_name" ]]
+
+              if [[ "$tag" == "dpc-aio-continuous" ]]; then
+                channel="continuous"
+              else
+                channel="emergency"
+              fi
+
+              apk_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/DPC-AIO-enterprise-release.apk"
+              notes_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
+              published_at="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt')"
+              [[ -n "$published_at" && "$published_at" != "null" ]]
+
+              python3 "$GITHUB_WORKSPACE/tools/release/build_self_update_manifest.py" \
+                --apk DPC-AIO-enterprise-release.apk \
+                --out self-update.json \
+                --channel "$channel" \
+                --package "$package_name" \
+                --version-name "$version_name" \
+                --version-code "$version_code" \
+                --apk-url "$apk_url" \
+                --published-at "$published_at" \
+                --release-notes-url "$notes_url"
+
+              test -s self-update.json
+              gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+
+              public_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
+              curl -fL --retry 3 --retry-delay 3 "$public_manifest_url" -o public-self-update.json
+
+              TAG="$tag" CHANNEL="$channel" PACKAGE_NAME="$package_name" VERSION_CODE="$version_code" VERSION_NAME="$version_name" APK_URL="$apk_url" EXPECTED_SHA="$expected_sha" python3 - <<'PY'
+              import json
+              import os
+              from pathlib import Path
+
+              payload = json.loads(Path('public-self-update.json').read_text(encoding='utf-8'))
+              expected = {
+                  'channel': os.environ['CHANNEL'],
+                  'packageName': os.environ['PACKAGE_NAME'],
+                  'versionCode': int(os.environ['VERSION_CODE']),
+                  'versionName': os.environ['VERSION_NAME'],
+                  'apkUrl': os.environ['APK_URL'],
+                  'apkSha256': os.environ['EXPECTED_SHA'],
+              }
+              for key, value in expected.items():
+                  if payload.get(key) != value:
+                      raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field={key} expected={value!r} observed={payload.get(key)!r}')
+              if int(payload.get('apkSize', 0)) != Path('DPC-AIO-enterprise-release.apk').stat().st_size:
+                  raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field=apkSize')
+              PY
+
+              echo "REPAIR_SELF_UPDATE_MANIFEST_OK tag=$tag channel=$channel version=$version_name code=$version_code sha256=$expected_sha"
+            )
+          done
+
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -94,6 +265,8 @@ jobs:
       release_tag: ${{ steps.mode.outputs.release_tag }}
       artifact_name: ${{ steps.mode.outputs.artifact_name }}
       should_publish: ${{ steps.mode.outputs.should_publish }}
+      stable_signing_configured: ${{ steps.mode.outputs.stable_signing_configured }}
+      self_update_manifest: ${{ steps.self_update_manifest.outputs.available }}
 
     steps:
       - name: Checkout
@@ -168,6 +341,7 @@ jobs:
             echo "release_tag=$release_tag"
             echo "artifact_name=$artifact_name"
             echo "should_publish=$should_publish"
+            echo "stable_signing_configured=$STABLE_SIGNING_CONFIGURED"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -257,7 +431,7 @@ jobs:
           echo "Provisioning APK URL: $url"
 
       - name: Prepare stable signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable'
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
         env:
           KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
           STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
@@ -293,7 +467,7 @@ jobs:
           chmod 600 "$DPC_AIO_SIGNING_ENV"
 
       - name: Prepare emergency ephemeral signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'emergency'
+        if: env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -415,10 +589,19 @@ jobs:
           sha256sum dist/DPC-AIO-enterprise-release.apk > dist/DPC-AIO-enterprise-release.apk.sha256
 
       - name: Build self-update manifest
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable' && steps.mode.outputs.should_publish == 'true'
+        id: self_update_manifest
+        if: steps.mode.outputs.should_publish == 'true'
         shell: bash
         run: |
           set -euo pipefail
+          signing_mode="$(tr -d '[:space:]' < dist/signing-mode.txt)"
+          if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" && "$signing_mode" != "stable" ]]; then
+            rm -f dist/self-update.json
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "EMERGENCY_SELF_UPDATE_MANIFEST_SKIPPED_EPHEMERAL_SIGNER"
+            exit 0
+          fi
+
           apk="dist/DPC-AIO-enterprise-release.apk"
           test -s "$apk"
 
@@ -430,7 +613,10 @@ jobs:
           version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
           [[ -n "$package_name" && -n "$version_code" && -n "$version_name" ]]
 
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+          if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" ]]; then
+            channel="emergency"
+            asset_tag="dpc-aio-emergency-enrollment"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             channel="stable"
             asset_tag="dpc-aio-stable"
           else
@@ -453,6 +639,7 @@ jobs:
             --published-at "$published_at" \
             --release-notes-url "$notes_url"
           test -s dist/self-update.json
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Validate QR to exact APK binding
         shell: bash
@@ -577,13 +764,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
-            notes="Run-specific emergency DPC-AIO 1.1.4 enrollment build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so independent runs cannot update each other in place."
+            if [[ "$SELF_UPDATE_MANIFEST" == "true" ]]; then
+              notes="Emergency DPC-AIO 1.1.4 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
+            else
+              notes="Run-specific emergency DPC-AIO 1.1.4 recovery build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this release is fresh-install/recovery only and is not advertised through Self Update."
+            fi
             prerelease="--prerelease"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             title="$RELEASE_TAG"
@@ -675,14 +867,18 @@ jobs:
           echo "Published APK asset(s) are public and byte-identical to the QR-bound build."
 
       - name: Verify published self-update manifest
-        if: needs.build.outputs.mode == 'stable'
+        if: needs.build.outputs.should_publish == 'true' && needs.build.outputs.self_update_manifest == 'true'
         env:
+          MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+          if [[ "$MODE" == "emergency" ]]; then
+            manifest_tag="$RELEASE_TAG"
+            expected_channel="emergency"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             manifest_tag="dpc-aio-stable"
             expected_channel="stable"
           else
@@ -733,4 +929,4 @@ jobs:
             exit 1
           }
 
-          echo "Published self-update manifest and APK are public, consistent, and byte-identical to the local stable build."
+          echo "Published self-update manifest and APK are public, consistent, and byte-identical to the local build."

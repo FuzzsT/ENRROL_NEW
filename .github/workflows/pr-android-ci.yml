@@ -1,6 +1,9 @@
 name: Android CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -178,6 +181,32 @@ jobs:
         run: |
           set -euo pipefail
           find apps/dpc/app/build/outputs/apk/enterprise/debug -type f -name '*.apk' -print -quit | grep -q .
+
+      - name: Package APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find apps/dpc/app/build/outputs/apk/enterprise/debug -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          mkdir -p dist
+          cp "$apk" dist/DPC-AIO-enterprise-debug.apk
+          sha256sum dist/DPC-AIO-enterprise-debug.apk > dist/DPC-AIO-enterprise-debug.apk.sha256
+          cat > dist/CI-DEBUG-NOT-FOR-SELF-UPDATE.txt <<'EOF'
+          This artifact is signed with the ephemeral Android debug key created on the GitHub-hosted runner.
+          Its signing certificate can change between workflow runs, so Android cannot reliably install a later CI artifact as an update over an earlier CI artifact.
+          Use this artifact for CI/testing/fresh installs only. Use the stable/release signing path for an updateable normal build and Self Update continuity.
+          EOF
+          test -s dist/DPC-AIO-enterprise-debug.apk
+          test -s dist/DPC-AIO-enterprise-debug.apk.sha256
+          test -s dist/CI-DEBUG-NOT-FOR-SELF-UPDATE.txt
+
+      - name: Upload enterprise debug APK artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DPC-AIO-ci-debug-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
 
   verify:
     name: verify

@@ -3,6 +3,7 @@ package io.dpcaio.selfupdate
 enum class UpdateChannel {
     STABLE,
     CONTINUOUS,
+    EMERGENCY,
 }
 
 data class SelfUpdateManifest(

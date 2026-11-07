@@ -36,13 +36,14 @@ class SelfUpdateActivity : Activity() {
     private val preferences by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private val operations = SelfUpdateOperationCoordinator
 
-    private var selectedChannel = UpdateChannel.STABLE
+    private var selectedChannel = UpdateChannel.CONTINUOUS
     private var selectedPolicy = SelfUpdateInstallPolicy.SILENT_IF_ALLOWED
     private var currentManifest: SelfUpdateManifest? = null
     private var state = SelfUpdateState.IDLE
     private var message = "Ready"
     private var progressPercent: Int? = null
     private var registered = false
+    private var launchActionConsumed = false
 
     private val stateChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -57,10 +58,18 @@ class SelfUpdateActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        launchActionConsumed = savedInstanceState?.getBoolean(STATE_LAUNCH_ACTION_CONSUMED, false) ?: false
         title = "DPC-AIO Self Update"
-        selectedChannel = runCatching {
-            UpdateChannel.valueOf(preferences.getString(KEY_CHANNEL, UpdateChannel.STABLE.name) ?: UpdateChannel.STABLE.name)
-        }.getOrDefault(UpdateChannel.STABLE)
+        val restored = runCatching {
+            UpdateChannel.valueOf(
+                preferences.getString(KEY_CHANNEL, UpdateChannel.CONTINUOUS.name)
+                    ?: UpdateChannel.CONTINUOUS.name
+            )
+        }.getOrDefault(UpdateChannel.CONTINUOUS)
+        selectedChannel = if (restored == UpdateChannel.STABLE) UpdateChannel.CONTINUOUS else restored
+        if (restored != selectedChannel) {
+            preferences.edit().putString(KEY_CHANNEL, selectedChannel.name).apply()
+        }
         selectedPolicy = runCatching {
             SelfUpdateInstallPolicy.valueOf(
                 preferences.getString(KEY_POLICY, SelfUpdateInstallPolicy.SILENT_IF_ALLOWED.name)
@@ -72,6 +81,7 @@ class SelfUpdateActivity : Activity() {
         state = snapshot.state
         message = snapshot.message
         render()
+        consumeLaunchAction()
     }
 
     override fun onStart() {
@@ -96,12 +106,27 @@ class SelfUpdateActivity : Activity() {
         render()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_LAUNCH_ACTION_CONSUMED, launchActionConsumed)
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onStop() {
         if (registered) {
             runCatching { unregisterReceiver(stateChangedReceiver) }
             registered = false
         }
         super.onStop()
+    }
+
+    private fun consumeLaunchAction() {
+        if (launchActionConsumed) return
+        launchActionConsumed = true
+        val shouldCheckNow = intent?.getBooleanExtra(EXTRA_CHECK_NOW, false) == true
+        intent?.removeExtra(EXTRA_CHECK_NOW)
+        if (shouldCheckNow) {
+            checkNow()
+        }
     }
 
     private fun render() {
@@ -163,12 +188,12 @@ class SelfUpdateActivity : Activity() {
         body.addView(
             ModernUi.card(this).apply {
                 val row = LinearLayout(this@SelfUpdateActivity).apply { orientation = LinearLayout.HORIZONTAL }
-                UpdateChannel.entries.forEach { channel ->
+                listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY).forEach { channel ->
                     val pill = ModernUi.pill(
                         this@SelfUpdateActivity,
                         channel.name,
                         channel == selectedChannel,
-                        if (channel == UpdateChannel.STABLE) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
+                        if (channel == UpdateChannel.CONTINUOUS) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
                     ) {
                         if (channel != selectedChannel) {
                             store.clearCandidate()
@@ -186,6 +211,17 @@ class SelfUpdateActivity : Activity() {
                     )
                 }
                 addView(row)
+                if (selectedChannel == UpdateChannel.EMERGENCY) {
+                    addView(ModernUi.spacer(this@SelfUpdateActivity, 8))
+                    addView(
+                        ModernUi.statusCard(
+                            this@SelfUpdateActivity,
+                            "Emergency channel",
+                            "Recovery builds use run-specific signing. Package/signature verification remains mandatory, so an incompatible signer is rejected instead of bypassed.",
+                            ModernUi.Tone.WARNING,
+                        )
+                    )
+                }
             }
         )
 
@@ -287,19 +323,14 @@ class SelfUpdateActivity : Activity() {
         setState(SelfUpdateState.CHECKING, "Checking ${channel.name.lowercase(Locale.ROOT)} channel…")
         Thread {
             try {
-                val (effectiveChannel, manifest) = fetchManifestWithFallback(channel)
+                val manifest = client.fetchManifest(manifestUrl(channel))
                 val installed = installedVersion().second
-                val decision = planner.evaluate(packageName, installed, effectiveChannel, manifest)
+                val decision = planner.evaluate(packageName, installed, channel, manifest)
                 store.saveCheckedManifest(manifest)
                 runOnUiThread {
                     currentManifest = manifest
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
-                    val detail = if (effectiveChannel != channel) {
-                        "Stable channel unavailable; using continuous manifest • ${decision.reason.replace('_', ' ')}"
-                    } else {
-                        decision.reason.replace('_', ' ')
-                    }
-                    setState(decision.state, detail)
+                    setState(decision.state, decision.reason.replace('_', ' '))
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -535,24 +566,12 @@ class SelfUpdateActivity : Activity() {
     }
 
     private fun manifestAllowedForSelection(manifest: SelfUpdateManifest): Boolean =
-        manifest.channel == selectedChannel ||
-            (selectedChannel == UpdateChannel.STABLE && manifest.channel == UpdateChannel.CONTINUOUS)
-
-    private fun fetchManifestWithFallback(channel: UpdateChannel): Pair<UpdateChannel, SelfUpdateManifest> {
-        return try {
-            channel to client.fetchManifest(manifestUrl(channel))
-        } catch (error: SelfUpdateClient.SelfUpdateHttpException) {
-            if (channel == UpdateChannel.STABLE && error.statusCode == 404) {
-                UpdateChannel.CONTINUOUS to client.fetchManifest(CONTINUOUS_MANIFEST_URL)
-            } else {
-                throw error
-            }
-        }
-    }
+        manifest.channel == selectedChannel
 
     private fun manifestUrl(channel: UpdateChannel): String = when (channel) {
         UpdateChannel.STABLE -> STABLE_MANIFEST_URL
         UpdateChannel.CONTINUOUS -> CONTINUOUS_MANIFEST_URL
+        UpdateChannel.EMERGENCY -> EMERGENCY_MANIFEST_URL
     }
 
     private fun formatBytes(bytes: Long): String = when {
@@ -562,6 +581,8 @@ class SelfUpdateActivity : Activity() {
     }
 
     companion object {
+        const val EXTRA_CHECK_NOW = "self_update_check_now"
+        private const val STATE_LAUNCH_ACTION_CONSUMED = "self_update_launch_action_consumed"
         private const val PREFS = "self_update_preferences"
         private const val KEY_CHANNEL = "channel"
         private const val KEY_POLICY = "install_policy"
@@ -571,5 +592,7 @@ class SelfUpdateActivity : Activity() {
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-stable/self-update.json"
         private const val CONTINUOUS_MANIFEST_URL =
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/self-update.json"
+        private const val EMERGENCY_MANIFEST_URL =
+            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-emergency-enrollment/self-update.json"
     }
 }

@@ -2,7 +2,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[2]
 manifest=(root/'apps/dpc/app/src/main/AndroidManifest.xml').read_text()
 texts='\n'.join(p.read_text(errors='ignore') for p in (root/'apps/dpc/app/src/main/kotlin').rglob('*.kt'))
-for cls in ['AioDashboardActivity','ActivityExplorerActivity','NetworkControlActivity','ScenarioLabActivity','NfcLabActivity','KnoxZtManagerActivity']:
+for cls in ['AioDashboardActivity','ActivityExplorerActivity','NetworkControlActivity','ScenarioLabActivity','NfcLabActivity','KnoxZtManagerActivity','DpcSettingsActivity','SelfUpdateCenterActivity']:
     assert cls in texts, cls
     assert f'.{cls}' in manifest, cls
 assert manifest.count('android.intent.action.MAIN') == 1
@@ -11,7 +11,16 @@ for required in ['AndroidActivityInventory','ActivityLaunchCoordinator','Shizuku
 print('test_aio_dashboard_contract: PASS')
 
 dashboard=(root/'apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt').read_text()
-for token in ['EnterprisePolicyHubActivity', 'DpcDiagnosticsActivity', 'DpcUiPreferences.read', 'developerMode', 'Advanced / Lab']:
+for token in [
+    'EnterprisePolicyHubActivity',
+    'DpcDiagnosticsActivity',
+    'DpcUiPreferences.read',
+    'developerMode',
+    'showAdvancedHome',
+    'Start here',
+    'Update Center • check / verify / recover',
+    'Settings • PIN / interface / native support',
+]:
     assert token in dashboard, token
 scenario_pos=dashboard.index('Scenario Recorder / Replay')
 nfc_pos=dashboard.index('NFC Lab')
@@ -34,8 +43,6 @@ for token in [
 ]:
     assert token in ui, token
 
-# Android 15+ owns system-bar transparency under enforced edge-to-edge. Keep the
-# old color setters only in an explicitly legacy, locally suppressed path.
 assert 'Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM' in ui, 'system-bar color setters must be gated below API 35'
 assert 'private fun configureLegacySystemBarColors(activity: Activity)' in ui, 'legacy system-bar color helper missing'
 assert '@Suppress("DEPRECATION")\n    private fun configureLegacySystemBarColors' in ui, 'legacy bar-color deprecations must be locally suppressed'
@@ -51,9 +58,9 @@ assert 'window.statusBarColor = Color.TRANSPARENT' in legacy_body, 'legacy statu
 assert 'window.navigationBarColor = Color.TRANSPARENT' in legacy_body, 'legacy navigation-bar transparency must be preserved'
 
 for token in [
+    'addSection(body, "Start here")',
+    'addSection(body, "Device management")',
     'addSection(body, "Setup & enrollment")',
-    'addSection(body, "Management")',
-    'addSection(body, "Tools")',
     'ModernUi.hero',
     'ModernUi.page',
     'ModernUi.compactCard',
