@@ -23,6 +23,8 @@ for token in [
     "DPC-AIO-signing-keystore.enc",
     "openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000",
     "append_output mode \"password-release-keystore\"",
+    "DPC_AIO_REQUIRE_PERSISTED_SIGNER",
+    "PERSISTED_SIGNING_KEY_REQUIRED",
 ]:
     assert token in signer, f"signer persistence contract missing: {token}"
 
