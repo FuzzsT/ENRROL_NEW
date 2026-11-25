@@ -27,14 +27,14 @@ android {
         applicationId = "io.dpcaio.app"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 26
+        versionCode = 274
         providers.environmentVariable("DPC_AIO_CI_VERSION_CODE").orNull?.let { raw ->
             val parsed = raw.toIntOrNull()
                 ?: throw GradleException("Invalid DPC_AIO_CI_VERSION_CODE")
-            require(parsed in 26..2100000000) { "CI version code outside allowed range" }
+            require(parsed in 274..2100000000) { "CI version code outside allowed range" }
             versionCode = parsed
         }
-        versionName = "1.1.4"
+        versionName = "1.3.1"
         buildConfigField("String", "ENROLLMENT_SIGNING_PUBLIC_KEY", buildConfigString(enrollmentSigningPublicKey.get()))
         buildConfigField("String", "OFFLINE_SIGNING_PUBLIC_KEY", buildConfigString(offlineSigningPublicKey.get()))
         val v2Build = providers.environmentVariable("DPC_AIO_CONTINUOUS_V2_BUILD").orNull == "true"

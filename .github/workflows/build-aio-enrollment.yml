@@ -665,7 +665,7 @@ jobs:
           set +a
           DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY="$(python3 tools/release/resolve_enrollment_public_key.py)"
           export DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY
-          export DPC_AIO_CI_VERSION_CODE=$((26 + GITHUB_RUN_NUMBER))
+          export DPC_AIO_CI_VERSION_CODE=$((274 + GITHUB_RUN_NUMBER))
           if [[ "$DPC_AIO_PIPELINE_MODE" == "continuous-v2" ]]; then
             export DPC_AIO_CONTINUOUS_V2_BUILD=true
           fi
@@ -737,7 +737,7 @@ jobs:
           version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
           version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
           [[ -n "$package_name" && -n "$version_code" && -n "$version_name" ]]
-          expected_code=$((26 + GITHUB_RUN_NUMBER))
+          expected_code=$((274 + GITHUB_RUN_NUMBER))
           [[ "$version_code" == "$expected_code" ]] || {
             echo "CI_VERSION_CODE_MISMATCH expected=$expected_code observed=$version_code" >&2
             exit 1
@@ -829,7 +829,7 @@ jobs:
             python3 tools/runtime/android_device_owner_smoke.py
             --apk dist/DPC-AIO-enterprise-release.apk
             --out dist/android-runtime-smoke.json
-            --expected-version 1.1.4
+            --expected-version 1.3.1
 
       - name: Classify runtime smoke failure
         if: steps.runtime_smoke_primary.outcome == 'failure'
@@ -854,15 +854,15 @@ jobs:
             python3 tools/runtime/android_device_owner_smoke.py
             --apk dist/DPC-AIO-enterprise-release.apk
             --out dist/android-runtime-smoke.json
-            --expected-version 1.1.4
+            --expected-version 1.3.1
 
       - name: Build QR release bundle
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/release/build_qr_release_bundle.py --dist dist --version 1.1.4 --apk-url "$DPC_AIO_PROVISIONING_APK_URL"
-          test -f dist/DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip
-          test -f dist/DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip.sha256
+          python3 tools/release/build_qr_release_bundle.py --dist dist --version 1.3.1 --apk-url "$DPC_AIO_PROVISIONING_APK_URL"
+          test -f dist/DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip
+          test -f dist/DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip.sha256
           test -f dist/QR-README.md
           test -f dist/RELEASE-INDEX.json
           test -f dist/SHA256SUMS.txt
@@ -1010,14 +1010,14 @@ jobs:
           elif [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
             if [[ "$SELF_UPDATE_MANIFEST" == "true" ]]; then
-              notes="Emergency DPC-AIO 1.1.4 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
+              notes="Emergency DPC-AIO 1.3.1 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
             else
-              notes="Run-specific emergency DPC-AIO 1.1.4 recovery build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this release is fresh-install/recovery only and is not advertised through Self Update."
+              notes="Run-specific emergency DPC-AIO 1.3.1 recovery build from commit $GITHUB_SHA. APK and QRs are verified against each other. The signer is ephemeral, so this release is fresh-install/recovery only and is not advertised through Self Update."
             fi
             prerelease="--prerelease"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             title="$RELEASE_TAG"
-            notes="DPC-AIO verified stable-signing release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip."
+            notes="DPC-AIO verified stable-signing release from commit $GITHUB_SHA. Includes Work Profile, Device Owner and compatibility QR assets plus DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip."
             prerelease=""
           else
             title="DPC-AIO Continuous Enrollment"
@@ -1026,7 +1026,7 @@ jobs:
             else
               signing_note="Signed by the configured stable repository release key."
             fi
-            notes="Update-stable DPC-AIO 1.1.4 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other. Signing mode: ${SIGNING_MODE:-stable-secrets}. $signing_note"
+            notes="Update-stable DPC-AIO 1.3.1 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other. Signing mode: ${SIGNING_MODE:-stable-secrets}. $signing_note"
             prerelease="--prerelease"
           fi
 
@@ -1047,7 +1047,7 @@ jobs:
           fi
 
           if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-            current_bundle="DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip"
+            current_bundle="DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip"
             current_bundle_hash="${current_bundle}.sha256"
             while IFS= read -r asset; do
               [[ -n "$asset" ]] || continue

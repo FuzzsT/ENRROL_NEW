@@ -1,4 +1,11 @@
-# DPC-AIO 1.1.4 — Enterprise + Samsung OEM AIO
+# DPC-AIO 1.3.1 — Enterprise + Samsung OEM AIO
+
+## 1.3.1 NEXT
+
+- Recovery-only Emergency manifest absence is shown explicitly instead of a generic update error.
+- Samsung Settings Editor refreshes observed values and reports Android write/readback failures.
+- Release versionCode base 274; CI release codes increase with the workflow run number. Existing signer continuity and publication gates remain mandatory.
+- Target QR Release Bundle: `DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip`. Publication and device verification are pending.
 
 Android Enterprise DPC workspace with production QR enrollment, protected enterprise operations, deterministic capability routing and explicit verification evidence.
 

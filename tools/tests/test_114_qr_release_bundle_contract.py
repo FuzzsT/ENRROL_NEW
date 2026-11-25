@@ -17,7 +17,7 @@ def read(path):
     return p.read_text('utf-8', errors='ignore')
 
 app=read('apps/dpc/app/build.gradle.kts')
-if 'versionName = "1.1.4"' not in app: errors.append('versionName 1.1.4 missing')
+if 'versionName = "1.3.1"' not in app: errors.append('versionName 1.3.1 missing')
 m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 25: errors.append('versionCode >=25 required')
 
@@ -26,8 +26,8 @@ pr_workflow=read('.github/workflows/pr-android-ci.yml')
 for token in [
     'Build QR release bundle',
     'tools/release/build_qr_release_bundle.py',
-    'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip',
-    'DPC-AIO-1.1.4-QR-RELEASE-BUNDLE.zip.sha256',
+    'DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip',
+    'DPC-AIO-1.3.1-QR-RELEASE-BUNDLE.zip.sha256',
     'QR-README.md',
     'RELEASE-INDEX.json',
     'SHA256SUMS.txt',
@@ -166,8 +166,8 @@ for token in ['REQUIRED_PRIMARY_ASSETS','QR-README.md','RELEASE-INDEX.json','SHA
     if token not in script: errors.append(f'bundle builder missing {token}')
 
 readme=read('README.md')
-if 'DPC-AIO 1.1.4' not in readme or 'QR Release Bundle' not in readme:
-    errors.append('README 1.1.4 QR release highlights missing')
+if 'DPC-AIO 1.3.1' not in readme or 'QR Release Bundle' not in readme:
+    errors.append('README 1.3.1 QR release highlights missing')
 
 report=read('RELEASE-VERIFICATION.json')
 try:
