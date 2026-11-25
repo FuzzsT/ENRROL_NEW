@@ -62,5 +62,36 @@ class V2PreflightTest(unittest.TestCase):
         self.invoke({'DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256': 'E7873449EDF167F6D6DEA07FB27567834DC455222C66B09C77EDB92E579F4AD4'}, 'CONTINUOUS_V2_LEGACY_CERT_REJECTED')
 
 
+
+class V2BuildWiringTest(unittest.TestCase):
+    def test_build_only_route(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/build-aio-enrollment.yml').read_text()
+        block = workflow.split('if [[ "$mode" == "continuous-v2" ]]; then', 1)[1].split('elif', 1)[0]
+        self.assertIn('release_tag="dpc-aio-continuous-v2"', block)
+        self.assertIn('should_publish="false"', block)
+        self.assertIn('DPC-AIO-continuous-v2-verified-build-only', block)
+        self.assertIn("inputs.signing_mode != 'continuous-v2'", workflow.split('  build:', 1)[0])
+        self.assertIn('HAS_V2_REPAIR_REQUEST', workflow)
+        signer = workflow.split('      - name: Prepare Continuous v2 signer', 1)[1].split('      - name: Prepare stable signer', 1)[0]
+        self.assertIn("env.DPC_AIO_PIPELINE_MODE == 'continuous-v2'", signer)
+        self.assertIn('check_continuous_v2_preflight.py', signer)
+        self.assertIn('DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "true"', signer)
+        self.assertIn('DPC_AIO_MANUAL_SIGNING_PASSWORD: ""', signer)
+        self.assertIn('DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL: ""', signer)
+        self.assertNotIn('secrets.DPC_AIO_RELEASE_', signer)
+        self.assertIn('channel="continuous-v2"', workflow)
+        self.assertIn('asset_tag="dpc-aio-continuous-v2"', workflow)
+        self.assertIn("needs.build.outputs.should_publish == 'true'", workflow.split('  publish:', 1)[1])
+
+    def test_v2_default_is_build_specific(self):
+        root = Path(__file__).resolve().parents[2]
+        gradle = (root / 'apps/dpc/app/build.gradle.kts').read_text()
+        activity = (root / 'apps/dpc/app/src/main/kotlin/io/dpcaio/app/SelfUpdateActivity.kt').read_text()
+        self.assertIn('environmentVariable("DPC_AIO_CONTINUOUS_V2_BUILD")', gradle)
+        self.assertIn('if (BuildConfig.CONTINUOUS_V2_BUILD) UpdateChannel.CONTINUOUS_V2 else UpdateChannel.CONTINUOUS', activity)
+        self.assertIn('preferences.getString(KEY_CHANNEL, defaultChannel.name)', activity)
+
+
 if __name__ == '__main__':
     unittest.main()
