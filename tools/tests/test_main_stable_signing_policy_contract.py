@@ -66,4 +66,14 @@ assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' not in normal_ci, 'ep
 assert 'actions/upload-artifact@' in normal_ci, 'main CI must upload the APK artifact'
 assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in normal_ci, 'CI/debug artifact must not require stable release signing secrets'
 
+signer = (ROOT / 'tools/release/prepare_enterprise_signing.sh').read_text(encoding='utf-8')
+for marker in [
+    'PERSISTED_SIGNING_ASSET_FORMAT_INVALID',
+    'PERSISTED_SIGNING_DECRYPT_TOOL_FAILED',
+    'PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH',
+    '-md sha256',
+    '53616c7465645f5f',
+]:
+    assert marker in signer, f'persisted signer diagnostic missing: {marker}'
+
 print('MAIN_STABLE_SIGNING_POLICY_CONTRACT: PASS')
