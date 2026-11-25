@@ -127,7 +127,8 @@ def main():
         "main pushes must be able to backfill a missing rolling self-update manifest"
     )
     assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow
-    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
+    assert 'Emergency signing is opt-in only unless auto fallback is required on main.' in workflow
+    assert 'AUTO_EMERGENCY_FALLBACK' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow
     repair_block = workflow.split("repair-self-update-manifests:", 1)[1].split("\n  build:", 1)[0]
