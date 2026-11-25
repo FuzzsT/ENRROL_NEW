@@ -200,9 +200,26 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
 
                 val outDir = layout.buildDirectory.dir("outputs/provisioning/$flavor/$buildType").get().asFile
                 outDir.mkdirs()
-                val configuredMode = provisioningMode.get()
+                val configuredMode = provisioningMode.get().trim().ifEmpty { "work-profile" }
+                val offlineMode = provisioningOfflineMode.get().trim().ifEmpty { "ONLINE" }
+                val offlineBundleId = provisioningOfflineBundleId.get().takeIf { it.isNotBlank() }
+                val endpoint = enrollmentEndpoint.orNull?.trim()?.takeIf { it.isNotEmpty() }
+                fun invalidConfig(reason: String): Nothing =
+                    throw GradleException("PROVISIONING_QR_CONFIG_INVALID: $reason")
                 if (configuredMode !in setOf("auto", "work-profile", "fully-managed")) {
-                    throw GradleException("Unsupported DPC_AIO_PROVISIONING_MODE: $configuredMode")
+                    invalidConfig("DPC_AIO_PROVISIONING_MODE must be auto, work-profile or fully-managed")
+                }
+                if (offlineMode !in setOf("ONLINE", "ONLINE_PREFERRED", "FULL_OFFLINE", "OFFLINE_THEN_SYNC")) {
+                    invalidConfig("DPC_AIO_ENROLLMENT_OFFLINE_MODE is not supported")
+                }
+                if (offlineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC") && offlineBundleId == null) {
+                    invalidConfig("DPC_AIO_OFFLINE_BUNDLE_ID is required for FULL_OFFLINE/OFFLINE_THEN_SYNC")
+                }
+                if (!apkUrl.trim().startsWith("https://", ignoreCase = true)) {
+                    invalidConfig("DPC_AIO_PROVISIONING_APK_URL must use HTTPS")
+                }
+                if (endpoint != null && !endpoint.startsWith("https://", ignoreCase = true)) {
+                    invalidConfig("DPC_AIO_ENROLLMENT_ENDPOINT must use HTTPS")
                 }
 
                 fun generate(mode: String, targetDir: java.io.File) {
@@ -211,24 +228,43 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                         "python3",
                         rootProject.file("tools/provisioning/generate_provisioning.py").absolutePath,
                         "--apk", apk.absolutePath,
-                        "--apk-url", apkUrl,
+                        "--apk-url", apkUrl.trim(),
                         "--out-dir", targetDir.absolutePath,
                         "--checksum-mode", "auto",
-                        "--policy-profile", provisioningPolicyProfile.get(),
+                        "--policy-profile=${provisioningPolicyProfile.get().ifBlank { "default" }}",
                         "--provisioning-mode", mode,
-                        "--offline-mode", provisioningOfflineMode.get(),
+                        "--offline-mode", offlineMode,
                     )
                     provisioningEnrollmentToken.orNull?.takeIf { it.isNotBlank() }?.let {
-                        args += listOf("--enrollment-token", it)
+                        args += "--enrollment-token=$it"
                     }
-                    enrollmentEndpoint.orNull?.takeIf { it.isNotBlank() }?.let {
-                        args += listOf("--enrollment-endpoint", it, "--enrollment-source", "qr")
+                    endpoint?.let {
+                        args += listOf("--enrollment-endpoint=$it", "--enrollment-source", "qr")
                     }
-                    provisioningOfflineBundleId.get().takeIf { it.isNotBlank() }?.let { args += listOf("--offline-bundle-id", it) }
+                    offlineBundleId?.let { args += "--offline-bundle-id=$it" }
                     if (provisioningAllowOffline.get()) {
                         args += "--allow-offline"
                     }
-                    providers.exec { commandLine(args) }.result.get().assertNormalExitValue()
+                    val execution = providers.exec {
+                        commandLine(args)
+                        isIgnoreExitValue = true
+                    }
+                    val exitCode = execution.result.get().exitValue
+                    if (exitCode != 0) {
+                        // Do not echo raw subprocess output: argparse can include token values.
+                        val stderr = execution.standardError.asText.get()
+                        val reason = when {
+                            stderr.contains("APK not found:") -> "APK file unavailable"
+                            stderr.contains("qrcode[pil] is required") -> "Missing Python QR dependencies"
+                            stderr.contains("DataOverflowError") -> "QR payload exceeds capacity"
+                            stderr.contains("expected one argument") -> "Missing CLI option value"
+                            stderr.contains("invalid choice:") -> "Unsupported CLI option value"
+                            stderr.contains("--offline-bundle-id is required") -> "Missing offline bundle ID"
+                            stderr.contains("must use https://") -> "HTTPS URL required"
+                            else -> "Generator rejected input or could not write outputs"
+                        }
+                        throw GradleException("PROVISIONING_QR_GENERATOR_FAILED: mode=$mode exit=$exitCode; $reason")
+                    }
                 }
 
                 generate(configuredMode, outDir)
