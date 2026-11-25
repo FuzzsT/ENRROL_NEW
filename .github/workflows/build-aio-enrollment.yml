@@ -237,26 +237,16 @@ jobs:
               public_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
               curl -fL --retry 3 --retry-delay 3 "$public_manifest_url" -o public-self-update.json
 
-              TAG="$tag" CHANNEL="$channel" PACKAGE_NAME="$package_name" VERSION_CODE="$version_code" VERSION_NAME="$version_name" APK_URL="$apk_url" EXPECTED_SHA="$expected_sha" python3 - <<'PY'
-              import json
-              import os
-              from pathlib import Path
-
-              payload = json.loads(Path('public-self-update.json').read_text(encoding='utf-8'))
-              expected = {
-                  'channel': os.environ['CHANNEL'],
-                  'packageName': os.environ['PACKAGE_NAME'],
-                  'versionCode': int(os.environ['VERSION_CODE']),
-                  'versionName': os.environ['VERSION_NAME'],
-                  'apkUrl': os.environ['APK_URL'],
-                  'apkSha256': os.environ['EXPECTED_SHA'],
-              }
-              for key, value in expected.items():
-                  if payload.get(key) != value:
-                      raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field={key} expected={value!r} observed={payload.get(key)!r}')
-              if int(payload.get('apkSize', 0)) != Path('DPC-AIO-enterprise-release.apk').stat().st_size:
-                  raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field=apkSize')
-              PY
+              python3 "$GITHUB_WORKSPACE/tools/release/verify_self_update_manifest.py" \
+                --manifest public-self-update.json \
+                --apk DPC-AIO-enterprise-release.apk \
+                --tag "$tag" \
+                --channel "$channel" \
+                --package "$package_name" \
+                --version-code "$version_code" \
+                --version-name "$version_name" \
+                --apk-url "$apk_url" \
+                --apk-sha256 "$expected_sha"
 
               echo "REPAIR_SELF_UPDATE_MANIFEST_OK tag=$tag channel=$channel version=$version_name code=$version_code sha256=$expected_sha"
             )
