@@ -231,6 +231,7 @@ python3 "$ROOT/tools/tests/test_knox_lab_token_bundle.py"
 python3 "$ROOT/tools/tests/test_dual_app_workspace_contract.py"
 python3 "$ROOT/tools/tests/test_self_update_core_contract.py"
 python3 "$ROOT/tools/tests/test_self_update_release_manifest.py"
+python3 "$ROOT/tools/tests/test_continuous_v2_manifest_contract.py"
 node --test "$ROOT/services/provisioning/test"/*.test.mjs
 python3 "$ROOT/tools/tests/test_release_gate.py"
 python3 "$ROOT/tools/tests/test_no_policy_gates.py"

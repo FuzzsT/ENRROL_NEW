@@ -19,8 +19,8 @@ def https_url(value: str, field: str) -> str:
 
 def normalize_channel(value: str) -> str:
     channel = value.strip().lower()
-    if channel not in {"stable", "continuous", "emergency"}:
-        raise ValueError("channel must be stable, continuous, or emergency")
+    if channel not in {"stable", "continuous", "emergency", "continuous-v2"}:
+        raise ValueError("channel must be stable, continuous, emergency, or continuous-v2")
     return channel
 
 
@@ -43,13 +43,21 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     if args.version_code <= 0:
         raise ValueError("version-code must be positive")
 
+    channel = normalize_channel(args.channel)
+    apk_url = https_url(args.apk_url, "apk-url")
+    if channel == "continuous-v2" and apk_url != (
+        "https://github.com/FuzzsT/ENRROL_NEW/releases/download/"
+        "dpc-aio-continuous-v2/DPC-AIO-enterprise-release.apk"
+    ):
+        raise ValueError("CONTINUOUS_V2_APK_URL_MISMATCH")
+
     return {
         "schemaVersion": 1,
-        "channel": normalize_channel(args.channel),
+        "channel": channel,
         "packageName": args.package.strip(),
         "versionName": args.version_name.strip(),
         "versionCode": args.version_code,
-        "apkUrl": https_url(args.apk_url, "apk-url"),
+        "apkUrl": apk_url,
         "apkSha256": file_sha256(apk),
         "apkSize": apk.stat().st_size,
         "publishedAt": args.published_at.strip(),
