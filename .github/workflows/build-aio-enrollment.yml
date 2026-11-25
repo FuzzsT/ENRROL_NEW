@@ -26,6 +26,10 @@ on:
           - auto
           - stable
           - emergency
+      release_signing_password:
+        description: "Optional password for the persisted encrypted continuous-release keystore (min. 12 chars). Reuse the same password as earlier Zero-Settings runs."
+        required: false
+        type: string
       repair_manifests_only:
         description: "Repair existing Self Update manifests only; do not rebuild or re-sign APKs"
         required: false
@@ -266,6 +270,7 @@ jobs:
       artifact_name: ${{ steps.mode.outputs.artifact_name }}
       should_publish: ${{ steps.mode.outputs.should_publish }}
       stable_signing_configured: ${{ steps.mode.outputs.stable_signing_configured }}
+      signing_mode: ${{ steps.signing.outputs.mode }}
       self_update_manifest: ${{ steps.self_update_manifest.outputs.available }}
 
     steps:
@@ -281,6 +286,7 @@ jobs:
           HAS_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' }}
           HAS_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' }}
           STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
+          HAS_MANUAL_SIGNING_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing_password != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -310,9 +316,14 @@ jobs:
           fi
 
           if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
-            echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
-            echo "Missing stable signing configuration: ${missing[*]}" >&2
-            exit 1
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "$HAS_MANUAL_SIGNING_PASSWORD" == "true" ]]; then
+              echo "PASSWORD_RELEASE_KEYSTORE: stable repository secrets are absent; using the persisted password-backed continuous-release signer."
+            else
+              echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
+              echo "Missing stable signing configuration: ${missing[*]}" >&2
+              echo "For the existing dpc-aio-continuous channel, run workflow_dispatch and provide release_signing_password to reuse DPC-AIO-signing-keystore.enc." >&2
+              exit 1
+            fi
           fi
 
           if [[ "$mode" == "emergency" ]]; then
@@ -428,43 +439,45 @@ jobs:
             url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
           fi
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
+          echo "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-continuous/DPC-AIO-signing-keystore.enc" >> "$GITHUB_ENV"
           echo "Provisioning APK URL: $url"
 
-      - name: Prepare stable signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
+      - name: Mask manual release password
+        if: github.event_name == 'workflow_dispatch' && inputs.release_signing_password != ''
         env:
-          KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
-          EXPECTED_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          RELEASE_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD EXPECTED_CERT; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "STABLE_SIGNING_KEY_REQUIRED: $name is not configured" >&2
-              exit 1
-            fi
-          done
+          if (( ${#RELEASE_SIGNING_PASSWORD} < 12 )); then
+            echo "release_signing_password must contain at least 12 characters" >&2
+            exit 2
+          fi
+          printf '::add-mask::%s\n' "$RELEASE_SIGNING_PASSWORD"
 
-          echo "::add-mask::$STORE_PASSWORD"
-          echo "::add-mask::$KEY_PASSWORD"
-
-          keystore="$RUNNER_TEMP/dpc-aio-enterprise-release.jks"
-          umask 077
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
-          test -s "$keystore"
-
-          {
-            printf 'DPC_AIO_RELEASE_KEYSTORE_PATH=%q\n' "$keystore"
-            printf 'DPC_AIO_RELEASE_STORE_PASSWORD=%q\n' "$STORE_PASSWORD"
-            printf 'DPC_AIO_RELEASE_KEY_ALIAS=%q\n' "$KEY_ALIAS"
-            printf 'DPC_AIO_RELEASE_KEY_PASSWORD=%q\n' "$KEY_PASSWORD"
-            printf 'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=%q\n' "$EXPECTED_CERT"
-            printf 'DPC_AIO_SIGNING_MODE=%q\n' 'stable'
-          } > "$DPC_AIO_SIGNING_ENV"
-          chmod 600 "$DPC_AIO_SIGNING_ENV"
+      - name: Prepare stable signer
+        id: signing
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
+        env:
+          DPC_AIO_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
+          DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
+          DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
+          DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
+          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.mode.outputs.stable_signing_configured }}" == "true" ]]; then
+            for name in DPC_AIO_RELEASE_KEYSTORE_B64 DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256; do
+              if [[ -z "${!name:-}" ]]; then
+                echo "STABLE_SIGNING_KEY_REQUIRED: $name is not configured" >&2
+                exit 1
+              fi
+            done
+          fi
+          bash tools/release/prepare_enterprise_signing.sh
 
       - name: Prepare emergency ephemeral signer
         if: env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured != 'true'
@@ -530,6 +543,7 @@ jobs:
           python3 tools/tests/test_release_secret_scan.py
           python3 tools/tests/test_self_update_release_manifest.py
           python3 tools/tests/test_main_stable_signing_policy_contract.py
+          python3 tools/tests/test_continuous_password_signer_contract.py
 
       - name: Build signed enterpriseRelease
         env:
@@ -578,6 +592,9 @@ jobs:
           }
 
           cp "$apk" dist/DPC-AIO-enterprise-release.apk
+          if [[ -n "${DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH:-}" && -f "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" ]]; then
+            cp "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" dist/DPC-AIO-signing-keystore.enc
+          fi
           for file in \
             provisioning.json provisioning-payload.txt provisioning-metadata.json provisioning-qr.png \
             work-profile-provisioning.json work-profile-provisioning-payload.txt work-profile-provisioning-metadata.json work-profile-qr.png \
@@ -771,6 +788,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
           SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
         shell: bash
         run: |
@@ -790,7 +808,12 @@ jobs:
             prerelease=""
           else
             title="DPC-AIO Continuous Enrollment"
-            notes="Update-stable DPC-AIO 1.1.4 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other and signed by the configured stable release key."
+            if [[ "$SIGNING_MODE" == "password-release-keystore" ]]; then
+              signing_note="Zero-Settings signing continuity: restored the encrypted DPC-AIO-signing-keystore.enc asset with the supplied workflow password and re-published it for future update-compatible runs."
+            else
+              signing_note="Signed by the configured stable repository release key."
+            fi
+            notes="Update-stable DPC-AIO 1.1.4 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other. Signing mode: ${SIGNING_MODE:-stable-secrets}. $signing_note"
             prerelease="--prerelease"
           fi
 
