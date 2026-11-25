@@ -306,6 +306,8 @@ jobs:
               mode="emergency"
               AUTO_EMERGENCY_FALLBACK="true"
               echo "AUTO_EMERGENCY_FALLBACK: stable signing is unavailable; publishing a fresh recovery APK instead of failing the rolling build."
+              echo "::warning title=CONTINUOUS_BLOCKED::Stable signing is unavailable. Emergency is a recovery build only; configure DPC_AIO_LEGACY_SIGNING_PASSWORD to update Continuous."
+              printf '%s\n' '### Continuous: BLOCKED' 'Emergency recovery only. Configure the existing stable signer via repository Actions secrets (DPC_AIO_LEGACY_SIGNING_PASSWORD or the full signing configuration).' >> "$GITHUB_STEP_SUMMARY"
             else
               mode="stable"
             fi
@@ -328,6 +330,8 @@ jobs:
               echo "PASSWORD_RELEASE_KEYSTORE: stable repository secrets are absent; using the persisted password-backed continuous-release signer."
             else
               echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
+              echo "::error title=CONTINUOUS_BLOCKED::Configure the existing signer using DPC_AIO_LEGACY_SIGNING_PASSWORD or the complete stable signing configuration."
+              printf '%s\n' '### Continuous: BLOCKED' 'No stable signing configuration is available. Configure the existing signing key in Settings > Secrets and variables > Actions.' >> "$GITHUB_STEP_SUMMARY"
               echo "Missing stable signing configuration: ${missing[*]}" >&2
               echo "For the existing dpc-aio-continuous channel, run workflow_dispatch and provide release_signing_password to reuse DPC-AIO-signing-keystore.enc." >&2
               exit 1
@@ -475,7 +479,7 @@ jobs:
           DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
           DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
-          DPC_AIO_REQUIRE_PERSISTED_SIGNER: ${{ github.event_name != 'workflow_dispatch' }}
+          DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"
         shell: bash
         run: |
           set -euo pipefail
