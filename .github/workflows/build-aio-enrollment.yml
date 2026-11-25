@@ -232,7 +232,13 @@ jobs:
                 --release-notes-url "$notes_url"
 
               test -s self-update.json
-              gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+              existing_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=pre-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
+              if curl -fsSL --retry 2 --retry-delay 2 "$existing_manifest_url" -o existing-self-update.json \
+                  && cmp -s existing-self-update.json self-update.json; then
+                echo "SELF_UPDATE_MANIFEST_UNCHANGED tag=$tag; keeping existing release asset untouched"
+              else
+                gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+              fi
 
               public_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
               curl -fL --retry 3 --retry-delay 3 "$public_manifest_url" -o public-self-update.json
@@ -862,6 +868,39 @@ jobs:
               dist/self-update.json \
               --clobber --repo "$GITHUB_REPOSITORY"
           fi
+
+      - name: Verify full release asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          target="$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("target_commitish", ""))')"
+          [[ "$target" == "$GITHUB_SHA" ]] || {
+            echo "FULL_RELEASE_TARGET_MISMATCH tag=$RELEASE_TAG expected=$GITHUB_SHA observed=$target" >&2
+            exit 1
+          }
+
+          checked=0
+          while IFS= read -r -d '' file; do
+            name="$(basename "$file")"
+            local_sha="$(sha256sum "$file" | awk '{print $1}')"
+            remote_digest="$(printf '%s' "$release_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); name=sys.argv[1]; print(next((a.get("digest", "") for a in data.get("assets", []) if a.get("name")==name), ""))' "$name")"
+            if [[ "$remote_digest" != "sha256:$local_sha" ]]; then
+              echo "FULL_RELEASE_ASSET_MISMATCH tag=$RELEASE_TAG asset=$name expected=sha256:$local_sha observed=${remote_digest:-missing}" >&2
+              exit 1
+            fi
+            checked=$((checked + 1))
+          done < <(find dist -maxdepth 1 -type f -print0 | sort -z)
+
+          (( checked > 0 )) || {
+            echo "FULL_RELEASE_ASSET_MISMATCH tag=$RELEASE_TAG reason=no-local-assets" >&2
+            exit 1
+          }
+          echo "FULL_RELEASE_ASSET_SET_VERIFIED tag=$RELEASE_TAG assets=$checked target=$target"
 
       - name: Verify published APK byte identity
         env:
