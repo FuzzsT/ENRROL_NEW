@@ -124,12 +124,12 @@ if [[ "$stable_count" -ne 0 ]]; then
   fi
 fi
 
-if [[ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]]; then
-  echo "STABLE_SIGNING_KEY_REQUIRED: tag/push release builds require repository signing secrets" >&2
+password="${DPC_AIO_MANUAL_SIGNING_PASSWORD:-}"
+require_persisted="${DPC_AIO_REQUIRE_PERSISTED_SIGNER:-false}"
+if [[ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" && -z "$password" ]]; then
+  echo "STABLE_SIGNING_KEY_REQUIRED: automated release build requires repository signing secrets or DPC_AIO_LEGACY_SIGNING_PASSWORD" >&2
   exit 1
 fi
-
-password="${DPC_AIO_MANUAL_SIGNING_PASSWORD:-}"
 if [[ -z "$password" ]]; then
   echo "MANUAL_SIGNING_PASSWORD_REQUIRED: enter release_signing_password when starting Run workflow" >&2
   exit 1
@@ -183,6 +183,11 @@ if [[ -n "$persisted_url" ]]; then
   else
     rm -f "$encrypted_in"
   fi
+fi
+
+if [[ ! -s "$keystore" && "$require_persisted" == "true" ]]; then
+  echo "PERSISTED_SIGNING_KEY_REQUIRED: automated password-backed builds must restore DPC-AIO-signing-keystore.enc; refusing key rotation" >&2
+  exit 1
 fi
 
 if [[ ! -s "$keystore" ]]; then
