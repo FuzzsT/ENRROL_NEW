@@ -105,6 +105,7 @@ def main():
         'aapt dump badging DPC-AIO-enterprise-release.apk',
         'gh release upload "$tag" self-update.json --clobber',
         'REPAIR_SELF_UPDATE_MANIFEST_OK',
+        'tools/release/verify_self_update_manifest.py',
     ]:
         assert token in workflow, f"self-update release workflow missing: {token}"
 
@@ -129,6 +130,8 @@ def main():
     assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow
+    repair_block = workflow.split("repair-self-update-manifests:", 1)[1].split("\n  build:", 1)[0]
+    assert "python3 - <<'PY'" not in repair_block, "repair workflow must not use an indentation-sensitive Python heredoc"
     assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow
 
     client = CLIENT.read_text(encoding="utf-8")
