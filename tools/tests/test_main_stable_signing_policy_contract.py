@@ -136,8 +136,10 @@ def expect_route(expected, tag, publish, **kwargs):
 expect_route("continuous-v2", "dpc-aio-continuous-v2", False, v2=True)
 expect_route("stable", "dpc-aio-continuous", True, stable=True, v2=True)
 expect_route("stable", "dpc-aio-continuous", True, v2=False)
-expect_route("stable", "dpc-aio-continuous", True, event="push", v2=True)
-expect_route("emergency", "dpc-aio-emergency-enrollment", True, event="push", legacy=False, v2=True)
+expect_route("continuous-v2", "dpc-aio-continuous-v2", False, event="push", v2=True)
+expect_route("continuous-v2", "dpc-aio-continuous-v2", False, event="push", legacy=False, v2=True)
+expect_route("emergency", "dpc-aio-emergency-enrollment", True, event="push", legacy=False)
+expect_route("stable", "dpc-aio-continuous", True, event="push", stable=True, v2=True)
 expect_route("stable", "dpc-aio-continuous", True, requested="stable", v2=True)
 expect_route("continuous-v2", "dpc-aio-continuous-v2", False, requested="continuous-v2", v2=True)
 expect_route("stable", "v1.4.0", True, event="push", ref="refs/tags/v1.4.0", v2=True)
@@ -145,7 +147,9 @@ result, _ = resolve_mode(v2_partial=True)
 assert result.returncode != 0 and "AUTO_CONTINUOUS_V2_CONFIG_INCOMPLETE" in result.stderr
 result, _ = resolve_mode(v2=True, publish=True)
 assert result.returncode != 0 and "CONTINUOUS_V2_ROUTE_INVALID" in result.stderr
-print("MANUAL_AUTO_SIGNING_ROUTE_MATRIX: PASS")
+result, _ = resolve_mode(event="push", v2_partial=True)
+assert result.returncode != 0 and "AUTO_CONTINUOUS_V2_CONFIG_INCOMPLETE" in result.stderr
+print("AUTO_SIGNING_ROUTE_MATRIX: PASS")
 
 # Exercise V2 alias selection using a synthetic PKCS12; never use release credentials.
 import hashlib
