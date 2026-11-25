@@ -23,6 +23,11 @@ def main() -> None:
     for marker in ['export DPC_AIO_CI_VERSION_CODE=', 'GITHUB_RUN_NUMBER', 'CI_VERSION_CODE_MISMATCH']:
         if marker not in workflow:
             raise AssertionError(f'release workflow missing {marker}')
+    guard = workflow.index('      - name: Guard continuous release progression')
+    publish = workflow.index('      - name: Publish release assets')
+    assert guard < publish, 'validate published release progression before mutating assets'
+    for token in ['CONTINUOUS_RELEASE_ROLLBACK', 'CONTINUOUS_RELEASE_VERSION_REUSE', 'CONTINUOUS_RELEASE_DIGEST_MISMATCH']:
+        assert token in workflow, f'missing release guard: {token}'
     dashboard = read('apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt')
     for marker in ['packageManager.getPackageInfo(packageName, 0).versionName', 'v$versionName • Device Owner / policy / research toolkit']:
         if marker not in dashboard:
