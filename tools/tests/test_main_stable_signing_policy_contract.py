@@ -16,9 +16,12 @@ for token in [
 assert 'DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}' in workflow, (
     'stable signer must accept the persisted legacy password from Actions secrets for unattended main builds'
 )
-assert 'DPC_AIO_REQUIRE_PERSISTED_SIGNER: ${{ github.event_name != \'workflow_dispatch\' }}' in workflow, (
-    'automated password-backed builds must never create/rotate a signing key when persisted ciphertext is unavailable'
+assert 'DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"' in workflow, (
+    'manual and automated password-backed builds must never create/rotate an existing release signing key when persisted ciphertext is unavailable'
 )
+assert '::warning title=CONTINUOUS_BLOCKED::' in workflow
+assert '::error title=CONTINUOUS_BLOCKED::' in workflow
+assert workflow.count('>> "$GITHUB_STEP_SUMMARY"') >= 2
 assert 'Prepare emergency ephemeral signer' in workflow, (
     'explicit emergency mode should remain available as a separate recovery path'
 )
