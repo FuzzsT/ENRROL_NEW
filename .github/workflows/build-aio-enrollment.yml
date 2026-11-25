@@ -783,8 +783,8 @@ jobs:
           rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12" || true
 
   publish:
-    needs: build
-    if: needs.build.result == 'success' && needs.build.outputs.should_publish == 'true'
+    needs: [build, repair-self-update-manifests]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.should_publish == 'true' && (needs.repair-self-update-manifests.result == 'success' || needs.repair-self-update-manifests.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -796,6 +796,51 @@ jobs:
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
+
+      - name: Guard continuous release progression
+        if: needs.build.outputs.release_tag == 'dpc-aio-continuous'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          guard_dir="$(mktemp -d)"
+          trap 'rm -rf "$guard_dir"' EXIT
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/dpc-aio-continuous" > "$guard_dir/release.json"
+          gh release download dpc-aio-continuous --repo "$GITHUB_REPOSITORY" --pattern self-update.json --dir "$guard_dir"
+          python3 - "$guard_dir/release.json" "$guard_dir/self-update.json" dist/self-update.json dist/DPC-AIO-enterprise-release.apk <<'PY'
+          import hashlib
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          release, old, new = (json.loads(Path(path).read_text(encoding="utf-8")) for path in sys.argv[1:4])
+          apk = Path(sys.argv[4])
+          def check_manifest(manifest):
+              code = manifest.get("versionCode")
+              digest = manifest.get("apkSha256")
+              if (manifest.get("schemaVersion") != 1 or manifest.get("channel") != "continuous"
+                  or manifest.get("packageName") != "io.dpcaio.app"
+                  or type(code) is not int or not 0 < code <= 2100000000
+                  or not isinstance(digest, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", digest)):
+                  raise SystemExit("CONTINUOUS_RELEASE_MANIFEST_INVALID")
+              return code, digest.lower()
+          old_code, old_sha = check_manifest(old)
+          new_code, new_sha = check_manifest(new)
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == apk.name]
+          if len(assets) != 1 or assets[0].get("digest") != "sha256:" + old_sha:
+              raise SystemExit("CONTINUOUS_RELEASE_DIGEST_MISMATCH: published manifest does not match current APK asset")
+          with apk.open("rb") as stream:
+              actual = hashlib.file_digest(stream, "sha256").hexdigest()
+          if actual != new_sha or new.get("apkSize") != apk.stat().st_size:
+              raise SystemExit("CONTINUOUS_RELEASE_DIGEST_MISMATCH: candidate manifest does not match built APK")
+          if new_code < old_code:
+              raise SystemExit(f"CONTINUOUS_RELEASE_ROLLBACK: published={old_code} candidate={new_code}")
+          if new_code == old_code and new_sha != old_sha:
+              raise SystemExit(f"CONTINUOUS_RELEASE_VERSION_REUSE: code={new_code}; start a new build instead of rerunning")
+          print(f"CONTINUOUS_RELEASE_PROGRESSION_OK: published={old_code} candidate={new_code}")
+          PY
 
       - name: Publish release assets
         env:
