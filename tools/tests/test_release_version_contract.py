@@ -17,6 +17,12 @@ def main() -> None:
         raise AssertionError(f'versionName must be {EXPECTED}, got {version_name.group(1) if version_name else None}')
     if not version_code or int(version_code.group(1)) < MINIMUM_CODE:
         raise AssertionError(f'versionCode must be >= {MINIMUM_CODE}, got {version_code.group(1) if version_code else None}')
+    if 'DPC_AIO_CI_VERSION_CODE' not in gradle or 'versionCode = parsed' not in gradle:
+        raise AssertionError('Gradle must accept the CI release version code')
+    workflow = read('.github/workflows/build-aio-enrollment.yml')
+    for marker in ['export DPC_AIO_CI_VERSION_CODE=', 'GITHUB_RUN_NUMBER', 'CI_VERSION_CODE_MISMATCH']:
+        if marker not in workflow:
+            raise AssertionError(f'release workflow missing {marker}')
     dashboard = read('apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt')
     for marker in ['packageManager.getPackageInfo(packageName, 0).versionName', 'v$versionName • Device Owner / policy / research toolkit']:
         if marker not in dashboard:
