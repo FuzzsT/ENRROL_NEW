@@ -347,6 +347,19 @@ class SelfUpdateActivity : Activity() {
                     preferences.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
                     setState(decision.state, decision.reason.replace('_', ' '))
                 }
+            } catch (error: SelfUpdateClient.SelfUpdateHttpException) {
+                if (error.statusCode == 404 && channel == UpdateChannel.EMERGENCY) {
+                    store.clearCandidate()
+                    runOnUiThread {
+                        currentManifest = null
+                        progressPercent = null
+                        setState(SelfUpdateState.IDLE, "Emergency Self Update unavailable: recovery-only releases may omit the update manifest. Select Continuous to check for an in-place update.")
+                    }
+                } else {
+                    runOnUiThread {
+                        setState(SelfUpdateState.ERROR, "Update check failed: ${error.message ?: error.javaClass.simpleName}")
+                    }
+                }
             } catch (error: Exception) {
                 runOnUiThread {
                     setState(SelfUpdateState.ERROR, "Update check failed: ${error.message ?: error.javaClass.simpleName}")
