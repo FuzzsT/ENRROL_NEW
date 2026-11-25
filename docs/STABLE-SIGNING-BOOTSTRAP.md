@@ -24,6 +24,8 @@ Do not commit the keystore, passwords, base64, or recovery files to Git.
 
 ## If a completely new signing lineage is intentional
 
+For this repository, use the isolated [Continuous v2 operations guide](publishing/CONTINUOUS-V2-OPERATIONS.md) when the original signer cannot be recovered. Do not run the legacy bootstrap below against the existing Continuous release with a different signer. It is appropriate only for a genuinely new release lineage without existing installations or an approved signing transition.
+
 A guarded helper is included:
 
 ```bash
