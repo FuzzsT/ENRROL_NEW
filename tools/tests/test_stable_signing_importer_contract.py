@@ -46,4 +46,15 @@ if '--expected-sha256' not in sh or 'ExpectedSha256' not in ps:
 if 'SIGNER_MISMATCH' not in sh or 'SIGNER_MISMATCH' not in ps:
     raise SystemExit('MISMATCH_MUST_FAIL_CLOSED')
 
+recovery = (root / 'tools/release/recover_stable_signer_verified.py').read_text(encoding='utf-8')
+import re
+pin = re.search(r'EXPECTED_CERT_SHA256 = "([0-9A-F]{64})"', recovery)
+assert pin, 'Historical certificate pin missing from verified recovery'
+for name, importer in [('shell', sh), ('PowerShell', ps)]:
+    assert pin.group(1) in importer, f'{name}: historical fingerprint fallback missing'
+    assert '-f signing_mode=stable' in importer, f'{name}: must explicitly dispatch stable'
+    assert '-f repair_manifests_only=false' in importer, f'{name}: must request full release'
+assert '&& "$repo" == "FuzzsT/ENRROL_NEW"' in sh
+assert "$Repo -ieq 'FuzzsT/ENRROL_NEW'" in ps
+
 print('STABLE_SIGNING_IMPORTER_CONTRACT: PASS')
