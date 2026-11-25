@@ -976,7 +976,7 @@ jobs:
             [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
             [[ "$V2_RELEASE_EXISTS" == "true" || "$V2_RELEASE_EXISTS" == "false" ]]
             title="DPC-AIO Continuous v2 Enrollment"
-            notes="Dedicated v2 signer and Self Update channel. Existing legacy installations require an authorized signing lineage for in-place migration. Commit: $GITHUB_SHA."
+            notes="Dedicated v2 signer and Self Update channel. Existing legacy installations require an authorized signing lineage for in-place updates. Commit: $GITHUB_SHA."
             prerelease="--prerelease"
           elif [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
