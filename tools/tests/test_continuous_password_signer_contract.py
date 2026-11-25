@@ -10,7 +10,6 @@ for token in [
     "release_signing_password:",
     "DPC_AIO_MANUAL_SIGNING_PASSWORD",
     "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL",
-    "Prepare enterprise release signing",
     "tools/release/prepare_enterprise_signing.sh",
     "password-release-keystore",
 ]:
