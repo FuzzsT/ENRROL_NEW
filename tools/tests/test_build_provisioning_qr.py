@@ -69,7 +69,30 @@ def test_signature_checksum_from_apksigner():
         assert metadata['certificateSha256Hex'] == cert_digest.hex()
 
 
+def test_dash_prefixed_values_and_explicit_modes():
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        apk = td / 'fixture.apk'
+        apk.write_bytes(b'synthetic-apk')
+        for mode in ('auto', 'work-profile', 'fully-managed'):
+            out = td / mode
+            result = run('--apk', apk, '--apk-url', 'https://example.test/dpc.apk',
+                         '--out-dir', out, '--checksum-mode', 'package',
+                         '--provisioning-mode', mode, '--enrollment-token=-fixture-token',
+                         '--policy-profile=-fixture-profile', '--offline-mode', 'OFFLINE_THEN_SYNC',
+                         '--offline-bundle-id=-fixture-bundle')
+            assert result.returncode == 0, result.stderr
+            payload = json.loads((out / 'provisioning.json').read_text('utf-8'))
+            extras = payload['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE']
+            assert extras['enrollmentToken'] == '-fixture-token'
+            assert extras['policyProfile'] == '-fixture-profile'
+            assert extras['io.dpcaio.extra.OFFLINE_BUNDLE_ID'] == '-fixture-bundle'
+            assert extras['io.dpcaio.extra.PROVISIONING_MODE'] == mode
+            assert (out / 'provisioning-qr.png').is_file()
+
+
 if __name__ == '__main__':
     test_package_checksum_and_png()
     test_signature_checksum_from_apksigner()
+    test_dash_prefixed_values_and_explicit_modes()
     print('test_build_provisioning_qr: PASS')
