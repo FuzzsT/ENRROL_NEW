@@ -16,6 +16,12 @@ Required repository values:
 
 The workflow checks all five before Gradle starts and verifies the final APK signer against the configured SHA-256 fingerprint.
 
+## GitHub Actions credentials only
+
+Release signing passwords must be provided via GitHub Actions Secrets, not manual workflow inputs. The legacy route uses only `DPC_AIO_LEGACY_SIGNING_PASSWORD` and requires the original password for the published encrypted keystore. A newly chosen password cannot decrypt it. The workflow verifies the downloaded ciphertext against its GitHub release asset SHA-256 before attempting decryption; matching metadata does not prove the ciphertext was originally encrypted with the configured password. A mismatch blocks the build. If decryption remains blocked, recover the original key/password or use the separately configured Continuous v2 route. A complete stable keystore configuration takes precedence; a partial stable configuration blocks the build rather than mixing credential sources. Keep v2 credentials separate. Do not put signing passwords in Variables, workflow inputs, commits or logs.
+
+If a certificate fingerprint exists as both a GitHub Variable and a Secret, both must normalize to the same SHA-256 value. An invalid or conflicting value blocks signing. No fingerprint is silently preferred over another.
+
 ## If the previous keystore is available
 
 Prefer restoring that keystore and its original passwords/alias. Base64-encode the keystore and set the four secrets above, then set the certificate SHA-256 as `DPC_AIO_EXPECTED_SIGNING_CERT_SHA256`.

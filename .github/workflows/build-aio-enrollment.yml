@@ -38,10 +38,6 @@ on:
         required: false
         default: false
         type: boolean
-      release_signing_password:
-        description: "Optional password for the persisted encrypted continuous-release keystore (min. 12 chars). Reuse the same password as earlier Zero-Settings runs."
-        required: false
-        type: string
       repair_manifests_only:
         description: "Repair existing Self Update manifests only; do not rebuild or re-sign APKs"
         required: false
@@ -298,7 +294,6 @@ jobs:
           HAS_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' }}
           HAS_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' }}
           STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
-          HAS_MANUAL_SIGNING_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing_password != '' }}
           HAS_LEGACY_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD != '' }}
           HAS_V2_CUSTOM_APK_URL: ${{ inputs.apk_url != '' }}
           HAS_V2_REPAIR_REQUEST: ${{ inputs.repair_manifests_only == true }}
@@ -326,8 +321,8 @@ jobs:
             exit 1
           fi
           if [[ "$requested" == "continuous-v2" ]]; then
-            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_MANUAL_SIGNING_PASSWORD" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" ]]; then
-              echo "CONTINUOUS_V2_ROUTE_INVALID: use a manual main build without legacy password, custom APK URL or repair-only mode" >&2
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" ]]; then
+              echo "CONTINUOUS_V2_ROUTE_INVALID: use a manual main build without custom APK URL or repair-only mode" >&2
               exit 1
             fi
             mode="continuous-v2"
@@ -355,15 +350,22 @@ jobs:
             exit 1
           fi
 
+          # A partial stable configuration must not be mixed with a legacy password.
+          if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" && ( "$HAS_RELEASE_KEYSTORE" == "true" || "$HAS_RELEASE_STORE_PASSWORD" == "true" || "$HAS_RELEASE_KEY_ALIAS" == "true" || "$HAS_RELEASE_KEY_PASSWORD" == "true" ) ]]; then
+            echo "SIGNING_CONFIG_CONFLICT: incomplete stable signer configuration; complete the original key configuration or use only the legacy secret." >&2
+            echo "Missing stable signing configuration: ${missing[*]}" >&2
+            exit 1
+          fi
+
           if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
-            if [[ ("${{ github.event_name }}" == "workflow_dispatch" && "$HAS_MANUAL_SIGNING_PASSWORD" == "true") || "$HAS_LEGACY_SIGNING_PASSWORD" == "true" ]]; then
+            if [[ "$HAS_LEGACY_SIGNING_PASSWORD" == "true" ]]; then
               echo "PASSWORD_RELEASE_KEYSTORE: stable repository secrets are absent; using the persisted password-backed continuous-release signer."
             else
               echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
               echo "::error title=CONTINUOUS_BLOCKED::Configure the existing signer using DPC_AIO_LEGACY_SIGNING_PASSWORD or the complete stable signing configuration."
               printf '%s\n' '### Continuous: BLOCKED' 'No stable signing configuration is available. Configure the existing signing key in Settings > Secrets and variables > Actions.' >> "$GITHUB_STEP_SUMMARY"
               echo "Missing stable signing configuration: ${missing[*]}" >&2
-              echo "For the existing dpc-aio-continuous channel, run workflow_dispatch and provide release_signing_password to reuse DPC-AIO-signing-keystore.enc." >&2
+              echo "For the existing dpc-aio-continuous channel, configure the original password in the DPC_AIO_LEGACY_SIGNING_PASSWORD Actions secret." >&2
               exit 1
             fi
           fi
@@ -495,19 +497,6 @@ jobs:
           echo "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-continuous/DPC-AIO-signing-keystore.enc" >> "$GITHUB_ENV"
           echo "Provisioning APK URL: $url"
 
-      - name: Mask manual release password
-        if: github.event_name == 'workflow_dispatch' && inputs.release_signing_password != ''
-        env:
-          RELEASE_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if (( ${#RELEASE_SIGNING_PASSWORD} < 12 )); then
-            echo "release_signing_password must contain at least 12 characters" >&2
-            exit 2
-          fi
-          printf '::add-mask::%s\n' "$RELEASE_SIGNING_PASSWORD"
-
       - name: Prepare Continuous v2 signer
         id: signing_v2
         if: env.DPC_AIO_PIPELINE_MODE == 'continuous-v2'
@@ -516,7 +505,8 @@ jobs:
           DPC_AIO_V2_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_STORE_PASSWORD }}
           DPC_AIO_V2_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_ALIAS }}
           DPC_AIO_V2_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_PASSWORD }}
-          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "true"
           DPC_AIO_MANUAL_SIGNING_PASSWORD: ""
           DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL: ""
@@ -524,6 +514,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256)"
+          export DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256
           python3 tools/release/check_continuous_v2_preflight.py
           export DPC_AIO_RELEASE_KEYSTORE_B64="$DPC_AIO_V2_RELEASE_KEYSTORE_B64"
           export DPC_AIO_RELEASE_STORE_PASSWORD="$DPC_AIO_V2_RELEASE_STORE_PASSWORD"
@@ -540,13 +532,17 @@ jobs:
           DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
           DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
           DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
-          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
-          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
+          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
+          GH_TOKEN: ${{ github.token }}
           DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"
         shell: bash
         run: |
           set -euo pipefail
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256 --allow-missing)"
+          export DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256
           if [[ "${{ steps.mode.outputs.stable_signing_configured }}" == "true" ]]; then
             for name in DPC_AIO_RELEASE_KEYSTORE_B64 DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256; do
               if [[ -z "${!name:-}" ]]; then
@@ -554,6 +550,16 @@ jobs:
                 exit 1
               fi
             done
+          else
+            if ! DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/dpc-aio-continuous" --jq '[.assets[] | select(.name == "DPC-AIO-signing-keystore.enc")] | if length == 1 then .[0].digest else empty end')"; then
+              echo "PERSISTED_SIGNING_ASSET_METADATA_UNAVAILABLE" >&2
+              exit 1
+            fi
+            if [[ ! "$DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
+              echo "PERSISTED_SIGNING_ASSET_DIGEST_INVALID" >&2
+              exit 1
+            fi
+            export DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256
           fi
           bash tools/release/prepare_enterprise_signing.sh
 
@@ -627,7 +633,9 @@ jobs:
         env:
           DPC_AIO_ENROLLMENT_TOKEN: ${{ inputs.enrollment_token }}
           DPC_AIO_ENROLLMENT_ENDPOINT: ${{ inputs.enrollment_endpoint || vars.DPC_AIO_ENROLLMENT_ENDPOINT }}
-          DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY: ${{ inputs.enrollment_signing_public_key || vars.DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY }}
+          ENROLLMENT_PUBLIC_KEY_INPUT: ${{ inputs.enrollment_signing_public_key }}
+          ENROLLMENT_PUBLIC_KEY_VARIABLE: ${{ vars.DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY }}
+          ENROLLMENT_PUBLIC_KEY_SECRET: ${{ secrets.DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY }}
           DPC_AIO_POLICY_PROFILE: ${{ inputs.policy_profile || 'default' }}
           DPC_AIO_PROVISIONING_MODE: ${{ inputs.provisioning_mode || 'work-profile' }}
           DPC_AIO_ALLOW_OFFLINE: ${{ inputs.allow_offline || false }}
@@ -640,6 +648,8 @@ jobs:
           set -a
           source "$DPC_AIO_SIGNING_ENV"
           set +a
+          DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY="$(python3 tools/release/resolve_enrollment_public_key.py)"
+          export DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY
           export DPC_AIO_CI_VERSION_CODE=$((26 + GITHUB_RUN_NUMBER))
           if [[ "$DPC_AIO_PIPELINE_MODE" == "continuous-v2" ]]; then
             export DPC_AIO_CONTINUOUS_V2_BUILD=true
@@ -884,11 +894,14 @@ jobs:
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
           SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
-          EXPECTED_V2_CERT: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          EXPECTED_V2_CERT_VARIABLE: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          EXPECTED_V2_CERT_SECRET: ${{ secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
           FIRST_RELEASE: ${{ inputs.first_continuous_v2_release == true }}
         shell: bash
         run: |
           set -euo pipefail
+          EXPECTED_V2_CERT="$(python3 tools/release/resolve_signing_pin.py EXPECTED_V2_CERT)"
+          export EXPECTED_V2_CERT
           [[ "$GITHUB_REPOSITORY" == "FuzzsT/ENRROL_NEW" && "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
           guard_dir="$(mktemp -d)"

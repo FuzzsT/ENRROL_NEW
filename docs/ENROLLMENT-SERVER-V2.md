@@ -24,6 +24,8 @@ export DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY="$(cat enrollment-signing-public-x5
 export DPC_AIO_ENROLLMENT_ENDPOINT=https://enroll.example.com
 ```
 
+GitHub builds automatically resolve `DPC_AIO_ENROLLMENT_SIGNING_PUBLIC_KEY` from Actions Variables or Secrets (or the optional public-key workflow input). Supply the server’s existing public key in Base64 DER or public-key PEM. All populated sources must agree; malformed values and conflicts fail closed. When an endpoint is configured, a public key is required. Builds without a configured endpoint and key remain supported. No key is fetched from an untrusted endpoint or generated during the APK build.
+
 Do not copy the private key into the source repository, APK, diagnostics, QR, or release archive.
 
 ## Token lifecycle

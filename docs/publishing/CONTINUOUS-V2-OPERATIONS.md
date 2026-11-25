@@ -15,7 +15,7 @@ In Settings > Secrets and variables > Actions, configure these repository secret
 - `DPC_AIO_V2_RELEASE_KEY_ALIAS` — private-key alias.
 - `DPC_AIO_V2_RELEASE_KEY_PASSWORD` — key password.
 
-Set the public certificate fingerprint as a repository variable (or secret) named `DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256`. Independently verify it against the keystore certificate; the workflow rejects the historical certificate and mismatched pins. Use consistent values; the variable takes precedence over a secret of the same name.
+Set the public certificate fingerprint as a repository variable (or secret) named `DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256`. Independently verify it against the keystore certificate; the workflow rejects the historical certificate and mismatched pins. Use only one source, or matching values in both sources. Conflicting or malformed values stop both build and publication; neither source silently overrides the other.
 
 If using the separately distributed local Signer Setup ZIP, the first command is an audit only. It does not set repository values:
 
