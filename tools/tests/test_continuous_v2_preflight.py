@@ -35,6 +35,13 @@ class V2PreflightTest(unittest.TestCase):
     def test_valid_route(self):
         self.invoke({})
 
+    def test_main_push_build_only(self):
+        self.invoke({'GITHUB_EVENT_NAME': 'push', 'DPC_AIO_V2_BUILD_ONLY': 'true'})
+        self.invoke({'GITHUB_EVENT_NAME': 'push', 'DPC_AIO_V2_BUILD_ONLY': 'false'},
+                    'CONTINUOUS_V2_ROUTE_INVALID')
+        self.invoke({'GITHUB_EVENT_NAME': 'push', 'DPC_AIO_V2_BUILD_ONLY': 'true',
+                     'GITHUB_REF': 'refs/tags/v1.4.0'}, 'CONTINUOUS_V2_ROUTE_INVALID')
+
     def test_wrong_route(self):
         for key, value in (
             ('DPC_AIO_RELEASE_TAG', 'dpc-aio-continuous'),
