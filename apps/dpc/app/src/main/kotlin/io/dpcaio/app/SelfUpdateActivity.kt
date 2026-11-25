@@ -60,12 +60,13 @@ class SelfUpdateActivity : Activity() {
         super.onCreate(savedInstanceState)
         launchActionConsumed = savedInstanceState?.getBoolean(STATE_LAUNCH_ACTION_CONSUMED, false) ?: false
         title = "DPC-AIO Self Update"
+        val defaultChannel = if (BuildConfig.CONTINUOUS_V2_BUILD) UpdateChannel.CONTINUOUS_V2 else UpdateChannel.CONTINUOUS
         val restored = runCatching {
             UpdateChannel.valueOf(
-                preferences.getString(KEY_CHANNEL, UpdateChannel.CONTINUOUS.name)
-                    ?: UpdateChannel.CONTINUOUS.name
+                preferences.getString(KEY_CHANNEL, defaultChannel.name)
+                    ?: defaultChannel.name
             )
-        }.getOrDefault(UpdateChannel.CONTINUOUS)
+        }.getOrDefault(defaultChannel)
         selectedChannel = if (restored == UpdateChannel.STABLE) UpdateChannel.CONTINUOUS else restored
         if (restored != selectedChannel) {
             preferences.edit().putString(KEY_CHANNEL, selectedChannel.name).apply()
@@ -188,12 +189,12 @@ class SelfUpdateActivity : Activity() {
         body.addView(
             ModernUi.card(this).apply {
                 val row = LinearLayout(this@SelfUpdateActivity).apply { orientation = LinearLayout.HORIZONTAL }
-                listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY).forEach { channel ->
+                listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY, UpdateChannel.CONTINUOUS_V2).forEach { channel ->
                     val pill = ModernUi.pill(
                         this@SelfUpdateActivity,
-                        channel.name,
+                        if (channel == UpdateChannel.CONTINUOUS_V2) "Stable v2" else channel.name,
                         channel == selectedChannel,
-                        if (channel == UpdateChannel.CONTINUOUS) ModernUi.Tone.SUCCESS else ModernUi.Tone.WARNING,
+                        if (channel == UpdateChannel.EMERGENCY) ModernUi.Tone.WARNING else ModernUi.Tone.SUCCESS,
                     ) {
                         if (channel != selectedChannel) {
                             store.clearCandidate()
@@ -211,6 +212,17 @@ class SelfUpdateActivity : Activity() {
                     )
                 }
                 addView(row)
+                if (selectedChannel == UpdateChannel.CONTINUOUS_V2) {
+                    addView(ModernUi.spacer(this@SelfUpdateActivity, 8))
+                    addView(
+                        ModernUi.statusCard(
+                            this@SelfUpdateActivity,
+                            "Stable v2 channel",
+                            "Separate release channel. An incompatible signing certificate is rejected. No automatic migration from the old signer is performed.",
+                            ModernUi.Tone.NEUTRAL,
+                        )
+                    )
+                }
                 if (selectedChannel == UpdateChannel.EMERGENCY) {
                     addView(ModernUi.spacer(this@SelfUpdateActivity, 8))
                     addView(
@@ -574,12 +586,13 @@ class SelfUpdateActivity : Activity() {
     private fun manifestUrl(channel: UpdateChannel): String = when (channel) {
         UpdateChannel.STABLE -> STABLE_MANIFEST_URL
         UpdateChannel.CONTINUOUS -> CONTINUOUS_MANIFEST_URL
+        UpdateChannel.CONTINUOUS_V2 -> CONTINUOUS_V2_MANIFEST_URL
         UpdateChannel.EMERGENCY -> EMERGENCY_MANIFEST_URL
     }
 
     private fun bootstrapManifestUrl(channel: UpdateChannel): String? = when (channel) {
         UpdateChannel.CONTINUOUS -> CONTINUOUS_BOOTSTRAP_MANIFEST_URL
-        UpdateChannel.STABLE, UpdateChannel.EMERGENCY -> null
+        UpdateChannel.STABLE, UpdateChannel.EMERGENCY, UpdateChannel.CONTINUOUS_V2 -> null
     }
 
     private fun formatBytes(bytes: Long): String = when {
@@ -600,6 +613,8 @@ class SelfUpdateActivity : Activity() {
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-stable/self-update.json"
         private const val CONTINUOUS_MANIFEST_URL =
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/self-update.json"
+        private const val CONTINUOUS_V2_MANIFEST_URL =
+            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous-v2/self-update.json"
         private const val CONTINUOUS_BOOTSTRAP_MANIFEST_URL =
             "https://raw.githubusercontent.com/FuzzsT/ENRROL_NEW/main/.github/self-update/continuous-bootstrap.json"
         private const val EMERGENCY_MANIFEST_URL =

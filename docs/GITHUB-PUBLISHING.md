@@ -13,6 +13,8 @@ DPC-AIO 1.1.4 is structured for GitHub upload with a read-only build job and a s
 
 ## Required repository configuration
 
+For the separate Continuous v2 channel, follow [Continuous v2 operations](publishing/CONTINUOUS-V2-OPERATIONS.md). The legacy and v2 signing values must not be interchanged.
+
 Configure release signing values as GitHub Actions secrets: `DPC_AIO_RELEASE_KEYSTORE_B64`, `DPC_AIO_RELEASE_STORE_PASSWORD`, `DPC_AIO_RELEASE_KEY_ALIAS`, and `DPC_AIO_RELEASE_KEY_PASSWORD`. Configure the expected certificate SHA-256 as a repository variable when possible (`DPC_AIO_EXPECTED_SIGNING_CERT_SHA256`). Do not commit keystores, private KPE/KLM material, reset tokens, or `.env` files.
 
 ## License

@@ -37,7 +37,7 @@ if not re.search(r'^\s{2}build:\n(?:.|\n)*?^\s{4}permissions:\n\s{6}contents:\s+
     errors.append('build job contents: read missing')
 if not re.search(r'^\s{2}publish:\n(?:.|\n)*?^\s{4}permissions:\n\s{6}contents:\s+write\s*$', wf, re.M):
     errors.append('publish job contents: write missing')
-if 'needs: build' not in wf: errors.append('publish job does not depend on build')
+if 'needs: [build, repair-self-update-manifests]' not in wf: errors.append('publish must wait for build and manifest repair')
 if 'actions/download-artifact@' not in wf: errors.append('publish job missing download-artifact')
 
 # Secret signing material must not be job-global. It may appear only in step-level env blocks.
