@@ -21,8 +21,11 @@ def normalize_pin(value):
 
 def validate(env):
     if (env.get('GITHUB_REPOSITORY'), env.get('GITHUB_REF'),
-            env.get('GITHUB_EVENT_NAME'), env.get('DPC_AIO_RELEASE_TAG')) != (
-            REPOSITORY, 'refs/heads/main', 'workflow_dispatch', TAG):
+            env.get('DPC_AIO_RELEASE_TAG')) != (REPOSITORY, 'refs/heads/main', TAG):
+        raise ValueError('CONTINUOUS_V2_ROUTE_INVALID')
+    event = env.get('GITHUB_EVENT_NAME')
+    if event != 'workflow_dispatch' and not (
+            event == 'push' and env.get('DPC_AIO_V2_BUILD_ONLY') == 'true'):
         raise ValueError('CONTINUOUS_V2_ROUTE_INVALID')
     missing = [name for name in REQUIRED if not env.get(name, '').strip()]
     if missing:

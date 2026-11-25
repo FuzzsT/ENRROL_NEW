@@ -322,10 +322,10 @@ jobs:
             echo "CONTINUOUS_V2_ROUTE_INVALID: initial release requires explicit publication" >&2
             exit 1
           fi
-          # Manual AUTO can select the isolated V2 build-only route, without
+          # AUTO on main can select the isolated V2 build-only route, without
           # treating the mere presence of a legacy password as proof of recovery.
           # Keep explicit publication authorization, push and tag semantics intact.
-          if [[ "$requested" == "auto" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
+          if [[ "$requested" == "auto" && "$GITHUB_REF" == "refs/heads/main" && ( "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$GITHUB_EVENT_NAME" == "push" ) && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
             if [[ "$V2_SIGNING_CONFIGURED" == "true" ]]; then
               requested="continuous-v2"
               echo "AUTO_CONTINUOUS_V2_SELECTED: dedicated V2 configuration present; building without publication."
@@ -335,8 +335,8 @@ jobs:
             fi
           fi
           if [[ "$requested" == "continuous-v2" ]]; then
-            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" ]]; then
-              echo "CONTINUOUS_V2_ROUTE_INVALID: use a manual main build without custom APK URL or repair-only mode" >&2
+            if [[ ( "$GITHUB_EVENT_NAME" != "workflow_dispatch" && "$GITHUB_EVENT_NAME" != "push" ) || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" || ( "$GITHUB_EVENT_NAME" == "push" && ( "$V2_PUBLISH_REQUESTED" == "true" || "$V2_FIRST_RELEASE_REQUESTED" == "true" ) ) ]]; then
+              echo "CONTINUOUS_V2_ROUTE_INVALID: use main without custom APK URL or repair-only mode; publication is manual only" >&2
               exit 1
             fi
             mode="continuous-v2"
@@ -515,6 +515,7 @@ jobs:
         id: signing_v2
         if: env.DPC_AIO_PIPELINE_MODE == 'continuous-v2'
         env:
+          DPC_AIO_V2_BUILD_ONLY: ${{ steps.mode.outputs.should_publish == 'false' }}
           DPC_AIO_V2_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_V2_RELEASE_KEYSTORE_B64 }}
           DPC_AIO_V2_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_STORE_PASSWORD }}
           DPC_AIO_V2_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_ALIAS }}
