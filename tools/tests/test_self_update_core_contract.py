@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import tempfile
 
 # This test also documents the lifecycle-independent operation gate required by the Android contract suite.
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,5 +77,11 @@ assert "private val downloadInFlight = AtomicBoolean(false)" not in activity, "d
 assert "private val installInFlight = AtomicBoolean(false)" not in activity, "install guard must not be Activity-instance state"
 assert 'total?.let { " / ${formatBytes(it)}" }.orEmpty()' not in activity, "progress total is non-null inside the percent branch and must not use a redundant safe call"
 assert 'message = "${formatBytes(downloaded)} / ${formatBytes(total)}"' in activity, "progress message must render downloaded and known total directly"
+
+with tempfile.TemporaryDirectory() as tmp:
+    classes = Path(tmp) / "classes"
+    test_path = ROOT / "tools/tests/kotlin/ContinuousV2PlannerTest.kt"
+    subprocess.run(["kotlinc", str(models_path), str(planner_path), str(test_path), "-d", str(classes)], check=True)
+    subprocess.run(["kotlin", "-classpath", str(classes), "io.dpcaio.selfupdate.ContinuousV2PlannerTestKt"], check=True)
 
 print("Self Update core contract: PASS")

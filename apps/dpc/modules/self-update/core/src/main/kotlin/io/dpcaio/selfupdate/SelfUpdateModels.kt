@@ -4,6 +4,7 @@ enum class UpdateChannel {
     STABLE,
     CONTINUOUS,
     EMERGENCY,
+    CONTINUOUS_V2,
 }
 
 data class SelfUpdateManifest(
