@@ -281,6 +281,7 @@ jobs:
           HAS_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' }}
           STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
           HAS_MANUAL_SIGNING_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing_password != '' }}
+          HAS_LEGACY_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -293,14 +294,21 @@ jobs:
           [[ "$HAS_RELEASE_KEY_PASSWORD" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_PASSWORD")
           [[ "$HAS_EXPECTED_SIGNING_CERT" == "true" ]] || missing+=("DPC_AIO_EXPECTED_SIGNING_CERT_SHA256")
 
+          AUTO_EMERGENCY_FALLBACK="false"
           if [[ "$requested" == "auto" ]]; then
-            mode="stable"
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" != "true" && "$HAS_LEGACY_SIGNING_PASSWORD" != "true" ]]; then
+              mode="emergency"
+              AUTO_EMERGENCY_FALLBACK="true"
+              echo "AUTO_EMERGENCY_FALLBACK: stable signing is unavailable; publishing a fresh recovery APK instead of failing the rolling build."
+            else
+              mode="stable"
+            fi
           else
             mode="$requested"
           fi
 
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then
-            echo "Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch." >&2
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" && "$AUTO_EMERGENCY_FALLBACK" != "true" ]]; then
+            echo "Emergency signing is opt-in only unless auto fallback is required on main." >&2
             exit 1
           fi
 
@@ -310,7 +318,7 @@ jobs:
           fi
 
           if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "$HAS_MANUAL_SIGNING_PASSWORD" == "true" ]]; then
+            if [[ ("${{ github.event_name }}" == "workflow_dispatch" && "$HAS_MANUAL_SIGNING_PASSWORD" == "true") || "$HAS_LEGACY_SIGNING_PASSWORD" == "true" ]]; then
               echo "PASSWORD_RELEASE_KEYSTORE: stable repository secrets are absent; using the persisted password-backed continuous-release signer."
             else
               echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
@@ -347,6 +355,7 @@ jobs:
             echo "artifact_name=$artifact_name"
             echo "should_publish=$should_publish"
             echo "stable_signing_configured=$STABLE_SIGNING_CONFIGURED"
+            echo "auto_emergency_fallback=$AUTO_EMERGENCY_FALLBACK"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -459,7 +468,8 @@ jobs:
           DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
           DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
-          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
+          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
+          DPC_AIO_REQUIRE_PERSISTED_SIGNER: ${{ github.event_name != 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
