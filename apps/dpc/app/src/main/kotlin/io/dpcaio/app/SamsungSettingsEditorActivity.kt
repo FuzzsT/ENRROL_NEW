@@ -2,6 +2,8 @@ package io.dpcaio.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -86,6 +88,17 @@ class SamsungSettingsEditorActivity : Activity() {
                 addView(namespace)
                 addView(key)
                 addView(value)
+                addView(ModernUi.action(this@SamsungSettingsEditorActivity, "Allow Android system settings changes") {
+                    if (Settings.System.canWrite(this@SamsungSettingsEditorActivity)) {
+                        status.text = "Android system settings write access is already enabled"
+                    } else {
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName")))
+                        } catch (error: Exception) {
+                            status.text = "Cannot open Android settings permission: ${error.javaClass.simpleName}"
+                        }
+                    }
+                })
                 addView(
                     ModernUi.actionRow(
                         this@SamsungSettingsEditorActivity,
@@ -185,7 +198,7 @@ class SamsungSettingsEditorActivity : Activity() {
                 rows.forEach { row -> rememberBaseline(row.namespace, row.name, row.currentValue) }
                 discoveredSettings = rows
                 renderDiscoveredSettings()
-                status.text = "Discovered ${rows.size} $scopeLabel settings"
+                // Discovery refresh must not overwrite the write result.
             }
         }.start()
     }
@@ -320,7 +333,15 @@ class SamsungSettingsEditorActivity : Activity() {
             status.text = "Select SYSTEM, SECURE or GLOBAL for manual Read"
             return
         }
-        status.text = gateway().read(ns, k) ?: "<null/unavailable>"
+        try {
+            val observed = gateway().read(ns, k)
+            status.text = observed ?: "<null/unavailable>"
+            if (observed != null) value.setText(observed)
+        } catch (error: SecurityException) {
+            status.text = "Read denied by Android for ${ns.name.lowercase()}/$k"
+        } catch (error: Exception) {
+            status.text = "Read failed: ${error.javaClass.simpleName}"
+        }
     }
 
     private fun cancelStabilityCleanup() {
@@ -353,6 +374,7 @@ class SamsungSettingsEditorActivity : Activity() {
             status.text = "Write already in progress"
             return
         }
+        discoveryGeneration++
         status.text = "Writing ${ns.name.lowercase()}/$k..."
         Thread {
             try {
@@ -392,6 +414,7 @@ class SamsungSettingsEditorActivity : Activity() {
                         }
                         renderDiscoveredSettings()
                     }
+                    discoverSettings()
                     cancelStabilityCleanup()
                     lateinit var cleanup: Runnable
                     cleanup = Runnable {
@@ -403,6 +426,18 @@ class SamsungSettingsEditorActivity : Activity() {
                     }
                     stabilityCleanup = cleanup
                     status.postDelayed(cleanup, 5000)
+                }
+            } catch (error: SecurityException) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    status.text = "Write or readback denied by Android for ${ns.name.lowercase()}/$k. Check the permitted write route."
+                    discoverSettings()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    status.text = "Write or readback failed: ${error.javaClass.simpleName}"
+                    discoverSettings()
                 }
             } finally {
                 synchronized(operationLock) {

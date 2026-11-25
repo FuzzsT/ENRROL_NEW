@@ -26,3 +26,10 @@ assert write_body.index('finally {') < write_body.rindex('operationRunning = fal
     'Samsung settings write gate must be released from finally'
 
 print('SAMSUNG_SETTINGS_OPERATION_GATE_CONTRACT: PASS')
+
+# Regression: ordinary user-approved writes and stale discovery results.
+assert "Settings.ACTION_MANAGE_WRITE_SETTINGS" in text
+assert "catch (error: SecurityException)" in write_body
+assert "discoveryGeneration++" in write_body
+assert "// Discovery refresh must not overwrite the write result." in text
+assert "discoverSettings()" in write_body

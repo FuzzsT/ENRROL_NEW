@@ -79,3 +79,9 @@ for token in [
 workflow = WORKFLOW.read_text(encoding="utf-8")
 assert "repair-self-update-manifests" in workflow
 assert "github.event_name == 'push'" in workflow, "push to main must be able to backfill a missing release self-update manifest"
+
+# Recovery-only Emergency releases deliberately may not publish a manifest.
+assert "error.statusCode == 404 && channel == UpdateChannel.EMERGENCY" in check_body
+assert "Emergency Self Update unavailable: recovery-only releases may omit the update manifest." in check_body
+assert "store.clearCandidate()" in check_body
+assert "setState(SelfUpdateState.IDLE," in check_body
