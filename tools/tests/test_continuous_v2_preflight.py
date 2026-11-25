@@ -71,6 +71,8 @@ class V2BuildWiringTest(unittest.TestCase):
         self.assertIn('release_tag="dpc-aio-continuous-v2"', block)
         self.assertIn('should_publish="false"', block)
         self.assertIn('DPC-AIO-continuous-v2-verified-build-only', block)
+        self.assertIn('if [[ "$V2_PUBLISH_REQUESTED" == "true" ]]; then', block)
+        self.assertLess(block.index('should_publish="false"'), block.index('should_publish="true"'))
         self.assertIn("inputs.signing_mode != 'continuous-v2'", workflow.split('  build:', 1)[0])
         self.assertIn('HAS_V2_REPAIR_REQUEST', workflow)
         signer = workflow.split('      - name: Prepare Continuous v2 signer', 1)[1].split('      - name: Prepare stable signer', 1)[0]
@@ -83,6 +85,19 @@ class V2BuildWiringTest(unittest.TestCase):
         self.assertIn('channel="continuous-v2"', workflow)
         self.assertIn('asset_tag="dpc-aio-continuous-v2"', workflow)
         self.assertIn("needs.build.outputs.should_publish == 'true'", workflow.split('  publish:', 1)[1])
+
+    def test_publication_guard_wiring(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/build-aio-enrollment.yml').read_text()
+        for name in ('publish_continuous_v2', 'first_continuous_v2_release'):
+            self.assertIn('default: false', workflow.split('      ' + name + ':', 1)[1].split('        type: boolean', 1)[0])
+        guard = workflow.split('      - name: Guard Continuous v2 release progression', 1)[1].split('      - name: Guard continuous release progression', 1)[0]
+        for marker in ('check_continuous_v2_release.py', 'CONTINUOUS_V2_FIRST_RELEASE_CONFIRMATION_REQUIRED', 'CONTINUOUS_V2_RELEASE_LOOKUP_FAILED', 'CONTINUOUS_V2_ALREADY_EXISTS', '200)', '404)', '--prior "$guard_dir"', '--first-release'):
+            self.assertIn(marker, guard)
+        self.assertLess(workflow.index('      - name: Guard Continuous v2 release progression'), workflow.index('      - name: Publish release assets'))
+        self.assertIn('expected_channel="continuous-v2"', workflow)
+        self.assertIn('V2_RELEASE_EXISTS: ${{ steps.v2_guard.outputs.release_exists }}', workflow)
+        self.assertIn("cancel-in-progress: ${{ inputs.signing_mode != 'continuous-v2' }}", workflow)
 
     def test_v2_default_is_build_specific(self):
         root = Path(__file__).resolve().parents[2]
