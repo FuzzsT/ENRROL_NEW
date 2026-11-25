@@ -66,6 +66,16 @@ if [[ "$stable_count" -eq 4 ]]; then
   rm -f "$certificate"
   export DPC_AIO_EFFECTIVE_STORE_PASSWORD="$DPC_AIO_RELEASE_STORE_PASSWORD"
   keytool_bin="$(command -v keytool)"
+  if [[ "${DPC_AIO_PIPELINE_MODE:-}" == "continuous-v2" ]]; then
+    if ! resolved_alias="$(java "$(dirname "${BASH_SOURCE[0]}")/ResolveV2SigningAlias.java" "$keystore")"; then
+      echo "CONTINUOUS_V2_KEYSTORE_VALIDATION_FAILED" >&2
+      exit 1
+    fi
+    if [[ "$resolved_alias" != "$DPC_AIO_RELEASE_KEY_ALIAS" ]]; then
+      echo "V2_ALIAS_RESOLVED_BY_PIN: using the unique private-key alias matching the configured certificate."
+    fi
+    export DPC_AIO_RELEASE_KEY_ALIAS="$resolved_alias"
+  fi
   if ! "$keytool_bin" -exportcert \
       -alias "$DPC_AIO_RELEASE_KEY_ALIAS" \
       -keystore "$keystore" \
