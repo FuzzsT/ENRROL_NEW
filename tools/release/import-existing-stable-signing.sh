@@ -18,7 +18,8 @@ Options:
   --keystore PATH            Existing JKS/PKCS12 keystore to restore (required)
   --alias ALIAS              Signing key alias; prompted if omitted
   --expected-sha256 HEX      Expected signing certificate SHA-256. If omitted,
-                             the script tries the current dpc-aio-continuous release.
+                             the default repository uses its historical signer pin;
+                             other repositories use the current release fingerprint.
   --backup-dir PATH          Local backup directory outside the repository
   --dispatch                 Run build-aio-enrollment.yml after configuration
   -h, --help                 Show this help
@@ -84,6 +85,11 @@ normalize_sha() {
   printf '%s' "$1" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]'
 }
 
+if [[ -z "$expected_sha256" && "$repo" == "FuzzsT/ENRROL_NEW" ]]; then
+  # Historical Continuous certificate; same pin as recover_stable_signer_verified.py.
+  expected_sha256="E7873449EDF167F6D6DEA07FB27567834DC455222C66B09C77EDB92E579F4AD4"
+fi
+
 if [[ -z "$expected_sha256" ]]; then
   release_url="https://github.com/${repo}/releases/download/dpc-aio-continuous/signing-cert-sha256.txt"
   if command -v curl >/dev/null && expected_raw="$(curl -fsSL --max-time 20 "$release_url" 2>/dev/null)"; then
@@ -127,8 +133,8 @@ printf 'Certificate SHA-256: %s\n' "$observed_sha256"
 printf 'Local backup: %s\n' "$backup_path"
 
 if [[ "$dispatch" == true ]]; then
-  gh workflow run build-aio-enrollment.yml --repo "$repo" --ref main
+  gh workflow run build-aio-enrollment.yml --repo "$repo" --ref main -f signing_mode=stable -f repair_manifests_only=false
   echo "Dispatched build-aio-enrollment.yml on main."
 else
-  echo "Run when ready: gh workflow run build-aio-enrollment.yml --repo '$repo' --ref main"
+  echo "Run when ready: gh workflow run build-aio-enrollment.yml --repo '$repo' --ref main -f signing_mode=stable -f repair_manifests_only=false"
 fi

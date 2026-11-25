@@ -66,6 +66,10 @@ try {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    if (-not $ExpectedSha256 -and $Repo -ieq 'FuzzsT/ENRROL_NEW') {
+        # Historical Continuous certificate; same pin as recover_stable_signer_verified.py.
+        $ExpectedSha256 = 'E7873449EDF167F6D6DEA07FB27567834DC455222C66B09C77EDB92E579F4AD4'
+    }
     if (-not $ExpectedSha256) {
         $releaseUri = "https://github.com/$Repo/releases/download/dpc-aio-continuous/signing-cert-sha256.txt"
         try { $ExpectedSha256 = (Invoke-WebRequest -UseBasicParsing -Uri $releaseUri -TimeoutSec 20).Content }
@@ -97,11 +101,11 @@ try {
     Write-Host "Certificate SHA-256: $observed"
     Write-Host "Local backup: $backup"
     if ($Dispatch) {
-        & gh workflow run build-aio-enrollment.yml --repo $Repo --ref main
+        & gh workflow run build-aio-enrollment.yml --repo $Repo --ref main -f signing_mode=stable -f repair_manifests_only=false
         if ($LASTEXITCODE -ne 0) { throw 'Failed to dispatch build-aio-enrollment.yml.' }
         Write-Host 'Dispatched build-aio-enrollment.yml on main.'
     } else {
-        Write-Host "Run when ready: gh workflow run build-aio-enrollment.yml --repo '$Repo' --ref main"
+        Write-Host "Run when ready: gh workflow run build-aio-enrollment.yml --repo '$Repo' --ref main -f signing_mode=stable -f repair_manifests_only=false"
     }
 } finally {
     $storePlain = $null
