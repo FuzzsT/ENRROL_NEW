@@ -27,6 +27,16 @@ on:
           - stable
           - emergency
           - continuous-v2
+      publish_continuous_v2:
+        description: "Publish verified Continuous v2 artifacts (manual opt-in)"
+        required: false
+        default: false
+        type: boolean
+      first_continuous_v2_release:
+        description: "Confirm first v2 publication only if no v2 release exists"
+        required: false
+        default: false
+        type: boolean
       release_signing_password:
         description: "Optional password for the persisted encrypted continuous-release keystore (min. 12 chars). Reuse the same password as earlier Zero-Settings runs."
         required: false
@@ -90,13 +100,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: enrollment-${{ github.ref }}
-  cancel-in-progress: true
+  group: enrollment-${{ github.ref }}${{ inputs.signing_mode == 'continuous-v2' && '-v2' || '' }}
+  cancel-in-progress: ${{ inputs.signing_mode != 'continuous-v2' }}
 
 jobs:
   repair-self-update-manifests:
     name: Repair existing Self Update manifests
-    if: (github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true && inputs.signing_mode != 'continuous-v2') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true && inputs.signing_mode != 'continuous-v2' && inputs.publish_continuous_v2 != true && inputs.first_continuous_v2_release != true) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -260,7 +270,7 @@ jobs:
           done
 
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true || inputs.signing_mode == 'continuous-v2'
+    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true || inputs.signing_mode == 'continuous-v2' || inputs.publish_continuous_v2 == true || inputs.first_continuous_v2_release == true
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -291,6 +301,8 @@ jobs:
           HAS_LEGACY_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD != '' }}
           HAS_V2_CUSTOM_APK_URL: ${{ inputs.apk_url != '' }}
           HAS_V2_REPAIR_REQUEST: ${{ inputs.repair_manifests_only == true }}
+          V2_PUBLISH_REQUESTED: ${{ inputs.publish_continuous_v2 == true }}
+          V2_FIRST_RELEASE_REQUESTED: ${{ inputs.first_continuous_v2_release == true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -304,6 +316,14 @@ jobs:
           [[ "$HAS_EXPECTED_SIGNING_CERT" == "true" ]] || missing+=("DPC_AIO_EXPECTED_SIGNING_CERT_SHA256")
 
           AUTO_EMERGENCY_FALLBACK="false"
+          if [[ "$requested" != "continuous-v2" && ( "$V2_PUBLISH_REQUESTED" == "true" || "$V2_FIRST_RELEASE_REQUESTED" == "true" ) ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID: v2 publication flags require continuous-v2 mode" >&2
+            exit 1
+          fi
+          if [[ "$V2_FIRST_RELEASE_REQUESTED" == "true" && "$V2_PUBLISH_REQUESTED" != "true" ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID: initial release requires explicit publication" >&2
+            exit 1
+          fi
           if [[ "$requested" == "continuous-v2" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_MANUAL_SIGNING_PASSWORD" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" ]]; then
               echo "CONTINUOUS_V2_ROUTE_INVALID: use a manual main build without legacy password, custom APK URL or repair-only mode" >&2
@@ -351,7 +371,12 @@ jobs:
             release_tag="dpc-aio-continuous-v2"
             artifact_name="DPC-AIO-continuous-v2-verified-build-only"
             should_publish="false"
-            echo "::notice title=CONTINUOUS_V2_BUILD_ONLY::Verified artifacts only; public publication is not enabled yet."
+            if [[ "$V2_PUBLISH_REQUESTED" == "true" ]]; then
+              artifact_name="DPC-AIO-continuous-v2-verified-release"
+              should_publish="true"
+            else
+              echo "::notice title=CONTINUOUS_V2_BUILD_ONLY::Verified artifacts only; publication was not requested."
+            fi
           elif [[ "$mode" == "emergency" ]]; then
             release_tag="dpc-aio-emergency-enrollment"
             artifact_name="DPC-AIO-emergency-enrollment"
@@ -838,11 +863,57 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout v2 publication guard
+        if: needs.build.outputs.mode == 'continuous-v2'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Download verified artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
+
+      - name: Guard Continuous v2 release progression
+        id: v2_guard
+        if: needs.build.outputs.mode == 'continuous-v2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
+          SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
+          EXPECTED_V2_CERT: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          FIRST_RELEASE: ${{ inputs.first_continuous_v2_release == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "FuzzsT/ENRROL_NEW" && "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
+          [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
+          guard_dir="$(mktemp -d)"
+          trap 'rm -rf "$guard_dir"' EXIT
+          gh api "repos/FuzzsT/ENRROL_NEW/releases?per_page=1" >/dev/null
+          status="$(curl --silent --show-error --proto '=https' --connect-timeout 15 --max-time 60 \
+            --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" \
+            --output "$guard_dir/release.json" --write-out '%{http_code}' \
+            "https://api.github.com/repos/FuzzsT/ENRROL_NEW/releases/tags/dpc-aio-continuous-v2")"
+          case "$status" in
+            200)
+              [[ "$FIRST_RELEASE" != "true" ]] || { echo "CONTINUOUS_V2_ALREADY_EXISTS" >&2; exit 1; }
+              gh release download dpc-aio-continuous-v2 --repo FuzzsT/ENRROL_NEW --pattern self-update.json --pattern signing-cert-sha256.txt --dir "$guard_dir"
+              python3 tools/release/check_continuous_v2_release.py --dist dist --tag "$RELEASE_TAG" --expected-pin "$EXPECTED_V2_CERT" --prior "$guard_dir"
+              echo "release_exists=true" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              [[ "$FIRST_RELEASE" == "true" ]] || { echo "CONTINUOUS_V2_FIRST_RELEASE_CONFIRMATION_REQUIRED" >&2; exit 1; }
+              python3 tools/release/check_continuous_v2_release.py --dist dist --tag "$RELEASE_TAG" --expected-pin "$EXPECTED_V2_CERT" --first-release
+              echo "release_exists=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "CONTINUOUS_V2_RELEASE_LOOKUP_FAILED HTTP=$status" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Guard continuous release progression
         if: needs.build.outputs.release_tag == 'dpc-aio-continuous'
@@ -896,11 +967,18 @@ jobs:
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
           SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
+          V2_RELEASE_EXISTS: ${{ steps.v2_guard.outputs.release_exists }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "$MODE" == "emergency" ]]; then
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
+            [[ "$V2_RELEASE_EXISTS" == "true" || "$V2_RELEASE_EXISTS" == "false" ]]
+            title="DPC-AIO Continuous v2 Enrollment"
+            notes="Dedicated v2 signer and Self Update channel. Existing legacy installations require an authorized signing lineage for in-place updates. Commit: $GITHUB_SHA."
+            prerelease="--prerelease"
+          elif [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
             if [[ "$SELF_UPDATE_MANIFEST" == "true" ]]; then
               notes="Emergency DPC-AIO 1.1.4 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
@@ -923,7 +1001,17 @@ jobs:
             prerelease="--prerelease"
           fi
 
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [[ "$MODE" != "continuous-v2" && "$RELEASE_TAG" == "dpc-aio-continuous-v2" ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID" >&2
+            exit 1
+          fi
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            if [[ "$V2_RELEASE_EXISTS" == "true" ]]; then
+              gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
+            else
+              gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
+            fi
+          elif gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
           else
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
@@ -945,7 +1033,15 @@ jobs:
             done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
           fi
 
-          gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            for file in dist/*; do
+              [[ "$file" == "dist/self-update.json" ]] && continue
+              gh release upload "$RELEASE_TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+            done
+            gh release upload "$RELEASE_TAG" dist/self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          fi
 
           if [[ "$MODE" == "stable" && "$GITHUB_REF_TYPE" == "tag" ]]; then
             stable_alias="dpc-aio-stable"
@@ -1044,7 +1140,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$MODE" == "emergency" ]]; then
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" ]]
+            manifest_tag="$RELEASE_TAG"
+            expected_channel="continuous-v2"
+          elif [[ "$MODE" == "emergency" ]]; then
             manifest_tag="$RELEASE_TAG"
             expected_channel="emergency"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
