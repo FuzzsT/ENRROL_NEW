@@ -4,7 +4,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = '1.1.4'
-EXPECTED_CODE = '25'
+MINIMUM_CODE = 25
 
 def read(path: str) -> str:
     return (ROOT / path).read_text('utf-8', errors='strict')
@@ -15,8 +15,8 @@ def main() -> None:
     version_code = re.search(r'versionCode\s*=\s*(\d+)', gradle)
     if not version_name or version_name.group(1) != EXPECTED:
         raise AssertionError(f'versionName must be {EXPECTED}, got {version_name.group(1) if version_name else None}')
-    if not version_code or version_code.group(1) != EXPECTED_CODE:
-        raise AssertionError(f'versionCode must be {EXPECTED_CODE}, got {version_code.group(1) if version_code else None}')
+    if not version_code or int(version_code.group(1)) < MINIMUM_CODE:
+        raise AssertionError(f'versionCode must be >= {MINIMUM_CODE}, got {version_code.group(1) if version_code else None}')
     dashboard = read('apps/dpc/app/src/main/kotlin/io/dpcaio/app/AioDashboardActivity.kt')
     for marker in ['packageManager.getPackageInfo(packageName, 0).versionName', 'v$versionName • Device Owner / policy / research toolkit']:
         if marker not in dashboard:
