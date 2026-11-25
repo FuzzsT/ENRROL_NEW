@@ -58,4 +58,4 @@ Verify the public APK, certificate fingerprint, manifest and QR metadata after p
 | CONTINUOUS_V2_ALREADY_EXISTS | Do not request first publication of an existing release. |
 | CONTINUOUS_V2_SIGNER_CHANGED / ROLLBACK / VERSION_REUSE | Stop and verify the intended key, build version and existing release. |
 
-Normal push builds still use the original channel and its signing configuration. Automatic v2 publication is not configured. No new workflow file is required.
+AUTO on main (manual or push) selects the dedicated V2 build-only route when all V2 credentials and the fingerprint are configured and the complete original stable configuration is absent. Partial V2 configuration blocks this automatic selection. Explicit stable mode and version-tag releases retain the original signing lineage. Publication of V2 still requires an explicit manual continuous-v2 dispatch with the publication flags. No new workflow file is required.
