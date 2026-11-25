@@ -32,6 +32,17 @@ class SelfUpdateClient(
         }
     }
 
+    fun fetchManifestWithFallback(primaryUrl: String, fallbackUrl: String?): SelfUpdateManifest {
+        return try {
+            fetchManifest(primaryUrl)
+        } catch (error: SelfUpdateHttpException) {
+            if (error.statusCode != HttpURLConnection.HTTP_NOT_FOUND || fallbackUrl.isNullOrBlank()) {
+                throw error
+            }
+            fetchManifest(fallbackUrl)
+        }
+    }
+
     fun downloadApk(
         url: String,
         destination: File,
