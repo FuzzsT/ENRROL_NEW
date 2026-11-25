@@ -80,11 +80,17 @@ jobs:
           NEW_KEY_ALIAS: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEY_ALIAS }}
           NEW_KEY_PASSWORD: ${{ secrets.DPC_AIO_MIGRATION_NEW_KEY_PASSWORD }}
           LINEAGE_B64: ${{ secrets.DPC_AIO_MIGRATION_LINEAGE_B64 }}
-          OLD_CERT_SHA256: ${{ vars.DPC_AIO_MIGRATION_OLD_CERT_SHA256 || secrets.DPC_AIO_MIGRATION_OLD_CERT_SHA256 }}
-          NEW_CERT_SHA256: ${{ vars.DPC_AIO_MIGRATION_NEW_CERT_SHA256 || secrets.DPC_AIO_MIGRATION_NEW_CERT_SHA256 }}
+          OLD_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_MIGRATION_OLD_CERT_SHA256 }}
+          OLD_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_MIGRATION_OLD_CERT_SHA256 }}
+          NEW_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_MIGRATION_NEW_CERT_SHA256 }}
+          NEW_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_MIGRATION_NEW_CERT_SHA256 }}
         shell: bash
         run: |
           set -euo pipefail
+          OLD_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py OLD_CERT_SHA256)"
+          export OLD_CERT_SHA256
+          NEW_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py NEW_CERT_SHA256)"
+          export NEW_CERT_SHA256
           missing=()
           for name in OLD_KEYSTORE_B64 OLD_STORE_PASSWORD OLD_KEY_ALIAS OLD_KEY_PASSWORD NEW_KEYSTORE_B64 NEW_STORE_PASSWORD NEW_KEY_ALIAS NEW_KEY_PASSWORD LINEAGE_B64 OLD_CERT_SHA256 NEW_CERT_SHA256; do
             [[ -n "${!name:-}" ]] || missing+=("$name")

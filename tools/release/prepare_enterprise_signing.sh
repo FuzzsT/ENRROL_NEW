@@ -164,6 +164,12 @@ if [[ -n "$persisted_url" ]]; then
   encrypted_in="$RUNNER_TEMP/dpc-aio-persisted-signing.enc"
   if curl -fsSL --connect-timeout 10 --max-time 60 "$persisted_url" -o "$encrypted_in"; then
     persisted_state="downloaded"
+    if [[ -n "${DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256:-}" ]]; then
+      if ! python3 "$(dirname "${BASH_SOURCE[0]}")/verify_persisted_signing_asset.py" "$encrypted_in" "$DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256"; then
+        rm -f "$encrypted_in" "$keystore"
+        exit 1
+      fi
+    fi
     # OpenSSL enc stores the Salted__ magic followed by the historical 8-byte salt.
     asset_header="$(od -An -tx1 -N8 "$encrypted_in" | tr -d '[:space:]')"
     asset_size="$(wc -c < "$encrypted_in")"
@@ -177,7 +183,11 @@ if [[ -n "$persisted_url" ]]; then
         -pass env:DPC_AIO_EFFECTIVE_SIGNING_PASSWORD 2>&1)"; then
       case "$decrypt_error" in
         *"bad decrypt"*)
-          echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: decryption failed; verify the original password and ciphertext integrity" >&2 ;;
+          echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: decryption failed; verify the original password and ciphertext integrity" >&2
+          if [[ -n "${DPC_AIO_PERSISTED_SIGNING_KEYSTORE_SHA256:-}" ]]; then
+            echo "LEGACY_SIGNER_RECOVERY_BLOCKED: downloaded ciphertext matches GitHub metadata; the original password or original keystore is required. No replacement key will be generated." >&2
+          fi
+          ;;
         *)
           echo "PERSISTED_SIGNING_DECRYPT_TOOL_FAILED: OpenSSL could not process the verified envelope; check tool availability and runtime configuration" >&2 ;;
       esac
