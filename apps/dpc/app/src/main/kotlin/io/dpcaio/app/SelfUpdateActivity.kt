@@ -323,7 +323,10 @@ class SelfUpdateActivity : Activity() {
         setState(SelfUpdateState.CHECKING, "Checking ${channel.name.lowercase(Locale.ROOT)} channel…")
         Thread {
             try {
-                val manifest = client.fetchManifest(manifestUrl(channel))
+                val manifest = client.fetchManifestWithFallback(
+                    manifestUrl(channel),
+                    bootstrapManifestUrl(channel),
+                )
                 val installed = installedVersion().second
                 val decision = planner.evaluate(packageName, installed, channel, manifest)
                 store.saveCheckedManifest(manifest)
@@ -574,6 +577,11 @@ class SelfUpdateActivity : Activity() {
         UpdateChannel.EMERGENCY -> EMERGENCY_MANIFEST_URL
     }
 
+    private fun bootstrapManifestUrl(channel: UpdateChannel): String? = when (channel) {
+        UpdateChannel.CONTINUOUS -> CONTINUOUS_BOOTSTRAP_MANIFEST_URL
+        UpdateChannel.STABLE, UpdateChannel.EMERGENCY -> null
+    }
+
     private fun formatBytes(bytes: Long): String = when {
         bytes >= 1024L * 1024L -> String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0))
         bytes >= 1024L -> String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0)
@@ -592,6 +600,8 @@ class SelfUpdateActivity : Activity() {
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-stable/self-update.json"
         private const val CONTINUOUS_MANIFEST_URL =
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous/self-update.json"
+        private const val CONTINUOUS_BOOTSTRAP_MANIFEST_URL =
+            "https://raw.githubusercontent.com/FuzzsT/ENRROL_NEW/main/.github/self-update/continuous-bootstrap.json"
         private const val EMERGENCY_MANIFEST_URL =
             "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-emergency-enrollment/self-update.json"
     }
