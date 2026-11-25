@@ -9,17 +9,20 @@ on:
     branches:
       - main
   workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'schedule' && '-health' || '' }}
   cancel-in-progress: true
 
 jobs:
   source-contracts:
     name: Source contracts
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -48,6 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/tests/test_self_update_http_diagnostics.py
+          python3 -m unittest discover -s .github/scripts -p test_self_update_health.py -v
           python3 tools/tests/test_stable_signing_diagnostics.py
           python3 tools/tests/test_stable_signing_recovery_behavior.py
           python3 tools/tests/test_stable_signer_recovery_integrity_contract.py
@@ -110,6 +114,7 @@ jobs:
 
   apk-build:
     name: Enterprise debug APK
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -211,7 +216,7 @@ jobs:
 
   verify:
     name: verify
-    if: always()
+    if: always() && github.event_name != 'schedule'
     needs:
       - source-contracts
       - apk-build
@@ -229,3 +234,16 @@ jobs:
           echo "apk-build=$APK_RESULT"
           [[ "$SOURCE_RESULT" == "success" ]]
           [[ "$APK_RESULT" == "success" ]]
+
+  published-channel-health:
+    name: Published channel health
+    if: github.repository == 'FuzzsT/ENRROL_NEW' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate public manifests
+        run: python3 .github/scripts/self_update_health.py
