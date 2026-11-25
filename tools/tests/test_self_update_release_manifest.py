@@ -134,6 +134,14 @@ def main():
     repair_block = workflow.split("repair-self-update-manifests:", 1)[1].split("\n  build:", 1)[0]
     assert "python3 - <<'PY'" not in repair_block, "repair workflow must not use an indentation-sensitive Python heredoc"
     assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow
+    assert 'SELF_UPDATE_MANIFEST_UNCHANGED' in workflow, (
+        "repair mode must avoid clobbering an identical self-update manifest"
+    )
+    assert 'Verify full release asset set' in workflow, (
+        "full release publication must verify every uploaded asset, not only the APK"
+    )
+    assert 'FULL_RELEASE_ASSET_MISMATCH' in workflow
+    assert 'FULL_RELEASE_TARGET_MISMATCH' in workflow
 
     client = CLIENT.read_text(encoding="utf-8")
     for token in ["MAX_MANIFEST_BYTES", "MAX_APK_BYTES", "readLimited", '"emergency" -> UpdateChannel.EMERGENCY']:
