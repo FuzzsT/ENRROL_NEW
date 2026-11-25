@@ -60,12 +60,13 @@ class SelfUpdateActivity : Activity() {
         super.onCreate(savedInstanceState)
         launchActionConsumed = savedInstanceState?.getBoolean(STATE_LAUNCH_ACTION_CONSUMED, false) ?: false
         title = "DPC-AIO Self Update"
+        val defaultChannel = if (BuildConfig.CONTINUOUS_V2_BUILD) UpdateChannel.CONTINUOUS_V2 else UpdateChannel.CONTINUOUS
         val restored = runCatching {
             UpdateChannel.valueOf(
-                preferences.getString(KEY_CHANNEL, UpdateChannel.CONTINUOUS.name)
-                    ?: UpdateChannel.CONTINUOUS.name
+                preferences.getString(KEY_CHANNEL, defaultChannel.name)
+                    ?: defaultChannel.name
             )
-        }.getOrDefault(UpdateChannel.CONTINUOUS)
+        }.getOrDefault(defaultChannel)
         selectedChannel = if (restored == UpdateChannel.STABLE) UpdateChannel.CONTINUOUS else restored
         if (restored != selectedChannel) {
             preferences.edit().putString(KEY_CHANNEL, selectedChannel.name).apply()

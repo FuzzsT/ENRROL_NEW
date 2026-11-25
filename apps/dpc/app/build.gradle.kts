@@ -37,6 +37,8 @@ android {
         versionName = "1.1.4"
         buildConfigField("String", "ENROLLMENT_SIGNING_PUBLIC_KEY", buildConfigString(enrollmentSigningPublicKey.get()))
         buildConfigField("String", "OFFLINE_SIGNING_PUBLIC_KEY", buildConfigString(offlineSigningPublicKey.get()))
+        val v2Build = providers.environmentVariable("DPC_AIO_CONTINUOUS_V2_BUILD").orNull == "true"
+        buildConfigField("boolean", "CONTINUOUS_V2_BUILD", v2Build.toString())
     }
 
     buildFeatures {
