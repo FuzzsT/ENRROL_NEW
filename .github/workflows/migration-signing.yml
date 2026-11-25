@@ -1,4 +1,5 @@
 name: Migration signing validation
+run-name: 'Migration signing | ${{ github.event_name }} | ${{ github.ref_name }}'
 
 on:
   workflow_dispatch:

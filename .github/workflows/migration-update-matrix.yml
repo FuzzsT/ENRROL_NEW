@@ -1,4 +1,5 @@
 name: Migration Update Compatibility Matrix
+run-name: 'Migration matrix | ${{ github.event_name }} | ${{ github.ref_name }}'
 
 on:
   workflow_dispatch:
