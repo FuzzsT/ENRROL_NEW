@@ -504,7 +504,8 @@ jobs:
           DPC_AIO_V2_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_STORE_PASSWORD }}
           DPC_AIO_V2_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_ALIAS }}
           DPC_AIO_V2_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_PASSWORD }}
-          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "true"
           DPC_AIO_MANUAL_SIGNING_PASSWORD: ""
           DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL: ""
@@ -512,6 +513,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256)"
+          export DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256
           python3 tools/release/check_continuous_v2_preflight.py
           export DPC_AIO_RELEASE_KEYSTORE_B64="$DPC_AIO_V2_RELEASE_KEYSTORE_B64"
           export DPC_AIO_RELEASE_STORE_PASSWORD="$DPC_AIO_V2_RELEASE_STORE_PASSWORD"
@@ -528,13 +531,16 @@ jobs:
           DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
           DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
           DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
-          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256_VARIABLE: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256_SECRET: ${{ secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
           DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
           DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
           DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"
         shell: bash
         run: |
           set -euo pipefail
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256="$(python3 tools/release/resolve_signing_pin.py DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256 --allow-missing)"
+          export DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256
           if [[ "${{ steps.mode.outputs.stable_signing_configured }}" == "true" ]]; then
             for name in DPC_AIO_RELEASE_KEYSTORE_B64 DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256; do
               if [[ -z "${!name:-}" ]]; then
@@ -872,11 +878,14 @@ jobs:
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
           SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
           SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
-          EXPECTED_V2_CERT: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          EXPECTED_V2_CERT_VARIABLE: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          EXPECTED_V2_CERT_SECRET: ${{ secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
           FIRST_RELEASE: ${{ inputs.first_continuous_v2_release == true }}
         shell: bash
         run: |
           set -euo pipefail
+          EXPECTED_V2_CERT="$(python3 tools/release/resolve_signing_pin.py EXPECTED_V2_CERT)"
+          export EXPECTED_V2_CERT
           [[ "$GITHUB_REPOSITORY" == "FuzzsT/ENRROL_NEW" && "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
           guard_dir="$(mktemp -d)"

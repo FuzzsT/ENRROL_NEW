@@ -233,6 +233,7 @@ python3 "$ROOT/tools/tests/test_self_update_core_contract.py"
 python3 "$ROOT/tools/tests/test_self_update_release_manifest.py"
 python3 "$ROOT/tools/tests/test_continuous_v2_manifest_contract.py"
 python3 "$ROOT/tools/tests/test_continuous_v2_preflight.py"
+python3 "$ROOT/tools/tests/test_signing_pin_sources.py"
 python3 "$ROOT/tools/tests/test_continuous_v2_release_guard.py"
 node --test "$ROOT/services/provisioning/test"/*.test.mjs
 python3 "$ROOT/tools/tests/test_release_gate.py"
