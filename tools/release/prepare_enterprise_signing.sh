@@ -164,13 +164,28 @@ if [[ -n "$persisted_url" ]]; then
   encrypted_in="$RUNNER_TEMP/dpc-aio-persisted-signing.enc"
   if curl -fsSL --connect-timeout 10 --max-time 60 "$persisted_url" -o "$encrypted_in"; then
     persisted_state="downloaded"
-    if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-        -in "$encrypted_in" -out "$keystore" \
-        -pass env:DPC_AIO_EFFECTIVE_SIGNING_PASSWORD >/dev/null 2>&1; then
-      echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: existing release signing keystore could not be decrypted with the entered password" >&2
+    # OpenSSL enc stores the Salted__ magic followed by the historical 8-byte salt.
+    asset_header="$(od -An -tx1 -N8 "$encrypted_in" | tr -d '[:space:]')"
+    asset_size="$(wc -c < "$encrypted_in")"
+    if [[ "$asset_header" != "53616c7465645f5f" ]] || (( asset_size < 32 || asset_size % 16 != 0 )); then
+      echo "PERSISTED_SIGNING_ASSET_FORMAT_INVALID: downloaded asset is not the expected salted AES-CBC envelope" >&2
       rm -f "$encrypted_in" "$keystore"
       exit 1
     fi
+    if ! decrypt_error="$(LC_ALL=C openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 \
+        -in "$encrypted_in" -out "$keystore" \
+        -pass env:DPC_AIO_EFFECTIVE_SIGNING_PASSWORD 2>&1)"; then
+      case "$decrypt_error" in
+        *"bad decrypt"*)
+          echo "PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH: decryption failed; verify the original password and ciphertext integrity" >&2 ;;
+        *)
+          echo "PERSISTED_SIGNING_DECRYPT_TOOL_FAILED: OpenSSL could not process the verified envelope; check tool availability and runtime configuration" >&2 ;;
+      esac
+      unset decrypt_error
+      rm -f "$encrypted_in" "$keystore"
+      exit 1
+    fi
+    unset decrypt_error
     rm -f "$encrypted_in"
     chmod 600 "$keystore"
     if ! validate_keystore "$keystore" "$alias" "$password"; then
