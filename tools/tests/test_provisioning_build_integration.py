@@ -43,6 +43,18 @@ def main():
         if token not in gradle:
             raise AssertionError(f'apps/dpc/app/build.gradle.kts missing {token}')
 
+    # Keep arbitrary free-form values bound to the intended argparse option.
+    for token in [
+        '"--enrollment-token=$it"',
+        '"--policy-profile=${provisioningPolicyProfile.get().ifBlank { "default" }}"',
+        '"--offline-bundle-id=$it"',
+        'PROVISIONING_QR_CONFIG_INVALID',
+        'PROVISIONING_QR_GENERATOR_FAILED',
+        'isIgnoreExitValue = true',
+        'standardError.asText.get()',
+    ]:
+        assert token in gradle, f'QR invocation/diagnostic regression: {token}'
+
     workflow = must('.github/workflows/build-aio-enrollment.yml', 'Build signed enterpriseRelease')
     if 'releases/latest/download/DPC-AIO-enterprise-debug.apk' in workflow:
         raise AssertionError('manual provisioning must not depend on a pre-existing latest release asset')
