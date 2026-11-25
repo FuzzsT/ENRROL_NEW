@@ -4,17 +4,20 @@ ROOT = Path(__file__).resolve().parents[2]
 workflow = (ROOT / '.github/workflows/build-aio-enrollment.yml').read_text(encoding='utf-8')
 normal_ci = (ROOT / '.github/workflows/pr-android-ci.yml').read_text(encoding='utf-8')
 
-assert 'if [[ "$requested" == "auto" ]]; then\n            mode="stable"' in workflow, (
-    'auto mode must resolve directly to stable; normal builds may not silently fall back to emergency'
+for token in [
+    'HAS_LEGACY_SIGNING_PASSWORD',
+    'secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD',
+    'AUTO_EMERGENCY_FALLBACK',
+    'mode="emergency"',
+    'AUTO_EMERGENCY_FALLBACK: stable signing is unavailable; publishing a fresh recovery APK instead of failing the rolling build.',
+]:
+    assert token in workflow, f'rolling release fallback contract missing: {token}'
+
+assert 'DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}' in workflow, (
+    'stable signer must accept the persisted legacy password from Actions secrets for unattended main builds'
 )
-assert 'mode="emergency"' not in workflow.split('if [[ "$requested" == "auto" ]]; then', 1)[1].split('else\n            mode="$requested"', 1)[0], (
-    'auto mode must not contain an emergency fallback'
-)
-assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow, (
-    'workflow must reject non-dispatch emergency signing'
-)
-assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.' in workflow, (
-    'missing stable signing configuration must fail closed with a clear diagnostic'
+assert 'DPC_AIO_REQUIRE_PERSISTED_SIGNER: ${{ github.event_name != \'workflow_dispatch\' }}' in workflow, (
+    'automated password-backed builds must never create/rotate a signing key when persisted ciphertext is unavailable'
 )
 assert 'Prepare emergency ephemeral signer' in workflow, (
     'explicit emergency mode should remain available as a separate recovery path'
