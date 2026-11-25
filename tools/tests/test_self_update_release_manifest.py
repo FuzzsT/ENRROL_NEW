@@ -120,8 +120,10 @@ def main():
     assert "if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true" in workflow, (
         "normal build must be skipped during manifest-only repair"
     )
-    assert "if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow, (
-        "manifest repair must be explicit workflow_dispatch only"
+    assert "repair-self-update-manifests:" in workflow
+    assert "github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow
+    assert "github.event_name == 'push' && github.ref == 'refs/heads/main'" in workflow, (
+        "main pushes must be able to backfill a missing rolling self-update manifest"
     )
     assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow
     assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
