@@ -4,18 +4,24 @@ ROOT = Path(__file__).resolve().parents[2]
 workflow = (ROOT / '.github/workflows/build-aio-enrollment.yml').read_text(encoding='utf-8')
 normal_ci = (ROOT / '.github/workflows/pr-android-ci.yml').read_text(encoding='utf-8')
 
-assert 'if [[ "$requested" == "auto" ]]; then\n            mode="stable"' in workflow, (
-    'auto mode must resolve directly to stable; normal builds may not silently fall back to emergency'
+for token in [
+    'HAS_LEGACY_SIGNING_PASSWORD',
+    'secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD',
+    'AUTO_EMERGENCY_FALLBACK',
+    'mode="emergency"',
+    'AUTO_EMERGENCY_FALLBACK: stable signing is unavailable; publishing a fresh recovery APK instead of failing the rolling build.',
+]:
+    assert token in workflow, f'rolling release fallback contract missing: {token}'
+
+assert 'DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}' in workflow, (
+    'stable signer must accept the persisted legacy password from Actions secrets for unattended main builds'
 )
-assert 'mode="emergency"' not in workflow.split('if [[ "$requested" == "auto" ]]; then', 1)[1].split('else\n            mode="$requested"', 1)[0], (
-    'auto mode must not contain an emergency fallback'
+assert 'DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"' in workflow, (
+    'manual and automated password-backed builds must never create/rotate an existing release signing key when persisted ciphertext is unavailable'
 )
-assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow, (
-    'workflow must reject non-dispatch emergency signing'
-)
-assert 'STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing.' in workflow, (
-    'missing stable signing configuration must fail closed with a clear diagnostic'
-)
+assert '::warning title=CONTINUOUS_BLOCKED::' in workflow
+assert '::error title=CONTINUOUS_BLOCKED::' in workflow
+assert workflow.count('>> "$GITHUB_STEP_SUMMARY"') >= 2
 assert 'Prepare emergency ephemeral signer' in workflow, (
     'explicit emergency mode should remain available as a separate recovery path'
 )
@@ -59,5 +65,15 @@ assert 'CI-DEBUG-NOT-FOR-SELF-UPDATE.txt' in normal_ci, 'CI/debug artifact must 
 assert 'DPC-AIO-enterprise-debug-${{ github.run_number }}' not in normal_ci, 'ephemeral CI/debug artifact must not look like the updateable normal release channel'
 assert 'actions/upload-artifact@' in normal_ci, 'main CI must upload the APK artifact'
 assert 'DPC_AIO_RELEASE_KEYSTORE_B64' not in normal_ci, 'CI/debug artifact must not require stable release signing secrets'
+
+signer = (ROOT / 'tools/release/prepare_enterprise_signing.sh').read_text(encoding='utf-8')
+for marker in [
+    'PERSISTED_SIGNING_ASSET_FORMAT_INVALID',
+    'PERSISTED_SIGNING_DECRYPT_TOOL_FAILED',
+    'PERSISTED_SIGNING_KEY_PASSWORD_MISMATCH',
+    '-md sha256',
+    '53616c7465645f5f',
+]:
+    assert marker in signer, f'persisted signer diagnostic missing: {marker}'
 
 print('MAIN_STABLE_SIGNING_POLICY_CONTRACT: PASS')

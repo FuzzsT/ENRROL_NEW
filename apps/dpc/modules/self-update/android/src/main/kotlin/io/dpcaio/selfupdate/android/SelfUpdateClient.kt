@@ -32,6 +32,17 @@ class SelfUpdateClient(
         }
     }
 
+    fun fetchManifestWithFallback(primaryUrl: String, fallbackUrl: String?): SelfUpdateManifest {
+        return try {
+            fetchManifest(primaryUrl)
+        } catch (error: SelfUpdateHttpException) {
+            if (error.statusCode != HttpURLConnection.HTTP_NOT_FOUND || fallbackUrl.isNullOrBlank()) {
+                throw error
+            }
+            fetchManifest(fallbackUrl)
+        }
+    }
+
     fun downloadApk(
         url: String,
         destination: File,
@@ -79,6 +90,7 @@ class SelfUpdateClient(
         channel = when (json.getString("channel").trim().lowercase(Locale.ROOT)) {
             "stable" -> UpdateChannel.STABLE
             "continuous" -> UpdateChannel.CONTINUOUS
+            "continuous-v2" -> UpdateChannel.CONTINUOUS_V2
             "emergency" -> UpdateChannel.EMERGENCY
             else -> throw IllegalArgumentException("Unsupported update channel")
         },
@@ -122,6 +134,7 @@ class SelfUpdateClient(
             val channel = when {
                 requestedUrl.contains("/dpc-aio-stable/", ignoreCase = true) -> "stable"
                 requestedUrl.contains("/dpc-aio-continuous/", ignoreCase = true) -> "continuous"
+                requestedUrl.contains("/dpc-aio-continuous-v2/", ignoreCase = true) -> "continuous-v2"
                 requestedUrl.contains("/dpc-aio-emergency-enrollment/", ignoreCase = true) -> "emergency"
                 else -> null
             }

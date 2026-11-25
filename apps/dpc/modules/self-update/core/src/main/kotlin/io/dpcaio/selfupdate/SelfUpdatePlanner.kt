@@ -26,6 +26,9 @@ class SelfUpdatePlanner {
         if (!manifest.apkUrl.startsWith("https://")) {
             return reject("APK_URL_NOT_HTTPS")
         }
+        if ((manifest.channel == UpdateChannel.CONTINUOUS_V2) != (manifest.apkUrl == CONTINUOUS_V2_APK_URL)) {
+            return reject("CONTINUOUS_V2_APK_URL_MISMATCH")
+        }
         if (!SHA256.matches(manifest.apkSha256)) {
             return reject("INVALID_APK_SHA256")
         }
@@ -43,6 +46,8 @@ class SelfUpdatePlanner {
     )
 
     private companion object {
+        const val CONTINUOUS_V2_APK_URL =
+            "https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous-v2/DPC-AIO-enterprise-release.apk"
         val SHA256 = Regex("^[0-9a-fA-F]{64}$")
     }
 }

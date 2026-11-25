@@ -27,6 +27,21 @@ on:
           - auto
           - stable
           - emergency
+          - continuous-v2
+      publish_continuous_v2:
+        description: "Publish verified Continuous v2 artifacts (manual opt-in)"
+        required: false
+        default: false
+        type: boolean
+      first_continuous_v2_release:
+        description: "Confirm first v2 publication only if no v2 release exists"
+        required: false
+        default: false
+        type: boolean
+      release_signing_password:
+        description: "Optional password for the persisted encrypted continuous-release keystore (min. 12 chars). Reuse the same password as earlier Zero-Settings runs."
+        required: false
+        type: string
       repair_manifests_only:
         description: "Repair existing Self Update manifests only; do not rebuild or re-sign APKs"
         required: false
@@ -86,13 +101,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: enrollment-${{ github.ref }}
-  cancel-in-progress: true
+  group: enrollment-${{ github.ref }}${{ inputs.signing_mode == 'continuous-v2' && '-v2' || '' }}
+  cancel-in-progress: ${{ inputs.signing_mode != 'continuous-v2' }}
 
 jobs:
   repair-self-update-manifests:
     name: Repair existing Self Update manifests
-    if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true
+    if: (github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true && inputs.signing_mode != 'continuous-v2' && inputs.publish_continuous_v2 != true && inputs.first_continuous_v2_release != true) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -131,6 +146,10 @@ jobs:
           export PATH="$(dirname "$aapt_bin"):$PATH"
 
           for tag in dpc-aio-continuous dpc-aio-emergency-enrollment; do
+            if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "REPAIR_SELF_UPDATE_RELEASE_SKIPPED_MISSING tag=$tag"
+              continue
+            fi
             dir="repair/$tag"
             rm -rf "$dir"
             mkdir -p "$dir"
@@ -225,38 +244,34 @@ jobs:
                 --release-notes-url "$notes_url"
 
               test -s self-update.json
-              gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+              existing_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=pre-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
+              if curl -fsSL --retry 2 --retry-delay 2 "$existing_manifest_url" -o existing-self-update.json \
+                  && cmp -s existing-self-update.json self-update.json; then
+                echo "SELF_UPDATE_MANIFEST_UNCHANGED tag=$tag; keeping existing release asset untouched"
+              else
+                gh release upload "$tag" self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+              fi
 
               public_manifest_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/self-update.json?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${tag}"
               curl -fL --retry 3 --retry-delay 3 "$public_manifest_url" -o public-self-update.json
 
-              TAG="$tag" CHANNEL="$channel" PACKAGE_NAME="$package_name" VERSION_CODE="$version_code" VERSION_NAME="$version_name" APK_URL="$apk_url" EXPECTED_SHA="$expected_sha" python3 - <<'PY'
-              import json
-              import os
-              from pathlib import Path
-
-              payload = json.loads(Path('public-self-update.json').read_text(encoding='utf-8'))
-              expected = {
-                  'channel': os.environ['CHANNEL'],
-                  'packageName': os.environ['PACKAGE_NAME'],
-                  'versionCode': int(os.environ['VERSION_CODE']),
-                  'versionName': os.environ['VERSION_NAME'],
-                  'apkUrl': os.environ['APK_URL'],
-                  'apkSha256': os.environ['EXPECTED_SHA'],
-              }
-              for key, value in expected.items():
-                  if payload.get(key) != value:
-                      raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field={key} expected={value!r} observed={payload.get(key)!r}')
-              if int(payload.get('apkSize', 0)) != Path('DPC-AIO-enterprise-release.apk').stat().st_size:
-                  raise SystemExit(f'REPAIR_SELF_UPDATE_MANIFEST_VERIFY_FAILED tag={os.environ["TAG"]} field=apkSize')
-              PY
+              python3 "$GITHUB_WORKSPACE/tools/release/verify_self_update_manifest.py" \
+                --manifest public-self-update.json \
+                --apk DPC-AIO-enterprise-release.apk \
+                --tag "$tag" \
+                --channel "$channel" \
+                --package "$package_name" \
+                --version-code "$version_code" \
+                --version-name "$version_name" \
+                --apk-url "$apk_url" \
+                --apk-sha256 "$expected_sha"
 
               echo "REPAIR_SELF_UPDATE_MANIFEST_OK tag=$tag channel=$channel version=$version_name code=$version_code sha256=$expected_sha"
             )
           done
 
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true
+    if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true || inputs.signing_mode == 'continuous-v2' || inputs.publish_continuous_v2 == true || inputs.first_continuous_v2_release == true
     runs-on: ubuntu-latest
     timeout-minutes: 70
     permissions:
@@ -267,6 +282,7 @@ jobs:
       artifact_name: ${{ steps.mode.outputs.artifact_name }}
       should_publish: ${{ steps.mode.outputs.should_publish }}
       stable_signing_configured: ${{ steps.mode.outputs.stable_signing_configured }}
+      signing_mode: ${{ steps.signing.outputs.mode || steps.signing_v2.outputs.mode }}
       self_update_manifest: ${{ steps.self_update_manifest.outputs.available }}
 
     steps:
@@ -282,6 +298,12 @@ jobs:
           HAS_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' }}
           HAS_EXPECTED_SIGNING_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' }}
           STABLE_SIGNING_CONFIGURED: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 != '' && secrets.DPC_AIO_RELEASE_STORE_PASSWORD != '' && secrets.DPC_AIO_RELEASE_KEY_ALIAS != '' && secrets.DPC_AIO_RELEASE_KEY_PASSWORD != '' && (vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '' || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 != '') }}
+          HAS_MANUAL_SIGNING_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing_password != '' }}
+          HAS_LEGACY_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD != '' }}
+          HAS_V2_CUSTOM_APK_URL: ${{ inputs.apk_url != '' }}
+          HAS_V2_REPAIR_REQUEST: ${{ inputs.repair_manifests_only == true }}
+          V2_PUBLISH_REQUESTED: ${{ inputs.publish_continuous_v2 == true }}
+          V2_FIRST_RELEASE_REQUESTED: ${{ inputs.first_continuous_v2_release == true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -294,14 +316,37 @@ jobs:
           [[ "$HAS_RELEASE_KEY_PASSWORD" == "true" ]] || missing+=("DPC_AIO_RELEASE_KEY_PASSWORD")
           [[ "$HAS_EXPECTED_SIGNING_CERT" == "true" ]] || missing+=("DPC_AIO_EXPECTED_SIGNING_CERT_SHA256")
 
-          if [[ "$requested" == "auto" ]]; then
-            mode="stable"
+          AUTO_EMERGENCY_FALLBACK="false"
+          if [[ "$requested" != "continuous-v2" && ( "$V2_PUBLISH_REQUESTED" == "true" || "$V2_FIRST_RELEASE_REQUESTED" == "true" ) ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID: v2 publication flags require continuous-v2 mode" >&2
+            exit 1
+          fi
+          if [[ "$V2_FIRST_RELEASE_REQUESTED" == "true" && "$V2_PUBLISH_REQUESTED" != "true" ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID: initial release requires explicit publication" >&2
+            exit 1
+          fi
+          if [[ "$requested" == "continuous-v2" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$GITHUB_REF" != "refs/heads/main" || "$GITHUB_REPOSITORY" != "FuzzsT/ENRROL_NEW" || "$HAS_V2_CUSTOM_APK_URL" == "true" || "$HAS_MANUAL_SIGNING_PASSWORD" == "true" || "$HAS_V2_REPAIR_REQUEST" == "true" ]]; then
+              echo "CONTINUOUS_V2_ROUTE_INVALID: use a manual main build without legacy password, custom APK URL or repair-only mode" >&2
+              exit 1
+            fi
+            mode="continuous-v2"
+          elif [[ "$requested" == "auto" ]]; then
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$GITHUB_REF" == "refs/heads/main" && "$STABLE_SIGNING_CONFIGURED" != "true" && "$HAS_LEGACY_SIGNING_PASSWORD" != "true" ]]; then
+              mode="emergency"
+              AUTO_EMERGENCY_FALLBACK="true"
+              echo "AUTO_EMERGENCY_FALLBACK: stable signing is unavailable; publishing a fresh recovery APK instead of failing the rolling build."
+              echo "::warning title=CONTINUOUS_BLOCKED::Stable signing is unavailable. Emergency is a recovery build only; configure DPC_AIO_LEGACY_SIGNING_PASSWORD to update Continuous."
+              printf '%s\n' '### Continuous: BLOCKED' 'Emergency recovery only. Configure the existing stable signer via repository Actions secrets (DPC_AIO_LEGACY_SIGNING_PASSWORD or the full signing configuration).' >> "$GITHUB_STEP_SUMMARY"
+            else
+              mode="stable"
+            fi
           else
             mode="$requested"
           fi
 
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" ]]; then
-            echo "Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch." >&2
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$mode" == "emergency" && "$AUTO_EMERGENCY_FALLBACK" != "true" ]]; then
+            echo "Emergency signing is opt-in only unless auto fallback is required on main." >&2
             exit 1
           fi
 
@@ -311,12 +356,29 @@ jobs:
           fi
 
           if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then
-            echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
-            echo "Missing stable signing configuration: ${missing[*]}" >&2
-            exit 1
+            if [[ ("${{ github.event_name }}" == "workflow_dispatch" && "$HAS_MANUAL_SIGNING_PASSWORD" == "true") || "$HAS_LEGACY_SIGNING_PASSWORD" == "true" ]]; then
+              echo "PASSWORD_RELEASE_KEYSTORE: stable repository secrets are absent; using the persisted password-backed continuous-release signer."
+            else
+              echo "STABLE_SIGNING_KEY_REQUIRED: normal/stable build will not fall back to emergency signing." >&2
+              echo "::error title=CONTINUOUS_BLOCKED::Configure the existing signer using DPC_AIO_LEGACY_SIGNING_PASSWORD or the complete stable signing configuration."
+              printf '%s\n' '### Continuous: BLOCKED' 'No stable signing configuration is available. Configure the existing signing key in Settings > Secrets and variables > Actions.' >> "$GITHUB_STEP_SUMMARY"
+              echo "Missing stable signing configuration: ${missing[*]}" >&2
+              echo "For the existing dpc-aio-continuous channel, run workflow_dispatch and provide release_signing_password to reuse DPC-AIO-signing-keystore.enc." >&2
+              exit 1
+            fi
           fi
 
-          if [[ "$mode" == "emergency" ]]; then
+          if [[ "$mode" == "continuous-v2" ]]; then
+            release_tag="dpc-aio-continuous-v2"
+            artifact_name="DPC-AIO-continuous-v2-verified-build-only"
+            should_publish="false"
+            if [[ "$V2_PUBLISH_REQUESTED" == "true" ]]; then
+              artifact_name="DPC-AIO-continuous-v2-verified-release"
+              should_publish="true"
+            else
+              echo "::notice title=CONTINUOUS_V2_BUILD_ONLY::Verified artifacts only; publication was not requested."
+            fi
+          elif [[ "$mode" == "emergency" ]]; then
             release_tag="dpc-aio-emergency-enrollment"
             artifact_name="DPC-AIO-emergency-enrollment"
             should_publish="true"
@@ -343,6 +405,7 @@ jobs:
             echo "artifact_name=$artifact_name"
             echo "should_publish=$should_publish"
             echo "stable_signing_configured=$STABLE_SIGNING_CONFIGURED"
+            echo "auto_emergency_fallback=$AUTO_EMERGENCY_FALLBACK"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -429,43 +492,70 @@ jobs:
             url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DPC_AIO_RELEASE_TAG}/DPC-AIO-enterprise-release.apk"
           fi
           echo "DPC_AIO_PROVISIONING_APK_URL=$url" >> "$GITHUB_ENV"
+          echo "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/dpc-aio-continuous/DPC-AIO-signing-keystore.enc" >> "$GITHUB_ENV"
           echo "Provisioning APK URL: $url"
 
-      - name: Prepare stable signer
-        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
+      - name: Mask manual release password
+        if: github.event_name == 'workflow_dispatch' && inputs.release_signing_password != ''
         env:
-          KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
-          STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
-          EXPECTED_CERT: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          RELEASE_SIGNING_PASSWORD: ${{ inputs.release_signing_password }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD EXPECTED_CERT; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "STABLE_SIGNING_KEY_REQUIRED: $name is not configured" >&2
-              exit 1
-            fi
-          done
+          if (( ${#RELEASE_SIGNING_PASSWORD} < 12 )); then
+            echo "release_signing_password must contain at least 12 characters" >&2
+            exit 2
+          fi
+          printf '::add-mask::%s\n' "$RELEASE_SIGNING_PASSWORD"
 
-          echo "::add-mask::$STORE_PASSWORD"
-          echo "::add-mask::$KEY_PASSWORD"
+      - name: Prepare Continuous v2 signer
+        id: signing_v2
+        if: env.DPC_AIO_PIPELINE_MODE == 'continuous-v2'
+        env:
+          DPC_AIO_V2_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_V2_RELEASE_KEYSTORE_B64 }}
+          DPC_AIO_V2_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_STORE_PASSWORD }}
+          DPC_AIO_V2_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_ALIAS }}
+          DPC_AIO_V2_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_V2_RELEASE_KEY_PASSWORD }}
+          DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "true"
+          DPC_AIO_MANUAL_SIGNING_PASSWORD: ""
+          DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL: ""
+          DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/release/check_continuous_v2_preflight.py
+          export DPC_AIO_RELEASE_KEYSTORE_B64="$DPC_AIO_V2_RELEASE_KEYSTORE_B64"
+          export DPC_AIO_RELEASE_STORE_PASSWORD="$DPC_AIO_V2_RELEASE_STORE_PASSWORD"
+          export DPC_AIO_RELEASE_KEY_ALIAS="$DPC_AIO_V2_RELEASE_KEY_ALIAS"
+          export DPC_AIO_RELEASE_KEY_PASSWORD="$DPC_AIO_V2_RELEASE_KEY_PASSWORD"
+          export DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256="$DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256"
+          bash tools/release/prepare_enterprise_signing.sh
 
-          keystore="$RUNNER_TEMP/dpc-aio-enterprise-release.jks"
-          umask 077
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
-          test -s "$keystore"
-
-          {
-            printf 'DPC_AIO_RELEASE_KEYSTORE_PATH=%q\n' "$keystore"
-            printf 'DPC_AIO_RELEASE_STORE_PASSWORD=%q\n' "$STORE_PASSWORD"
-            printf 'DPC_AIO_RELEASE_KEY_ALIAS=%q\n' "$KEY_ALIAS"
-            printf 'DPC_AIO_RELEASE_KEY_PASSWORD=%q\n' "$KEY_PASSWORD"
-            printf 'DPC_AIO_EXPECTED_SIGNING_CERT_SHA256=%q\n' "$EXPECTED_CERT"
-            printf 'DPC_AIO_SIGNING_MODE=%q\n' 'stable'
-          } > "$DPC_AIO_SIGNING_ENV"
-          chmod 600 "$DPC_AIO_SIGNING_ENV"
+      - name: Prepare stable signer
+        id: signing
+        if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
+        env:
+          DPC_AIO_RELEASE_KEYSTORE_B64: ${{ secrets.DPC_AIO_RELEASE_KEYSTORE_B64 }}
+          DPC_AIO_RELEASE_STORE_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_STORE_PASSWORD }}
+          DPC_AIO_RELEASE_KEY_ALIAS: ${{ secrets.DPC_AIO_RELEASE_KEY_ALIAS }}
+          DPC_AIO_RELEASE_KEY_PASSWORD: ${{ secrets.DPC_AIO_RELEASE_KEY_PASSWORD }}
+          DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256: ${{ vars.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_EXPECTED_SIGNING_CERT_SHA256 }}
+          DPC_AIO_STRICT_EXPECTED_SIGNING_CERT: "false"
+          DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}
+          DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.mode.outputs.stable_signing_configured }}" == "true" ]]; then
+            for name in DPC_AIO_RELEASE_KEYSTORE_B64 DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_CONFIGURED_SIGNING_CERT_SHA256; do
+              if [[ -z "${!name:-}" ]]; then
+                echo "STABLE_SIGNING_KEY_REQUIRED: $name is not configured" >&2
+                exit 1
+              fi
+            done
+          fi
+          bash tools/release/prepare_enterprise_signing.sh
 
       - name: Prepare emergency ephemeral signer
         if: env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured != 'true'
@@ -531,6 +621,7 @@ jobs:
           python3 tools/tests/test_release_secret_scan.py
           python3 tools/tests/test_self_update_release_manifest.py
           python3 tools/tests/test_main_stable_signing_policy_contract.py
+          python3 tools/tests/test_continuous_password_signer_contract.py
 
       - name: Build signed enterpriseRelease
         env:
@@ -549,6 +640,11 @@ jobs:
           set -a
           source "$DPC_AIO_SIGNING_ENV"
           set +a
+          export DPC_AIO_CI_VERSION_CODE=$((26 + GITHUB_RUN_NUMBER))
+          if [[ "$DPC_AIO_PIPELINE_MODE" == "continuous-v2" ]]; then
+            export DPC_AIO_CONTINUOUS_V2_BUILD=true
+          fi
+          echo "CI version code: $DPC_AIO_CI_VERSION_CODE"
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app-dpc:assembleEnterpriseRelease
 
@@ -577,6 +673,9 @@ jobs:
           }
 
           cp "$apk" dist/DPC-AIO-enterprise-release.apk
+          if [[ -n "${DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH:-}" && -f "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" ]]; then
+            cp "$DPC_AIO_SIGNING_EXPORT_ENCRYPTED_PATH" dist/DPC-AIO-signing-keystore.enc
+          fi
           for file in \
             provisioning.json provisioning-payload.txt provisioning-metadata.json provisioning-qr.png \
             work-profile-provisioning.json work-profile-provisioning-payload.txt work-profile-provisioning-metadata.json work-profile-qr.png \
@@ -591,7 +690,7 @@ jobs:
 
       - name: Build self-update manifest
         id: self_update_manifest
-        if: steps.mode.outputs.should_publish == 'true'
+        if: steps.mode.outputs.should_publish == 'true' || env.DPC_AIO_PIPELINE_MODE == 'continuous-v2'
         shell: bash
         run: |
           set -euo pipefail
@@ -613,8 +712,17 @@ jobs:
           version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
           version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
           [[ -n "$package_name" && -n "$version_code" && -n "$version_name" ]]
+          expected_code=$((26 + GITHUB_RUN_NUMBER))
+          [[ "$version_code" == "$expected_code" ]] || {
+            echo "CI_VERSION_CODE_MISMATCH expected=$expected_code observed=$version_code" >&2
+            exit 1
+          }
 
-          if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" ]]; then
+          if [[ "$DPC_AIO_PIPELINE_MODE" == "continuous-v2" ]]; then
+            channel="continuous-v2"
+            asset_tag="dpc-aio-continuous-v2"
+            [[ "$DPC_AIO_RELEASE_TAG" == "$asset_tag" && "$signing_mode" == "stable" ]]
+          elif [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" ]]; then
             channel="emergency"
             asset_tag="dpc-aio-emergency-enrollment"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
@@ -656,8 +764,10 @@ jobs:
         run: |
           set -euo pipefail
           rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12"
-          rm -f "$DPC_AIO_SIGNING_ENV"
+          rm -f "$DPC_AIO_SIGNING_ENV" "$RUNNER_TEMP/dpc-aio-enterprise-release.p12"
+          printf '%s=\n' DPC_AIO_RELEASE_STORE_PASSWORD DPC_AIO_RELEASE_KEY_PASSWORD DPC_AIO_RELEASE_KEY_ALIAS DPC_AIO_RELEASE_KEYSTORE_PATH >> "$GITHUB_ENV"
           test ! -e "$DPC_AIO_SIGNING_ENV"
+          test ! -e "$RUNNER_TEMP/dpc-aio-enterprise-release.p12"
 
       - name: Align cmdline-tools latest for emulator runner
         shell: bash
@@ -743,34 +853,133 @@ jobs:
         shell: bash
         run: |
           rm -f "$DPC_AIO_SIGNING_ENV" || true
-          rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-emergency-release.p12" || true
+          rm -f "$RUNNER_TEMP/dpc-aio-enterprise-release.jks" "$RUNNER_TEMP/dpc-aio-enterprise-release.p12" "$RUNNER_TEMP/dpc-aio-emergency-release.p12" || true
 
   publish:
-    needs: build
-    if: needs.build.result == 'success' && needs.build.outputs.should_publish == 'true'
+    needs: [build, repair-self-update-manifests]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.should_publish == 'true' && (needs.repair-self-update-manifests.result == 'success' || needs.repair-self-update-manifests.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
 
     steps:
+      - name: Checkout v2 publication guard
+        if: needs.build.outputs.mode == 'continuous-v2'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
       - name: Download verified artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
+      - name: Guard Continuous v2 release progression
+        id: v2_guard
+        if: needs.build.outputs.mode == 'continuous-v2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
+          SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
+          EXPECTED_V2_CERT: ${{ vars.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 || secrets.DPC_AIO_V2_EXPECTED_SIGNING_CERT_SHA256 }}
+          FIRST_RELEASE: ${{ inputs.first_continuous_v2_release == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "FuzzsT/ENRROL_NEW" && "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
+          [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
+          guard_dir="$(mktemp -d)"
+          trap 'rm -rf "$guard_dir"' EXIT
+          gh api "repos/FuzzsT/ENRROL_NEW/releases?per_page=1" >/dev/null
+          status="$(curl --silent --show-error --proto '=https' --connect-timeout 15 --max-time 60 \
+            --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" \
+            --output "$guard_dir/release.json" --write-out '%{http_code}' \
+            "https://api.github.com/repos/FuzzsT/ENRROL_NEW/releases/tags/dpc-aio-continuous-v2")"
+          case "$status" in
+            200)
+              [[ "$FIRST_RELEASE" != "true" ]] || { echo "CONTINUOUS_V2_ALREADY_EXISTS" >&2; exit 1; }
+              gh release download dpc-aio-continuous-v2 --repo FuzzsT/ENRROL_NEW --pattern self-update.json --pattern signing-cert-sha256.txt --dir "$guard_dir"
+              python3 tools/release/check_continuous_v2_release.py --dist dist --tag "$RELEASE_TAG" --expected-pin "$EXPECTED_V2_CERT" --prior "$guard_dir"
+              echo "release_exists=true" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              [[ "$FIRST_RELEASE" == "true" ]] || { echo "CONTINUOUS_V2_FIRST_RELEASE_CONFIRMATION_REQUIRED" >&2; exit 1; }
+              python3 tools/release/check_continuous_v2_release.py --dist dist --tag "$RELEASE_TAG" --expected-pin "$EXPECTED_V2_CERT" --first-release
+              echo "release_exists=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "CONTINUOUS_V2_RELEASE_LOOKUP_FAILED HTTP=$status" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Guard continuous release progression
+        if: needs.build.outputs.release_tag == 'dpc-aio-continuous'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          guard_dir="$(mktemp -d)"
+          trap 'rm -rf "$guard_dir"' EXIT
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/dpc-aio-continuous" > "$guard_dir/release.json"
+          gh release download dpc-aio-continuous --repo "$GITHUB_REPOSITORY" --pattern self-update.json --dir "$guard_dir"
+          python3 - "$guard_dir/release.json" "$guard_dir/self-update.json" dist/self-update.json dist/DPC-AIO-enterprise-release.apk <<'PY'
+          import hashlib
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          release, old, new = (json.loads(Path(path).read_text(encoding="utf-8")) for path in sys.argv[1:4])
+          apk = Path(sys.argv[4])
+          def check_manifest(manifest):
+              code = manifest.get("versionCode")
+              digest = manifest.get("apkSha256")
+              if (manifest.get("schemaVersion") != 1 or manifest.get("channel") != "continuous"
+                  or manifest.get("packageName") != "io.dpcaio.app"
+                  or type(code) is not int or not 0 < code <= 2100000000
+                  or not isinstance(digest, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", digest)):
+                  raise SystemExit("CONTINUOUS_RELEASE_MANIFEST_INVALID")
+              return code, digest.lower()
+          old_code, old_sha = check_manifest(old)
+          new_code, new_sha = check_manifest(new)
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == apk.name]
+          if len(assets) != 1 or assets[0].get("digest") != "sha256:" + old_sha:
+              raise SystemExit("CONTINUOUS_RELEASE_DIGEST_MISMATCH: published manifest does not match current APK asset")
+          with apk.open("rb") as stream:
+              actual = hashlib.file_digest(stream, "sha256").hexdigest()
+          if actual != new_sha or new.get("apkSize") != apk.stat().st_size:
+              raise SystemExit("CONTINUOUS_RELEASE_DIGEST_MISMATCH: candidate manifest does not match built APK")
+          if new_code < old_code:
+              raise SystemExit(f"CONTINUOUS_RELEASE_ROLLBACK: published={old_code} candidate={new_code}")
+          if new_code == old_code and new_sha != old_sha:
+              raise SystemExit(f"CONTINUOUS_RELEASE_VERSION_REUSE: code={new_code}; start a new build instead of rerunning")
+          print(f"CONTINUOUS_RELEASE_PROGRESSION_OK: published={old_code} candidate={new_code}")
+          PY
+
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.build.outputs.mode }}
           RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
           SELF_UPDATE_MANIFEST: ${{ needs.build.outputs.self_update_manifest }}
+          V2_RELEASE_EXISTS: ${{ steps.v2_guard.outputs.release_exists }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "$MODE" == "emergency" ]]; then
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" && "$SIGNING_MODE" == "stable-secrets" && "$SELF_UPDATE_MANIFEST" == "true" ]]
+            [[ "$V2_RELEASE_EXISTS" == "true" || "$V2_RELEASE_EXISTS" == "false" ]]
+            title="DPC-AIO Continuous v2 Enrollment"
+            notes="Dedicated v2 signer and Self Update channel. Existing legacy installations require an authorized signing lineage for in-place updates. Commit: $GITHUB_SHA."
+            prerelease="--prerelease"
+          elif [[ "$MODE" == "emergency" ]]; then
             title="DPC-AIO Emergency Enrollment"
             if [[ "$SELF_UPDATE_MANIFEST" == "true" ]]; then
               notes="Emergency DPC-AIO 1.1.4 build from commit $GITHUB_SHA signed by the configured stable release key. APK and QRs are verified against each other and the build is eligible for the EMERGENCY Self Update channel."
@@ -784,11 +993,26 @@ jobs:
             prerelease=""
           else
             title="DPC-AIO Continuous Enrollment"
-            notes="Update-stable DPC-AIO 1.1.4 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other and signed by the configured stable release key."
+            if [[ "$SIGNING_MODE" == "password-release-keystore" ]]; then
+              signing_note="Zero-Settings signing continuity: restored the encrypted DPC-AIO-signing-keystore.enc asset with the supplied workflow password and re-published it for future update-compatible runs."
+            else
+              signing_note="Signed by the configured stable repository release key."
+            fi
+            notes="Update-stable DPC-AIO 1.1.4 enrollment artifacts from commit $GITHUB_SHA. APK and QRs are verified against each other. Signing mode: ${SIGNING_MODE:-stable-secrets}. $signing_note"
             prerelease="--prerelease"
           fi
 
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [[ "$MODE" != "continuous-v2" && "$RELEASE_TAG" == "dpc-aio-continuous-v2" ]]; then
+            echo "CONTINUOUS_V2_ROUTE_INVALID" >&2
+            exit 1
+          fi
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            if [[ "$V2_RELEASE_EXISTS" == "true" ]]; then
+              gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
+            else
+              gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
+            fi
+          elif gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
           else
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" $prerelease
@@ -810,7 +1034,15 @@ jobs:
             done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
           fi
 
-          gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            for file in dist/*; do
+              [[ "$file" == "dist/self-update.json" ]] && continue
+              gh release upload "$RELEASE_TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+            done
+            gh release upload "$RELEASE_TAG" dist/self-update.json --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          fi
 
           if [[ "$MODE" == "stable" && "$GITHUB_REF_TYPE" == "tag" ]]; then
             stable_alias="dpc-aio-stable"
@@ -829,6 +1061,39 @@ jobs:
               dist/self-update.json \
               --clobber --repo "$GITHUB_REPOSITORY"
           fi
+
+      - name: Verify full release asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          target="$(printf '%s' "$release_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("target_commitish", ""))')"
+          [[ "$target" == "$GITHUB_SHA" ]] || {
+            echo "FULL_RELEASE_TARGET_MISMATCH tag=$RELEASE_TAG expected=$GITHUB_SHA observed=$target" >&2
+            exit 1
+          }
+
+          checked=0
+          while IFS= read -r -d '' file; do
+            name="$(basename "$file")"
+            local_sha="$(sha256sum "$file" | awk '{print $1}')"
+            remote_digest="$(printf '%s' "$release_json" | python3 -c 'import json,sys; data=json.load(sys.stdin); name=sys.argv[1]; print(next((a.get("digest", "") for a in data.get("assets", []) if a.get("name")==name), ""))' "$name")"
+            if [[ "$remote_digest" != "sha256:$local_sha" ]]; then
+              echo "FULL_RELEASE_ASSET_MISMATCH tag=$RELEASE_TAG asset=$name expected=sha256:$local_sha observed=${remote_digest:-missing}" >&2
+              exit 1
+            fi
+            checked=$((checked + 1))
+          done < <(find dist -maxdepth 1 -type f -print0 | sort -z)
+
+          (( checked > 0 )) || {
+            echo "FULL_RELEASE_ASSET_MISMATCH tag=$RELEASE_TAG reason=no-local-assets" >&2
+            exit 1
+          }
+          echo "FULL_RELEASE_ASSET_SET_VERIFIED tag=$RELEASE_TAG assets=$checked target=$target"
 
       - name: Verify published APK byte identity
         env:
@@ -876,7 +1141,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$MODE" == "emergency" ]]; then
+          if [[ "$MODE" == "continuous-v2" ]]; then
+            [[ "$RELEASE_TAG" == "dpc-aio-continuous-v2" ]]
+            manifest_tag="$RELEASE_TAG"
+            expected_channel="continuous-v2"
+          elif [[ "$MODE" == "emergency" ]]; then
             manifest_tag="$RELEASE_TAG"
             expected_channel="emergency"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then

@@ -52,10 +52,12 @@ def main() -> None:
         "migration signing workflow contract must run in Android CI"
     )
 
-    # Normal production release stays isolated: auto remains stable and migration
-    # is not a signing_mode option in build-aio-enrollment.yml.
+    # Normal production release stays isolated from migration signing. Auto prefers
+    # stable/update-compatible signing, but main may publish a separate emergency
+    # recovery artifact when no stable signer is available.
     assert 'requested="${{ inputs.signing_mode || \'auto\' }}"' in main_text
-    assert 'if [[ "$requested" == "auto" ]]; then\n            mode="stable"' in main_text
+    assert 'AUTO_EMERGENCY_FALLBACK' in main_text
+    assert 'HAS_LEGACY_SIGNING_PASSWORD' in main_text
     signing_mode_section = main_text.split("signing_mode:", 1)[1].split("apk_url:", 1)[0]
     assert "migration" not in signing_mode_section
 

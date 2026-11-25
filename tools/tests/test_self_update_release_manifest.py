@@ -105,6 +105,7 @@ def main():
         'aapt dump badging DPC-AIO-enterprise-release.apk',
         'gh release upload "$tag" self-update.json --clobber',
         'REPAIR_SELF_UPDATE_MANIFEST_OK',
+        'tools/release/verify_self_update_manifest.py',
     ]:
         assert token in workflow, f"self-update release workflow missing: {token}"
 
@@ -120,14 +121,27 @@ def main():
     assert "if: github.event_name != 'workflow_dispatch' || inputs.repair_manifests_only != true" in workflow, (
         "normal build must be skipped during manifest-only repair"
     )
-    assert "if: github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow, (
-        "manifest repair must be explicit workflow_dispatch only"
+    assert "repair-self-update-manifests:" in workflow
+    assert "github.event_name == 'workflow_dispatch' && inputs.repair_manifests_only == true" in workflow
+    assert "github.event_name == 'push' && github.ref == 'refs/heads/main'" in workflow, (
+        "main pushes must be able to backfill a missing rolling self-update manifest"
     )
     assert 'if [[ "$mode" == "stable" && "$STABLE_SIGNING_CONFIGURED" != "true" ]]; then' in workflow
-    assert 'Emergency signing is opt-in only and may only be selected explicitly from workflow_dispatch.' in workflow
+    assert 'Emergency signing is opt-in only unless auto fallback is required on main.' in workflow
+    assert 'AUTO_EMERGENCY_FALLBACK' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_url" -o public-self-update.json' in workflow
     assert 'curl -fL --retry 3 --retry-delay 3 "$manifest_apk_url" -o public-self-update.apk' in workflow
+    repair_block = workflow.split("repair-self-update-manifests:", 1)[1].split("\n  build:", 1)[0]
+    assert "python3 - <<'PY'" not in repair_block, "repair workflow must not use an indentation-sensitive Python heredoc"
     assert '[[ "$public_apk_sha" == "$manifest_apk_sha" && "$public_apk_sha" == "$local_apk_sha" ]]' in workflow
+    assert 'SELF_UPDATE_MANIFEST_UNCHANGED' in workflow, (
+        "repair mode must avoid clobbering an identical self-update manifest"
+    )
+    assert 'Verify full release asset set' in workflow, (
+        "full release publication must verify every uploaded asset, not only the APK"
+    )
+    assert 'FULL_RELEASE_ASSET_MISMATCH' in workflow
+    assert 'FULL_RELEASE_TARGET_MISMATCH' in workflow
 
     client = CLIENT.read_text(encoding="utf-8")
     for token in ["MAX_MANIFEST_BYTES", "MAX_APK_BYTES", "readLimited", '"emergency" -> UpdateChannel.EMERGENCY']:

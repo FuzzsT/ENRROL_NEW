@@ -17,6 +17,8 @@ for token in [
     'requestedUrl.contains("/dpc-aio-continuous/", ignoreCase = true)',
     'requestedUrl.contains("/dpc-aio-emergency-enrollment/", ignoreCase = true)',
     '"emergency" -> UpdateChannel.EMERGENCY',
+    '"continuous-v2" -> UpdateChannel.CONTINUOUS_V2',
+    'requestedUrl.contains("/dpc-aio-continuous-v2/", ignoreCase = true)',
     "channel is not published yet (manifest HTTP 404)",
     "Self Update manifest was not found (HTTP 404)",
     "Self Update APK asset was not found (HTTP 404)",
@@ -28,7 +30,10 @@ assert 'throw IOException("HTTP ${connection.responseCode}")' not in text, "raw 
 
 for token in [
     "private var selectedChannel = UpdateChannel.CONTINUOUS",
-    "listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY)",
+    "listOf(UpdateChannel.CONTINUOUS, UpdateChannel.EMERGENCY, UpdateChannel.CONTINUOUS_V2)",
+    "UpdateChannel.CONTINUOUS_V2 -> CONTINUOUS_V2_MANIFEST_URL",
+    '"https://github.com/FuzzsT/ENRROL_NEW/releases/download/dpc-aio-continuous-v2/self-update.json"',
+    "UpdateChannel.STABLE, UpdateChannel.EMERGENCY, UpdateChannel.CONTINUOUS_V2 -> null",
     "if (restored == UpdateChannel.STABLE) UpdateChannel.CONTINUOUS else restored",
     "CONTINUOUS_MANIFEST_URL",
     "EMERGENCY_MANIFEST_URL",
@@ -39,11 +44,19 @@ for token in [
 ]:
     assert token in activity, f"Self Update UI/channel migration missing: {token}"
 
-assert "UpdateChannel.entries.forEach" not in activity, "Self Update UI must expose only CONTINUOUS and EMERGENCY"
-assert "fetchManifestWithFallback" not in activity, "Self Update channels must stay explicit/fail-closed"
+assert "UpdateChannel.entries.forEach" not in activity, "Self Update UI must explicitly select supported channels"
+
+for token in [
+    "fetchManifestWithFallback",
+    "CONTINUOUS_BOOTSTRAP_MANIFEST_URL",
+    "continuous-bootstrap.json",
+]:
+    assert token in activity or token in text, f"same-channel 404 fallback missing: {token}"
 
 check_body = activity.split("private fun checkNow()", 1)[1].split("private fun downloadAndVerify()", 1)[0]
-assert "client.fetchManifest(manifestUrl(channel))" in check_body, "checkNow must fetch only the explicitly selected channel"
+assert "client.fetchManifestWithFallback(" in check_body, "checkNow must use the same-channel manifest fallback"
+assert "manifestUrl(channel)" in check_body
+assert "bootstrapManifestUrl(channel)" in check_body
 assert "selectedChannel =" not in check_body, "checkNow must not silently change the user's selected channel"
 
 render_body = activity.split("private fun render()", 1)[1].split("private fun checkNow()", 1)[0]
@@ -51,3 +64,18 @@ assert "planner.evaluate(packageName, installed.second, it.channel, it).accepted
 assert "planner.evaluate(packageName, installed.second, it.manifest.channel, it.manifest).accepted" in render_body
 
 print("test_self_update_http_diagnostics: PASS")
+
+BOOTSTRAP = ROOT / ".github/self-update/continuous-bootstrap.json"
+WORKFLOW = ROOT / ".github/workflows/build-aio-enrollment.yml"
+assert BOOTSTRAP.is_file(), "continuous bootstrap manifest must exist"
+bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+for token in [
+    '"channel": "continuous"',
+    '"versionName": "1.3.0"',
+    '"versionCode": 27',
+    '"apkSha256": "02c0e15dfb86c499369fcd64aba3d6163df52112de231cc4230c2470d5ac1a7c"',
+]:
+    assert token in bootstrap, f"bootstrap manifest missing: {token}"
+workflow = WORKFLOW.read_text(encoding="utf-8")
+assert "repair-self-update-manifests" in workflow
+assert "github.event_name == 'push'" in workflow, "push to main must be able to backfill a missing release self-update manifest"
