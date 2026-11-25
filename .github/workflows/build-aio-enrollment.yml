@@ -455,7 +455,7 @@ jobs:
           fi
           printf '::add-mask::%s\n' "$RELEASE_SIGNING_PASSWORD"
 
-      - name: Prepare enterprise release signing
+      - name: Prepare stable signer
         id: signing
         if: env.DPC_AIO_PIPELINE_MODE == 'stable' || (env.DPC_AIO_PIPELINE_MODE == 'emergency' && steps.mode.outputs.stable_signing_configured == 'true')
         env:
