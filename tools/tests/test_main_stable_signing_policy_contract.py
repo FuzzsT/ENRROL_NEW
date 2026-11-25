@@ -13,7 +13,7 @@ for token in [
 ]:
     assert token in workflow, f'rolling release fallback contract missing: {token}'
 
-assert 'DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ inputs.release_signing_password || secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}' in workflow, (
+assert 'DPC_AIO_MANUAL_SIGNING_PASSWORD: ${{ secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD }}' in workflow, (
     'stable signer must accept the persisted legacy password from Actions secrets for unattended main builds'
 )
 assert 'DPC_AIO_REQUIRE_PERSISTED_SIGNER: "true"' in workflow, (
@@ -75,5 +75,11 @@ for marker in [
     '53616c7465645f5f',
 ]:
     assert marker in signer, f'persisted signer diagnostic missing: {marker}'
+
+assert 'inputs.release_signing_password' not in workflow
+assert '      release_signing_password:' not in workflow
+assert 'Mask manual release password' not in workflow
+assert 'SIGNING_CONFIG_CONFLICT: incomplete stable signer configuration' in workflow
+assert 'HAS_MANUAL_SIGNING_PASSWORD' not in workflow
 
 print('MAIN_STABLE_SIGNING_POLICY_CONTRACT: PASS')

@@ -7,7 +7,7 @@ SIGNER = ROOT / "tools/release/prepare_enterprise_signing.sh"
 workflow = WORKFLOW.read_text(encoding="utf-8")
 
 for token in [
-    "release_signing_password:",
+    "secrets.DPC_AIO_LEGACY_SIGNING_PASSWORD",
     "DPC_AIO_MANUAL_SIGNING_PASSWORD",
     "DPC_AIO_PERSISTED_SIGNING_KEYSTORE_URL",
     "tools/release/prepare_enterprise_signing.sh",
@@ -31,5 +31,8 @@ for token in [
 assert "github.event_name == 'workflow_dispatch'" in workflow
 assert "needs.build.outputs.signing_mode" in workflow
 assert "password-release-keystore" in workflow
+
+assert "inputs.release_signing_password" not in workflow
+assert "      release_signing_password:" not in workflow
 
 print("CONTINUOUS_PASSWORD_SIGNER_CONTRACT: PASS")
