@@ -548,6 +548,8 @@ jobs:
           set -a
           source "$DPC_AIO_SIGNING_ENV"
           set +a
+          export DPC_AIO_CI_VERSION_CODE=$((26 + GITHUB_RUN_NUMBER))
+          echo "CI version code: $DPC_AIO_CI_VERSION_CODE"
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app-dpc:assembleEnterpriseRelease
 
@@ -612,6 +614,11 @@ jobs:
           version_code="$(printf '%s\n' "$package_line" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")"
           version_name="$(printf '%s\n' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
           [[ -n "$package_name" && -n "$version_code" && -n "$version_name" ]]
+          expected_code=$((26 + GITHUB_RUN_NUMBER))
+          [[ "$version_code" == "$expected_code" ]] || {
+            echo "CI_VERSION_CODE_MISMATCH expected=$expected_code observed=$version_code" >&2
+            exit 1
+          }
 
           if [[ "$DPC_AIO_PIPELINE_MODE" == "emergency" ]]; then
             channel="emergency"
