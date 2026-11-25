@@ -215,8 +215,8 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                 if (offlineMode in setOf("FULL_OFFLINE", "OFFLINE_THEN_SYNC") && offlineBundleId == null) {
                     invalidConfig("DPC_AIO_OFFLINE_BUNDLE_ID is required for FULL_OFFLINE/OFFLINE_THEN_SYNC")
                 }
-                if (!apkUrl.trim().startsWith("https://", ignoreCase = true)) {
-                    invalidConfig("DPC_AIO_PROVISIONING_APK_URL must use HTTPS")
+                if (apkUrl != apkUrl.trim() || !apkUrl.startsWith("https://", ignoreCase = true)) {
+                    invalidConfig("DPC_AIO_PROVISIONING_APK_URL must use HTTPS without surrounding whitespace")
                 }
                 if (endpoint != null && !endpoint.startsWith("https://", ignoreCase = true)) {
                     invalidConfig("DPC_AIO_ENROLLMENT_ENDPOINT must use HTTPS")
@@ -228,7 +228,7 @@ listOf("enterprise", "systemPrivileged", "lab", "tst", "eng").forEach { flavor -
                         "python3",
                         rootProject.file("tools/provisioning/generate_provisioning.py").absolutePath,
                         "--apk", apk.absolutePath,
-                        "--apk-url", apkUrl.trim(),
+                        "--apk-url", apkUrl,
                         "--out-dir", targetDir.absolutePath,
                         "--checksum-mode", "auto",
                         "--policy-profile=${provisioningPolicyProfile.get().ifBlank { "default" }}",
