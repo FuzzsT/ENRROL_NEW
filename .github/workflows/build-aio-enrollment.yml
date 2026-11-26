@@ -285,6 +285,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
+      - name: Validate provisioning configuration
+        env:
+          DPC_AIO_ENROLLMENT_OFFLINE_MODE: ${{ inputs.enrollment_offline_mode || vars.DPC_AIO_ENROLLMENT_OFFLINE_MODE || 'ONLINE' }}
+          DPC_AIO_OFFLINE_BUNDLE_ID: ${{ inputs.offline_bundle_id || vars.DPC_AIO_OFFLINE_BUNDLE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DPC_AIO_ENROLLMENT_OFFLINE_MODE" in
+            ONLINE|ONLINE_PREFERRED) ;;
+            FULL_OFFLINE|OFFLINE_THEN_SYNC)
+              if [[ -z "${DPC_AIO_OFFLINE_BUNDLE_ID//[[:space:]]/}" ]]; then
+                echo "PROVISIONING_QR_CONFIG_INVALID: provide the signed offline bundle ID or select ONLINE/ONLINE_PREFERRED." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "PROVISIONING_QR_CONFIG_INVALID: unsupported enrollment offline mode." >&2
+              exit 1
+              ;;
+          esac
+          echo "PROVISIONING_QR_CONFIG_OK"
+
       - name: Resolve pipeline mode
         id: mode
         env:

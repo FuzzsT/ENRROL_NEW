@@ -56,6 +56,33 @@ def main():
         assert token in gradle, f'QR invocation/diagnostic regression: {token}'
 
     workflow = must('.github/workflows/build-aio-enrollment.yml', 'Build signed enterpriseRelease')
+    # Run the same early provisioning check that the release workflow executes.
+    import os
+    import subprocess
+    import textwrap
+    step = workflow.split('      - name: Validate provisioning configuration\n', 1)[1].split('      - name:', 1)[0]
+    assert workflow.index('      - name: Validate provisioning configuration') < workflow.index('      - name: Resolve pipeline mode')
+    script = textwrap.dedent(step.split('        run: |\n', 1)[1])
+    assert "${{" not in script
+    for mode, bundle, expected in (
+        ('ONLINE', '', 0), ('ONLINE_PREFERRED', '', 0),
+        ('FULL_OFFLINE', '', 1), ('OFFLINE_THEN_SYNC', '', 1),
+        ('OFFLINE_THEN_SYNC', '  ', 1),
+        ('FULL_OFFLINE', 'fixture-signed-bundle-id', 0),
+        ('OFFLINE_THEN_SYNC', 'fixture-signed-bundle-id', 0),
+        ('INVALID', 'fixture-signed-bundle-id', 1),
+    ):
+        result = subprocess.run(['bash', '-c', script], env=dict(os.environ,
+            DPC_AIO_ENROLLMENT_OFFLINE_MODE=mode, DPC_AIO_OFFLINE_BUNDLE_ID=bundle),
+            text=True, capture_output=True, timeout=10)
+        assert result.returncode == expected, result.stdout + result.stderr
+        assert 'fixture-signed-bundle-id' not in result.stdout + result.stderr
+        if expected:
+            assert 'PROVISIONING_QR_CONFIG_INVALID' in result.stderr
+    for field in ('DPC_AIO_ENROLLMENT_OFFLINE_MODE:', 'DPC_AIO_OFFLINE_BUNDLE_ID:'):
+        entry = next(line.strip() for line in step.splitlines() if field in line)
+        assert workflow.count(entry) == 2, f'preflight/build inputs diverge: {field}'
+
     if 'releases/latest/download/DPC-AIO-enterprise-debug.apk' in workflow:
         raise AssertionError('manual provisioning must not depend on a pre-existing latest release asset')
     if 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' not in workflow:
