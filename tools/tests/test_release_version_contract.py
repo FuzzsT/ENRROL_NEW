@@ -9,8 +9,8 @@ import tempfile
 import textwrap
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPECTED = '1.1.4'
-MINIMUM_CODE = 25
+EXPECTED = '1.3.1'
+MINIMUM_CODE = 274
 
 def read(path: str) -> str:
     return (ROOT / path).read_text('utf-8', errors='strict')
@@ -63,6 +63,8 @@ def main() -> None:
     for marker in ['export DPC_AIO_CI_VERSION_CODE=', 'GITHUB_RUN_NUMBER', 'CI_VERSION_CODE_MISMATCH']:
         if marker not in workflow:
             raise AssertionError(f'release workflow missing {marker}')
+    assert workflow.count('274 + GITHUB_RUN_NUMBER') == 2, 'build and manifest versionCode must share the release floor'
+    assert '1.1.4' not in workflow, 'active release workflow must not advertise a stale version'
     guard = workflow.index('      - name: Guard continuous release progression')
     publish = workflow.index('      - name: Publish release assets')
     assert guard < publish, 'validate published release progression before mutating assets'

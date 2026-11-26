@@ -1,6 +1,6 @@
 # DPC-AIO Companion 0.2.1
 
-DPC-AIO Companion is a **skills-only** companion for DPC-AIO 1.1.4 Enterprise + Samsung OEM AIO. It provides bounded workflows for repository-native Gradle builds, root-cause-first CI diagnosis, production Android Enterprise enrollment validation, Plugin Autopilot packaging and release verification.
+DPC-AIO Companion is a **skills-only** companion for DPC-AIO 1.3.1 Enterprise + Samsung OEM AIO. It provides bounded workflows for repository-native Gradle builds, root-cause-first CI diagnosis, production Android Enterprise enrollment validation, Plugin Autopilot packaging and release verification.
 
 The plugin does **not** contain or execute the Android DPC itself. It does not bundle APKs, Android SDK/NDK components, Gradle caches, signing material, KPE/KLM credentials, reset tokens or private keys. Android/Knox/SEM/OEM actions remain authorized and executed by DPC-AIO and the target platform.
 

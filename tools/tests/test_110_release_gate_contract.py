@@ -52,8 +52,9 @@ def main() -> None:
     gradle = read('apps/dpc/app/build.gradle.kts')
     version_name = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
     version_code = re.search(r'versionCode\s*=\s*(\d+)', gradle)
-    if not version_name or not re.fullmatch(r'1\.1\.\d+', version_name.group(1)):
-        raise AssertionError(f'1.1.0 compatibility gate requires versionName in 1.1.x, got {version_name.group(1) if version_name else None}')
+    if (not version_name or not re.fullmatch(r'\d+\.\d+\.\d+', version_name.group(1))
+            or tuple(map(int, version_name.group(1).split('.'))) < (1, 1, 0)):
+        raise AssertionError(f'1.1.0 compatibility gate requires versionName >= 1.1.0, got {version_name.group(1) if version_name else None}')
     if not version_code or int(version_code.group(1)) < 21:
         raise AssertionError(f'1.1.0 release gate requires versionCode>=21, got {version_code.group(1) if version_code else None}')
 

@@ -1,4 +1,4 @@
-> Current release target: DPC-AIO 1.1.4 Enterprise + Samsung OEM AIO
+> Current release target: DPC-AIO 1.3.1 Enterprise + Samsung OEM AIO
 
 # DPC-AIO checkpoint 1.1.4
 

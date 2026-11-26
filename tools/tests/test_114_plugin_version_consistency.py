@@ -10,7 +10,7 @@ README = PLUGIN / "README.md"
 ENROLL = PLUGIN / "skills" / "dpc-aio-enrollment" / "SKILL.md"
 VERIFY = PLUGIN / "skills" / "dpc-aio-verify" / "SKILL.md"
 
-PROJECT_VERSION = "1.1.4"
+PROJECT_VERSION = "1.3.1"
 PLUGIN_VERSION = "0.2.1"
 
 

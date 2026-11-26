@@ -5,8 +5,8 @@ ROOT=Path(__file__).resolve().parents[2]
 errors=[]
 read=lambda p:(ROOT/p).read_text('utf-8')
 app=read('apps/dpc/app/build.gradle.kts')
-vm=re.search(r'versionName\s*=\s*"1\.1\.(\d+)"', app)
-if not vm or int(vm.group(1)) < 1: errors.append('versionName must be 1.1.1 or later 1.1.x')
+vm=re.search(r'versionName\s*=\s*"(\d+)\.(\d+)\.(\d+)"', app)
+if not vm or tuple(map(int, vm.groups())) < (1, 1, 1): errors.append('versionName must be >=1.1.1')
 m=re.search(r'versionCode\s*=\s*(\d+)',app)
 if not m or int(m.group(1))<22: errors.append('versionCode >=22 required')
 host=read('tools/run_host_tests.sh')
