@@ -12,8 +12,8 @@ m=re.search(r'versionCode\s*=\s*(\d+)', app)
 if not m or int(m.group(1)) < 24: errors.append('versionCode >=24 required')
 
 readme=read('README.md')
-if 'DPC-AIO 1.1.' not in readme:
-    errors.append('README does not identify a 1.1.x release')
+if not vm or not re.search(r'^# DPC-AIO ' + re.escape(vm.group(1)) + r'\b', readme, re.M):
+    errors.append('README heading must identify the current Gradle release version')
 
 prov=read('docs/releases/SOURCE-COMMIT.txt')
 if '0.6.7' in prov or '1.1.' not in prov:
